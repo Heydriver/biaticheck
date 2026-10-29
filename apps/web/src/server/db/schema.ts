@@ -1,6 +1,6 @@
 import type { Auslesung } from "@biaticheck/auslesen";
 import type { AbrechnungEingabe, Pruefbericht } from "@biaticheck/pruefkern";
-import { bigserial, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigserial, boolean, index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const FALLSTATUS = [
   "hochgeladen",
@@ -26,6 +26,8 @@ export const faelle = pgTable(
     zugangHash: text("zugang_hash").notNull(),
     status: text("status", { enum: FALLSTATUS }).notNull().default("hochgeladen"),
     daten: jsonb("daten").$type<AbrechnungEingabe>(),
+    /** Unveränderte KI-Auslesung – Grundlage, um die Genauigkeit je Feld und Regel zu messen. */
+    datenAutomatisch: jsonb("daten_automatisch").$type<AbrechnungEingabe>(),
     bericht: jsonb("bericht").$type<Pruefbericht>(),
     auslesung: jsonb("auslesung").$type<AuslesungMeta>(),
     fehler: text("fehler"),
@@ -71,4 +73,25 @@ export const protokoll = pgTable("protokoll", {
   aktion: text("aktion").notNull(),
   details: jsonb("details").$type<Record<string, unknown>>(),
   zeitpunkt: timestamp("zeitpunkt", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Mitarbeitende mit Zugang zum internen Prüfbereich. */
+export const experten = pgTable("experten", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwortHash: text("passwort_hash").notNull(),
+  aktiv: boolean("aktiv").notNull().default(true),
+  erstelltAm: timestamp("erstellt_am", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sitzungen = pgTable("sitzungen", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  expertId: uuid("expert_id")
+    .notNull()
+    .references(() => experten.id, { onDelete: "cascade" }),
+  /** SHA-256 des Sitzungstokens aus dem Cookie. */
+  tokenHash: text("token_hash").notNull().unique(),
+  laeuftAbAm: timestamp("laeuft_ab_am", { withTimezone: true }).notNull(),
+  erstelltAm: timestamp("erstellt_am", { withTimezone: true }).notNull().defaultNow(),
 });

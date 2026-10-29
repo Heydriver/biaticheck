@@ -5,6 +5,7 @@ const chromiumPfad = process.env.PLAYWRIGHT_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: "e2e",
+  globalSetup: "./e2e/vorbereitung.ts",
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   use: {

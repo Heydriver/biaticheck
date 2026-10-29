@@ -1,4 +1,4 @@
-import { euro, runde, tageInklusive, vergleiche } from "../hilfen";
+import { euro, runde, tageInklusive, vergleiche, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema";
 
@@ -156,8 +156,8 @@ export const I04_Heizkosten: Regel = {
     } else if (p < 50 || p > 70) {
       befunde.push({
         status: "auffaelligkeit",
-        titel: `Verbrauchsanteil von ${p} % ungewöhnlich`,
-        erklaerung: `Nach der Heizkostenverordnung sind in der Regel 50–70 % der Kosten nach Verbrauch zu verteilen. Hier sind es ${p} %.`,
+        titel: `Verbrauchsanteil von ${zahlDE(p)} % ungewöhnlich`,
+        erklaerung: `Nach der Heizkostenverordnung sind in der Regel 50–70 % der Kosten nach Verbrauch zu verteilen. Hier sind es ${zahlDE(p)} %.`,
         naechsterSchritt: "Fragen Sie beim Vermieter nach, warum dieser Verteilerschlüssel gewählt wurde.",
         beleg: { verbrauchsanteilProzent: p },
       });
@@ -168,7 +168,7 @@ export const I04_Heizkosten: Regel = {
       {
         status: "ok",
         titel: "Heizkosten verbrauchsabhängig verteilt",
-        erklaerung: `${p} % der Heizkosten werden nach Verbrauch verteilt – im zulässigen Rahmen.`,
+        erklaerung: `${zahlDE(p ?? 0)} % der Heizkosten werden nach Verbrauch verteilt – im zulässigen Rahmen.`,
       },
     ];
   },
@@ -322,7 +322,7 @@ export const I08_CO2Aufteilung: Regel = {
         {
           status: "ok",
           titel: "CO₂-Kosten korrekt aufgeteilt",
-          erklaerung: `Bei ${runde(kgProQm)} kg CO₂ pro m² trägt der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten (${euro(erwartet)}) – das ist berücksichtigt.`,
+          erklaerung: `Bei ${zahlDE(kgProQm)} kg CO₂ pro m² trägt der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten (${euro(erwartet)}) – das ist berücksichtigt.`,
           beleg,
         },
       ];
@@ -331,7 +331,7 @@ export const I08_CO2Aufteilung: Regel = {
       {
         status: "abweichung",
         titel: "CO₂-Kosten falsch aufgeteilt",
-        erklaerung: `Bei ${runde(kgProQm)} kg CO₂ pro m² müsste der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten tragen, also ${euro(erwartet)} für das Haus. Berücksichtigt sind ${euro(c.vermieteranteil)}.`,
+        erklaerung: `Bei ${zahlDE(kgProQm)} kg CO₂ pro m² müsste der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten tragen, also ${euro(erwartet)} für das Haus. Berücksichtigt sind ${euro(c.vermieteranteil)}.`,
         naechsterSchritt: "Fordern Sie eine Korrektur der CO₂-Kostenaufteilung.",
         beleg: { ...beleg, differenzHaus: differenz },
       },

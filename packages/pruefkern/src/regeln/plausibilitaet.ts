@@ -1,4 +1,4 @@
-import { euro, runde, tageInklusive } from "../hilfen";
+import { euro, runde, tageInklusive, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import { KOSTENKATEGORIEN } from "../schema";
 
@@ -148,7 +148,7 @@ export const P03_Warmwasser: Regel = {
         titel: "Hohe Warmwasserkosten",
         erklaerung:
           `Warmwasser kostet im Haus ${euro(proM3)} pro m³ – deutlich mehr als üblich (bis etwa ${euro(schwelle)}).` +
-          (kwhProM3 ? ` Für jeden m³ Warmwasser werden ${kwhProM3} kWh Wärme aufgewendet; hohe Werte deuten auf Verluste in der Anlage (z. B. Zirkulation) hin.` : ""),
+          (kwhProM3 ? ` Für jeden m³ Warmwasser werden ${zahlDE(kwhProM3, 0)} kWh Wärme aufgewendet; hohe Werte deuten auf Verluste in der Anlage (z. B. Zirkulation) hin.` : ""),
         naechsterSchritt: "Verlangen Sie Belegeinsicht in die Warmwasserkosten (Energie, Entkalkung, Wartung) und fragen Sie nach Maßnahmen gegen Wärmeverluste.",
         beleg,
       },

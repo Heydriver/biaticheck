@@ -8,6 +8,11 @@ export function euro(betrag: number): string {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(betrag);
 }
 
+/** Zahl im deutschen Format, z. B. 3187.97 → "3.187,97". */
+export function zahlDE(n: number, nachkommastellen = 2): string {
+  return new Intl.NumberFormat("de-DE", { maximumFractionDigits: nachkommastellen }).format(n);
+}
+
 export function datumDE(iso: string): string {
   const [j, m, t] = iso.split("-");
   return `${t}.${m}.${j}`;

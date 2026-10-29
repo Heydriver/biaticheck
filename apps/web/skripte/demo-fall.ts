@@ -4,7 +4,7 @@
  */
 import { pruefeAbrechnung } from "@biaticheck/pruefkern";
 import { G001 } from "../../../packages/pruefkern/test/golden/G-001";
-import { erstelleDb } from "../src/server/db";
+import { erstelleDb } from "../src/server/db/verbindung";
 import { faelle } from "../src/server/db/schema";
 import { erzeugeZugang } from "../src/server/zugang";
 

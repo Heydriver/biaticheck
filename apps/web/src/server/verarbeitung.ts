@@ -114,7 +114,10 @@ export async function verarbeiteFall(fallId: string, deps: Abhaengigkeiten): Pro
       bericht,
     });
 
-    await db.update(faelle).set({ status, daten, bericht, auslesung: meta, aktualisiertAm: new Date() }).where(eq(faelle.id, fallId));
+    await db
+      .update(faelle)
+      .set({ status, daten, datenAutomatisch: abrechnung, bericht, auslesung: meta, aktualisiertAm: new Date() })
+      .where(eq(faelle.id, fallId));
     await protokolliere(db, fallId, "system", "ausgelesen_und_geprueft", {
       status,
       konsistent: meta.konsistenz.konsistent,

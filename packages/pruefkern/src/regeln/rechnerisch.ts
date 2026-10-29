@@ -1,4 +1,4 @@
-import { euro, runde, tageInklusive } from "../hilfen";
+import { euro, runde, tageInklusive, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import type { Abrechnung } from "../schema";
 
@@ -193,7 +193,7 @@ export const R04_Flaechen: Regel = {
       befunde.push({
         status: "auffaelligkeit",
         titel: "Unterschiedliche Wohnflächen verwendet",
-        erklaerung: `In der Abrechnung werden für Ihre Wohnung unterschiedliche Flächen verwendet (${[...wohnflaechen].join(" m², ")} m²).`,
+        erklaerung: `In der Abrechnung werden für Ihre Wohnung unterschiedliche Flächen verwendet (${[...wohnflaechen].map((f) => zahlDE(f!)).join(" m², ")} m²).`,
         naechsterSchritt: "Vergleichen Sie die Flächen mit Ihrem Mietvertrag und fragen Sie beim Vermieter nach.",
         beleg: { wohnflaechen: [...wohnflaechen] },
       });
@@ -202,7 +202,7 @@ export const R04_Flaechen: Regel = {
       befunde.push({
         status: "auffaelligkeit",
         titel: "Unterschiedliche Gesamtflächen verwendet",
-        erklaerung: `Bei der Verteilung nach Fläche werden unterschiedliche Gesamtflächen angesetzt (${[...gesamtflaechen].join(" m², ")} m²). Das kann berechtigt sein (z. B. Gewerbe ausgenommen), sollte aber erklärt werden.`,
+        erklaerung: `Bei der Verteilung nach Fläche werden unterschiedliche Gesamtflächen angesetzt (${[...gesamtflaechen].map((f) => zahlDE(f!)).join(" m², ")} m²). Das kann berechtigt sein (z. B. Gewerbe ausgenommen), sollte aber erklärt werden.`,
         naechsterSchritt: "Bitten Sie den Vermieter um eine Erläuterung der unterschiedlichen Gesamtflächen.",
         beleg: { gesamtflaechen: [...gesamtflaechen] },
       });
@@ -213,7 +213,7 @@ export const R04_Flaechen: Regel = {
       befunde.push({
         status: "auffaelligkeit",
         titel: "Heizfläche weicht von Wohnfläche ab",
-        erklaerung: `In der Heizkostenabrechnung werden für Ihre Wohnung ${h.flaecheMieter} m² angesetzt, in der Betriebskostenabrechnung ${wohnflaeche} m². Das kann berechtigt sein (z. B. unbeheizte Räume), sollte aber erklärt werden.`,
+        erklaerung: `In der Heizkostenabrechnung werden für Ihre Wohnung ${zahlDE(h.flaecheMieter)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(wohnflaeche)} m². Das kann berechtigt sein (z. B. unbeheizte Räume), sollte aber erklärt werden.`,
         naechsterSchritt: "Fragen Sie nach, welche Räume nicht als beheizte Fläche zählen.",
         beleg: { heizflaeche: h.flaecheMieter, wohnflaeche, heizGesamtflaeche: h.gesamtflaeche },
       });

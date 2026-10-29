@@ -21,7 +21,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="text-xs text-stone-500">Nebenkosten prüfen</span>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:py-10">{children}</main>
+        <main className="flex-1">{children}</main>
         <footer className="border-t border-stone-200 bg-white text-sm text-stone-500">
           <div className="mx-auto flex max-w-3xl flex-wrap gap-x-6 gap-y-2 px-4 py-4">
             <Link href="/impressum">Impressum</Link>

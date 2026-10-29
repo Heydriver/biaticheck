@@ -40,6 +40,18 @@ Auslesen einer echten Abrechnung und Vergleich mit dem Golden Set (benötigt `AN
 pnpm auslesen pfad/zur/abrechnung.pdf --golden G-001
 ```
 
+## Interner Prüfbereich
+
+Unter `/intern` korrigieren Experten ausgelesene Daten (PDF und Formular nebeneinander), prüfen neu und geben Ergebnisse für Kunden frei. Bei jeder Freigabe wird protokolliert, welche Felder und Regelergebnisse der Experte gegenüber der KI geändert hat – die Datengrundlage für die schrittweise Auto-Freigabe je Regel.
+
+```bash
+# Experten-Konto anlegen (Passwort wird verdeckt abgefragt)
+DATABASE_URL=... pnpm --filter @biaticheck/web experte:anlegen anna@biati.de "Anna Muster"
+
+# Abgelaufene Fälle löschen (täglich per Cron)
+DATABASE_URL=... UPLOAD_DIR=... DATEI_SCHLUESSEL=... pnpm --filter @biaticheck/web aufraeumen
+```
+
 ## Sicherheitsprinzipien
 
 - Dateien werden am Inhalt erkannt (nicht an der Endung), verschlüsselt abgelegt (AES-256-GCM) und nach 90 Tagen gelöscht.
@@ -48,6 +60,7 @@ pnpm auslesen pfad/zur/abrechnung.pdf --golden G-001
 - Die kostenlose Erstauswertung wird serverseitig gefiltert; Inhalte des bezahlten Berichts erreichen den Browser nicht.
 - Fehlkonfiguration (z. B. fehlender Schlüssel im Produktivbetrieb) verhindert den Serverstart.
 - Ratenbegrenzung für Uploads schützt vor Missbrauch und unkontrollierten API-Kosten.
+- Prüfbereich: Passwörter mit scrypt, begrenzte Anmeldeversuche, HttpOnly/SameSite-strict-Sitzungscookie, Herkunftsprüfung (CSRF) bei allen Änderungen, Protokoll jeder Aktion.
 
 ## Stand
 
@@ -58,7 +71,9 @@ pnpm auslesen pfad/zur/abrechnung.pdf --golden G-001
 | Auslesen (PDF → Schema, Selbstkontrolle) | ✅ – Live-Test mit API-Schlüssel ausstehend |
 | Web-App: Upload, Erstauswertung, Rückfragen (mobil) | ✅ |
 | Automatische Qualitätskontrolle (CI) | ✅ |
-| Interner Prüfbereich (Korrigieren, Freigeben) | ⏳ Sprint 3 |
+| Interner Prüfbereich (Korrigieren, Freigeben, Messung für Auto-Freigabe) | ✅ |
+| Löschfrist (90 Tage) | ✅ Skript, Cron im Deployment einrichten |
+| Design von biati.de übernehmen | ⏳ wartet auf Netzwerkfreigabe für biati.de |
 | Bezahlung, ausführlicher Bericht (PDF) | ⏳ Sprint 4 |
 | Deployment biati.de | ⏳ Sprint 4 |
 
