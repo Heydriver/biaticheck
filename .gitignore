@@ -11,3 +11,4 @@ next-env.d.ts
 .daten/
 test-results/
 playwright-report/
+*.tsbuildinfo
