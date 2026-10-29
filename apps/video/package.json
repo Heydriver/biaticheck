@@ -1,0 +1,23 @@
+{
+  "name": "@biaticheck/video",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts Erklaervideo out/biaticheck-erklaervideo.mp4",
+    "render:hochkant": "remotion render src/index.ts ErklaervideoHochkant out/biaticheck-erklaervideo-hochkant.mp4",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.534"
+  },
+  "devDependencies": {
+    "@fontsource/inter": "5.2.8",
+    "@types/react": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}
