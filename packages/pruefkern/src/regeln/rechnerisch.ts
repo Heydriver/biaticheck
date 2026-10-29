@@ -175,7 +175,7 @@ export const R03_Saldo: Regel = {
 
 export const R04_Flaechen: Regel = {
   id: "R-04",
-  version: "1.0.0",
+  version: "1.1.0",
   titel: "Einheitliche Flächenangaben",
   bereich: "rechnerisch",
   grundlage: "§ 556a Abs. 1 BGB",
@@ -207,6 +207,17 @@ export const R04_Flaechen: Regel = {
         beleg: { gesamtflaechen: [...gesamtflaechen] },
       });
     }
+    const h = a.heizkosten;
+    const wohnflaeche = a.flaechen.wohnflaecheMieter ?? [...wohnflaechen][0];
+    if (h?.flaecheMieter !== undefined && wohnflaeche !== undefined && h.flaecheMieter !== wohnflaeche) {
+      befunde.push({
+        status: "auffaelligkeit",
+        titel: "Heizfläche weicht von Wohnfläche ab",
+        erklaerung: `In der Heizkostenabrechnung werden für Ihre Wohnung ${h.flaecheMieter} m² angesetzt, in der Betriebskostenabrechnung ${wohnflaeche} m². Das kann berechtigt sein (z. B. unbeheizte Räume), sollte aber erklärt werden.`,
+        naechsterSchritt: "Fragen Sie nach, welche Räume nicht als beheizte Fläche zählen.",
+        beleg: { heizflaeche: h.flaecheMieter, wohnflaeche, heizGesamtflaeche: h.gesamtflaeche },
+      });
+    }
     if (befunde.length > 0) return befunde;
     return [
       {
@@ -218,4 +229,54 @@ export const R04_Flaechen: Regel = {
   },
 };
 
-export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen];
+export const R05_Vorauszahlungen: Regel = {
+  id: "R-05",
+  version: "1.0.0",
+  titel: "Angerechnete Vorauszahlungen plausibel",
+  bereich: "rechnerisch",
+  grundlage: "§ 556 Abs. 2 BGB; Abgleich mit vereinbarten Vorauszahlungen",
+  stand: "entwurf",
+  pruefe(a, { einstellungen }) {
+    const d = a.vorauszahlungenDetail;
+    const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
+    if (!d?.monatlich || !zeitraum) return [];
+    const monate = Math.round(tageInklusive(zeitraum.von, zeitraum.bis) / (365.25 / 12));
+
+    const arten = [
+      ["betriebskosten", "Betriebskosten"],
+      ["heizkosten", "Heizkosten"],
+    ] as const;
+    const befunde: Befund[] = [];
+    for (const [art, name] of arten) {
+      const jahr = d[art];
+      const monatlich = d.monatlich[art];
+      if (jahr === undefined || monatlich === undefined) continue;
+      const erwartet = runde(monatlich * monate);
+      const differenz = runde(erwartet - jahr);
+      if (Math.abs(differenz) <= Math.max(einstellungen.toleranzEuro, 1)) {
+        befunde.push({
+          status: "ok",
+          titel: `Vorauszahlungen ${name} plausibel`,
+          erklaerung: `Angerechnet sind ${euro(jahr)} – das entspricht ${monate} × ${euro(monatlich)}.`,
+          beleg: { art, jahr, monatlich, monate },
+        });
+        continue;
+      }
+      befunde.push({
+        status: "auffaelligkeit",
+        titel: `Vorauszahlungen ${name} prüfen`,
+        erklaerung: `Angerechnet sind ${euro(jahr)} (Ø ${euro(jahr / monate)} pro Monat). Bei den angegebenen ${euro(monatlich)} pro Monat wären es ${euro(erwartet)} – eine Differenz von ${euro(Math.abs(differenz))}. Möglicherweise wurde die Vorauszahlung im Lauf des Jahres geändert, oder nicht alle Zahlungen wurden berücksichtigt.`,
+        naechsterSchritt: "Gleichen Sie die angerechneten Vorauszahlungen mit Ihren Kontoauszügen bzw. Ihrem Mietkonto für den Abrechnungszeitraum ab. Fehlende Zahlungen schriftlich beim Vermieter reklamieren.",
+        betragZugunstenMieter: differenz > 0 ? differenz : undefined,
+        beleg: { art, jahr, monatlich, monate, erwartet, differenz },
+        rueckfrage: {
+          feld: `vorauszahlungenDetail.monatlich.${art}`,
+          frage: `Wie viel haben Sie im Abrechnungszeitraum monatlich an Vorauszahlung für ${name} gezahlt? (Kontoauszug oder Mietkonto)`,
+        },
+      });
+    }
+    return befunde;
+  },
+};
+
+export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen];

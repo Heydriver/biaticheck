@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ordneKategorieZu, plusMonate, pruefeAbrechnung, type Regelergebnis } from "../src/index.js";
+import { co2Vermieterquote } from "../src/regeln/inhaltlich.js";
 import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle.js";
 
 const HEUTE = "2026-10-29";
@@ -148,6 +149,43 @@ describe("Sonderfälle", () => {
     const kaputt = { id: "X-99", version: "0", titel: "Test", bereich: "formell" as const, grundlage: "", stand: "entwurf" as const, pruefe: () => { throw new Error("kaputt"); } };
     const bericht = pruefeAbrechnung(korrekteAbrechnung(), { heute: HEUTE, regeln: [kaputt] });
     expect(bericht.ergebnisse).toMatchObject([{ regelId: "X-99", status: "nicht_pruefbar" }]);
+  });
+});
+
+describe("Regeln aus Musterprüfung G-001", () => {
+  it("Kabel-TV in einer Abrechnung ab 07/2024 ist komplett nicht umlagefähig", () => {
+    const a = korrekteAbrechnung();
+    a.meta.abrechnungszeitraum = { von: "2024-07-01", bis: "2025-06-30" };
+    a.meta.zugangAm = "2025-10-01";
+    a.kostenpositionen.push({ id: "kt", bezeichnung: "Kabel-TV", kategorie: "antenne_kabel", anteilMieter: 96 });
+    expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "I-05")).toMatchObject([
+      { status: "abweichung", betragZugunstenMieter: 96 },
+    ]);
+  });
+
+  it("Aufzugskosten im EG mit Ausnahme im Mietvertrag", () => {
+    const a = korrekteAbrechnung();
+    a.meta.geschoss = 0;
+    a.mietvertrag = { aufzugAusgenommen: true };
+    a.kostenpositionen.push({ id: "az", bezeichnung: "Aufzug", kategorie: "aufzug", anteilMieter: 80 });
+    expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "I-06")).toMatchObject([
+      { status: "abweichung", betragZugunstenMieter: 80 },
+    ]);
+  });
+
+  it("CO₂-Stufenmodell", () => {
+    expect(co2Vermieterquote(11.9)).toBe(0);
+    expect(co2Vermieterquote(15.04)).toBe(0.1);
+    expect(co2Vermieterquote(30)).toBe(0.4);
+    expect(co2Vermieterquote(60)).toBe(0.95);
+  });
+
+  it("falsche CO₂-Aufteilung wird erkannt", () => {
+    const a = korrekteAbrechnung();
+    a.heizkosten = { ...a.heizkosten!, co2: { emissionKg: 30_000, flaecheM2: 1000, kostenGesamt: 1000, vermieteranteil: 0 } };
+    expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "I-08")).toMatchObject([
+      { status: "abweichung", beleg: { vermieterquote: 0.4, erwartet: 400 } },
+    ]);
   });
 });
 

@@ -81,8 +81,12 @@ export const Kostenposition = z.object({
   /** Bezeichnung wie in der Abrechnung, z. B. "Müllabfuhr". */
   bezeichnung: z.string(),
   kategorie: Kostenkategorie,
-  /** Gesamtkosten des Hauses/der Abrechnungseinheit für diese Position. */
+  /** Gesamtkosten des Hauses/der Abrechnungseinheit für diese Position (nach Vorwegabzug). */
   gesamtkosten: betrag.optional(),
+  /** Gesamtkosten vor Vorwegabzug (z. B. inkl. Gewerbe), falls ausgewiesen. */
+  gesamtkostenVorVorwegabzug: betrag.optional(),
+  /** Kennzeichnung nach § 35a EStG in der Abrechnung. */
+  steuerlich35a: z.enum(["haushaltsnah", "handwerker"]).optional(),
   umlageschluessel: Umlageschluessel.optional(),
   /** Auf die Mieterwohnung entfallender Betrag laut Abrechnung. */
   anteilMieter: betrag,
@@ -101,6 +105,30 @@ export const Heizkosten = z.object({
   anteilMieter: betrag,
   /** Ist der Heizkostenanteil bereits als Kostenposition in `kostenpositionen` enthalten? */
   inKostenpositionenEnthalten: z.boolean().default(false),
+  /** Beheizte Fläche der Wohnung bzw. des Hauses laut Heizkostenabrechnung. */
+  flaecheMieter: z.number().positive().optional(),
+  gesamtflaeche: z.number().positive().optional(),
+  warmwasser: z
+    .object({
+      /** Gesamtkosten Warmwasser des Hauses. */
+      kostenGesamt: betrag.optional(),
+      /** Gesamtverbrauch Warmwasser des Hauses in m³. */
+      verbrauchGesamtM3: z.number().positive().optional(),
+      /** Für Warmwasser aufgewendete Wärmemenge in kWh. */
+      energieKwh: z.number().positive().optional(),
+    })
+    .optional(),
+  /** Angaben zur Aufteilung der CO₂-Kosten nach CO2KostAufG. */
+  co2: z
+    .object({
+      emissionKg: z.number().nonnegative(),
+      /** Gesamtwohnfläche, auf die sich die Emission bezieht. */
+      flaecheM2: z.number().positive(),
+      kostenGesamt: betrag,
+      /** Vom Vermieter getragener Anteil in Euro laut Abrechnung. */
+      vermieteranteil: betrag,
+    })
+    .optional(),
 });
 export type Heizkosten = z.infer<typeof Heizkosten>;
 
@@ -108,6 +136,8 @@ export const Abrechnung = z.object({
   meta: z.object({
     objektAdresse: z.string().optional(),
     wohnung: z.string().optional(),
+    /** Geschoss der Wohnung: 0 = Erdgeschoss, -1 = Souterrain, 1 = 1. OG … */
+    geschoss: z.number().int().optional(),
     vermieter: z.string().optional(),
     mieter: z.string().optional(),
     abrechnungszeitraum: Zeitraum.optional(),
@@ -128,6 +158,15 @@ export const Abrechnung = z.object({
   heizkosten: Heizkosten.optional(),
   /** Summe der geleisteten Vorauszahlungen im Abrechnungszeitraum. */
   vorauszahlungen: betrag.optional(),
+  /** Aufschlüsselung der Vorauszahlungen, soweit die Abrechnung sie hergibt. */
+  vorauszahlungenDetail: z
+    .object({
+      betriebskosten: betrag.optional(),
+      heizkosten: betrag.optional(),
+      /** Monatliche Vorauszahlungen laut Schreiben/Mietvertrag (können vom Abrechnungsjahr abweichen). */
+      monatlich: z.object({ betriebskosten: betrag.optional(), heizkosten: betrag.optional() }).optional(),
+    })
+    .optional(),
   /** Werte, die die Abrechnung selbst als Ergebnis ausweist. */
   ausgewiesen: z
     .object({
@@ -152,6 +191,8 @@ export const Abrechnung = z.object({
       vereinbarteSonstigeKosten: z.array(z.string()).optional(),
       /** Pauschale statt Vorauszahlung vereinbart → keine Abrechnung geschuldet. */
       pauschaleVereinbart: z.boolean().optional(),
+      /** Mietvertrag schließt Erdgeschosswohnungen von Aufzugskosten aus. */
+      aufzugAusgenommen: z.boolean().optional(),
     })
     .optional(),
 });

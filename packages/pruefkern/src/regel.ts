@@ -66,6 +66,8 @@ export interface Einstellungen {
   vorjahrSteigerungMindestEuro: number;
   /** Kosten pro m² und Monat (ohne Heizung), ab denen die Gesamtkosten auffällig sind. */
   kostenProQmMonatSchwelle: number;
+  /** Warmwasserkosten des Hauses pro m³, ab denen sie auffällig sind. */
+  warmwasserProM3Schwelle: number;
 }
 
 export const STANDARD_EINSTELLUNGEN: Einstellungen = {
@@ -74,6 +76,8 @@ export const STANDARD_EINSTELLUNGEN: Einstellungen = {
   vorjahrSteigerungMindestEuro: 25,
   // ENTWURF: Wert vom Expertenteam bestätigen (z. B. anhand Betriebskostenspiegel).
   kostenProQmMonatSchwelle: 2.5,
+  // ENTWURF: Wert vom Expertenteam bestätigen.
+  warmwasserProM3Schwelle: 20,
 };
 
 export interface Regelergebnis extends Befund {

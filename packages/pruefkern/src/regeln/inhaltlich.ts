@@ -1,4 +1,4 @@
-import { euro, runde } from "../hilfen.js";
+import { euro, runde, tageInklusive, vergleiche } from "../hilfen.js";
 import type { Befund, Regel } from "../regel.js";
 import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema.js";
 
@@ -174,4 +174,178 @@ export const I04_Heizkosten: Regel = {
   },
 };
 
-export const INHALTLICHE_REGELN = [I01_NichtUmlagefaehig, I02_SonstigeKosten, I03_NichtZugeordnet, I04_Heizkosten];
+/** Ende der Übergangsfrist für die Umlage von Kabel-/Antennenkosten. */
+const KABEL_STICHTAG = "2024-07-01";
+
+export const I05_KabelTV: Regel = {
+  id: "I-05",
+  version: "1.0.0",
+  titel: "Kabel-/SAT-Kosten nur bis 30.06.2024 umlagefähig",
+  bereich: "inhaltlich",
+  grundlage: "§ 2 Nr. 15 BetrKV i. V. m. § 230 Abs. 4 TKG",
+  stand: "entwurf",
+  pruefe(a) {
+    const z = a.meta.abrechnungszeitraum;
+    if (!z || vergleiche(z.bis, KABEL_STICHTAG) < 0) return [];
+    return a.kostenpositionen
+      .filter((p) => p.kategorie === "antenne_kabel")
+      .map((p): Befund => {
+        if (vergleiche(z.von, KABEL_STICHTAG) >= 0) {
+          return {
+            status: "abweichung",
+            titel: `Nicht mehr umlagefähig: ${p.bezeichnung}`,
+            erklaerung: `Seit dem 01.07.2024 dürfen Kosten für Kabel-TV bzw. Gemeinschaftsantenne nicht mehr über die Nebenkosten abgerechnet werden.`,
+            naechsterSchritt: `Fordern Sie die Streichung dieser Position (${euro(p.anteilMieter)}).`,
+            betragZugunstenMieter: p.anteilMieter,
+            positionId: p.id,
+          };
+        }
+        const tageGesamt = tageInklusive(z.von, z.bis);
+        const tageDanach = tageInklusive(KABEL_STICHTAG, z.bis);
+        const geschaetzt = runde((p.anteilMieter * tageDanach) / tageGesamt);
+        return {
+          status: "auffaelligkeit",
+          titel: `Zeitraum prüfen: ${p.bezeichnung}`,
+          erklaerung: `Kabel-/SAT-Kosten dürfen nur bis zum 30.06.2024 umgelegt werden. Aus der Abrechnung geht nicht eindeutig hervor, dass nur Kosten bis zu diesem Tag enthalten sind. Zeitanteilig entfielen bis zu ${euro(geschaetzt)} auf die Zeit danach.`,
+          naechsterSchritt: "Lassen Sie sich per Belegeinsicht zeigen, für welchen Zeitraum diese Kosten angefallen sind.",
+          betragZugunstenMieter: geschaetzt,
+          positionId: p.id,
+          beleg: { tageGesamt, tageDanach, anteilMieter: p.anteilMieter },
+        };
+      });
+  },
+};
+
+export const I06_AufzugErdgeschoss: Regel = {
+  id: "I-06",
+  version: "1.0.0",
+  titel: "Aufzugskosten bei Erdgeschosswohnung",
+  bereich: "inhaltlich",
+  grundlage: "BGH, Urt. v. 20.09.2006 – VIII ZR 103/06; Mietvertrag",
+  stand: "entwurf",
+  pruefe(a) {
+    if (a.meta.geschoss === undefined || a.meta.geschoss > 0) return [];
+    const aufzug = a.kostenpositionen.filter((p) => p.kategorie === "aufzug");
+    if (aufzug.length === 0) return [];
+    const summe = runde(aufzug.reduce((s, p) => s + p.anteilMieter, 0));
+    const ausgenommen = a.mietvertrag?.aufzugAusgenommen;
+    if (ausgenommen === true) {
+      return [
+        {
+          status: "abweichung",
+          titel: "Aufzugskosten trotz Ausnahme im Mietvertrag",
+          erklaerung: `Ihr Mietvertrag nimmt Erdgeschosswohnungen von den Aufzugskosten aus. Trotzdem wurden ${euro(summe)} berechnet.`,
+          naechsterSchritt: `Fordern Sie die Streichung der Aufzugskosten (${euro(summe)}).`,
+          betragZugunstenMieter: summe,
+        },
+      ];
+    }
+    if (ausgenommen === false) return [];
+    return [
+      {
+        status: "nicht_pruefbar",
+        titel: "Aufzugskosten im Erdgeschoss",
+        erklaerung: `Sie wohnen im Erdgeschoss und zahlen ${euro(summe)} Aufzugskosten. Das ist grundsätzlich zulässig, außer Ihr Mietvertrag nimmt Erdgeschosswohnungen ausdrücklich aus oder der Aufzug erschließt Ihre Wohnung gar nicht (z. B. separater Eingang).`,
+        rueckfrage: {
+          feld: "mietvertrag.aufzugAusgenommen",
+          frage: "Enthält Ihr Mietvertrag eine Regelung, nach der Erdgeschosswohnungen keine Aufzugskosten tragen? Erreichen Sie über den Aufzug z. B. Keller oder Tiefgarage?",
+        },
+        beleg: { summe },
+      },
+    ];
+  },
+};
+
+export const I07_WartungMitReparatur: Regel = {
+  id: "I-07",
+  version: "1.0.0",
+  titel: "Wartungskosten ohne Reparaturanteil",
+  bereich: "inhaltlich",
+  grundlage: "§ 1 Abs. 2 Nr. 2 BetrKV; § 2 Nr. 7 BetrKV",
+  stand: "entwurf",
+  pruefe(a) {
+    return a.kostenpositionen
+      .filter(
+        (p) =>
+          p.kategorie !== "instandhaltung" &&
+          (p.steuerlich35a === "handwerker" || (p.kategorie === "aufzug" && /wart/i.test(p.bezeichnung))),
+      )
+      .map((p) => ({
+        status: "auffaelligkeit" as const,
+        titel: `Reparaturanteil prüfen: ${p.bezeichnung}`,
+        erklaerung:
+          `In „${p.bezeichnung}“ (Gesamtkosten ${p.gesamtkosten !== undefined ? euro(p.gesamtkosten) : "unbekannt"}, Ihr Anteil ${euro(p.anteilMieter)}) können Reparaturen enthalten sein` +
+          (p.steuerlich35a === "handwerker" ? " – die Position ist als Handwerkerleistung gekennzeichnet." : ".") +
+          " Umlagefähig sind nur Prüfung und Wartung. Bei Vollwartungsverträgen muss der Reparaturanteil herausgerechnet werden.",
+        naechsterSchritt: "Verlangen Sie Einsicht in den Wartungsvertrag und die Rechnungen. Enthält der Vertrag Reparaturen, muss der Anteil abgezogen werden.",
+        positionId: p.id,
+        beleg: { gesamtkosten: p.gesamtkosten, steuerlich35a: p.steuerlich35a },
+      }));
+  },
+};
+
+/** Stufenmodell nach Anlage zum CO2KostAufG: [ab kg CO₂/m²/Jahr, Vermieteranteil]. */
+const CO2_STUFEN: [number, number][] = [
+  [52, 0.95],
+  [47, 0.8],
+  [42, 0.7],
+  [37, 0.6],
+  [32, 0.5],
+  [27, 0.4],
+  [22, 0.3],
+  [17, 0.2],
+  [12, 0.1],
+  [0, 0],
+];
+
+export function co2Vermieterquote(kgProQmJahr: number): number {
+  return CO2_STUFEN.find(([ab]) => kgProQmJahr >= ab)?.[1] ?? 0;
+}
+
+export const I08_CO2Aufteilung: Regel = {
+  id: "I-08",
+  version: "1.0.0",
+  titel: "CO₂-Kosten korrekt aufgeteilt",
+  bereich: "inhaltlich",
+  grundlage: "§§ 5, 6 CO2KostAufG mit Anlage",
+  stand: "entwurf",
+  pruefe(a, { einstellungen }) {
+    const c = a.heizkosten?.co2;
+    if (!c) return [];
+    const kgProQm = c.emissionKg / c.flaecheM2;
+    const quote = co2Vermieterquote(kgProQm);
+    const erwartet = runde(c.kostenGesamt * quote);
+    const differenz = runde(erwartet - c.vermieteranteil);
+    const beleg = { kgProQm: runde(kgProQm), vermieterquote: quote, erwartet, abgerechnet: c.vermieteranteil };
+    if (Math.abs(differenz) <= Math.max(einstellungen.toleranzEuro, 1)) {
+      return [
+        {
+          status: "ok",
+          titel: "CO₂-Kosten korrekt aufgeteilt",
+          erklaerung: `Bei ${runde(kgProQm)} kg CO₂ pro m² trägt der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten (${euro(erwartet)}) – das ist berücksichtigt.`,
+          beleg,
+        },
+      ];
+    }
+    return [
+      {
+        status: "abweichung",
+        titel: "CO₂-Kosten falsch aufgeteilt",
+        erklaerung: `Bei ${runde(kgProQm)} kg CO₂ pro m² müsste der Vermieter ${Math.round(quote * 100)} % der CO₂-Kosten tragen, also ${euro(erwartet)} für das Haus. Berücksichtigt sind ${euro(c.vermieteranteil)}.`,
+        naechsterSchritt: "Fordern Sie eine Korrektur der CO₂-Kostenaufteilung.",
+        beleg: { ...beleg, differenzHaus: differenz },
+      },
+    ];
+  },
+};
+
+export const INHALTLICHE_REGELN = [
+  I01_NichtUmlagefaehig,
+  I02_SonstigeKosten,
+  I03_NichtZugeordnet,
+  I04_Heizkosten,
+  I05_KabelTV,
+  I06_AufzugErdgeschoss,
+  I07_WartungMitReparatur,
+  I08_CO2Aufteilung,
+];

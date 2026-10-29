@@ -13,7 +13,7 @@ import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet.js";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch.js";
 import { Abrechnung, type AbrechnungEingabe } from "./schema.js";
 
-export const REGELWERK_VERSION = "0.1.0";
+export const REGELWERK_VERSION = "0.2.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,
@@ -34,6 +34,8 @@ export interface Pruefbericht {
      * sondern der höhere Wert genommen.
      */
     einsparpotenzial: number;
+    /** Beträge aus Auffälligkeiten, die sich nach Klärung als Ersparnis erweisen können. */
+    klaerungspotenzial: number;
     rueckfragen: Rueckfrage[];
   };
 }
@@ -73,6 +75,7 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
   const anzahl: Record<Status, number> = { ok: 0, abweichung: 0, auffaelligkeit: 0, nicht_pruefbar: 0 };
   let einzeln = 0;
   let gesamt = 0;
+  let klaerung = 0;
   const rueckfragen = new Map<string, Rueckfrage>();
 
   for (const e of ergebnisse) {
@@ -80,6 +83,9 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     if (e.status === "abweichung" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
       if (GESAMTREGELN.has(e.regelId)) gesamt = Math.max(gesamt, e.betragZugunstenMieter);
       else einzeln += e.betragZugunstenMieter;
+    }
+    if (e.status === "auffaelligkeit" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
+      klaerung += e.betragZugunstenMieter;
     }
     if (e.rueckfrage && !rueckfragen.has(e.rueckfrage.feld)) rueckfragen.set(e.rueckfrage.feld, e.rueckfrage);
   }
@@ -91,6 +97,7 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     zusammenfassung: {
       anzahl,
       einsparpotenzial: runde(Math.max(einzeln, gesamt)),
+      klaerungspotenzial: runde(klaerung),
       rueckfragen: [...rueckfragen.values()],
     },
   };

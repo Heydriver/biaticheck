@@ -118,4 +118,42 @@ export const P02_KostenProQm: Regel = {
   },
 };
 
-export const PLAUSIBILITAETS_REGELN = [P01_Vorjahresvergleich, P02_KostenProQm];
+export const P03_Warmwasser: Regel = {
+  id: "P-03",
+  version: "1.0.0",
+  titel: "Warmwasserkosten pro m³ im üblichen Rahmen",
+  bereich: "plausibilitaet",
+  grundlage: "Wirtschaftlichkeitsgebot; § 9 HeizkostenV (Schwellenwert vom Expertenteam festzulegen)",
+  stand: "entwurf",
+  pruefe(a, { einstellungen }) {
+    const w = a.heizkosten?.warmwasser;
+    if (!w?.kostenGesamt || !w.verbrauchGesamtM3) return [];
+    const proM3 = runde(w.kostenGesamt / w.verbrauchGesamtM3);
+    const kwhProM3 = w.energieKwh ? runde(w.energieKwh / w.verbrauchGesamtM3) : undefined;
+    const schwelle = einstellungen.warmwasserProM3Schwelle;
+    const beleg = { proM3, kwhProM3, schwelle, kostenGesamt: w.kostenGesamt, verbrauchGesamtM3: w.verbrauchGesamtM3 };
+    if (proM3 <= schwelle) {
+      return [
+        {
+          status: "ok",
+          titel: "Warmwasserkosten im üblichen Rahmen",
+          erklaerung: `Warmwasser kostet im Haus ${euro(proM3)} pro m³.`,
+          beleg,
+        },
+      ];
+    }
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: "Hohe Warmwasserkosten",
+        erklaerung:
+          `Warmwasser kostet im Haus ${euro(proM3)} pro m³ – deutlich mehr als üblich (bis etwa ${euro(schwelle)}).` +
+          (kwhProM3 ? ` Für jeden m³ Warmwasser werden ${kwhProM3} kWh Wärme aufgewendet; hohe Werte deuten auf Verluste in der Anlage (z. B. Zirkulation) hin.` : ""),
+        naechsterSchritt: "Verlangen Sie Belegeinsicht in die Warmwasserkosten (Energie, Entkalkung, Wartung) und fragen Sie nach Maßnahmen gegen Wärmeverluste.",
+        beleg,
+      },
+    ];
+  },
+};
+
+export const PLAUSIBILITAETS_REGELN = [P01_Vorjahresvergleich, P02_KostenProQm, P03_Warmwasser];

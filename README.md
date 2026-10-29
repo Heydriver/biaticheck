@@ -5,6 +5,7 @@ Automatisierte Prüfung von Nebenkostenabrechnungen auf Basis von Expertenwissen
 - [Architektur](docs/ARCHITEKTUR.md)
 - [Regelkatalog](docs/REGELKATALOG.md)
 - [Vorlage Prüfprotokoll und Regelkarte](docs/REGELKARTE-VORLAGE.md)
+- Musterprüfungen: [G-001](docs/musterpruefung/G-001.md)
 
 ## Entwicklung
 
@@ -20,7 +21,8 @@ pnpm typecheck
 
 | Baustein | Status |
 |---|---|
-| Prüfkern (Schema, 15 Regeln, Engine, Tests) | ✅ v0.1 (Regeln im Entwurf) |
+| Prüfkern (Schema, 20 Regeln, Engine, Tests) | ✅ v0.2 (Regeln im Entwurf) |
+| Golden Set | 1 echter Fall (G-001) |
 | Auslesen (PDF → Schema) | ⏳ |
 | Web-App: Upload, Erstauswertung, Bericht | ⏳ |
 | Interner Prüfbereich | ⏳ |
