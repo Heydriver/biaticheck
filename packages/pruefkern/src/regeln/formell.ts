@@ -1,5 +1,5 @@
-import { datumDE, euro, plusMonate, vergleiche } from "../hilfen.js";
-import type { Regel, Rueckfrage } from "../regel.js";
+import { datumDE, euro, plusMonate, vergleiche } from "../hilfen";
+import type { Regel, Rueckfrage } from "../regel";
 
 const RUECKFRAGE_ZUGANG: Rueckfrage = {
   feld: "meta.zugangAm",

@@ -1,6 +1,6 @@
-import { euro, runde, tageInklusive } from "../hilfen.js";
-import type { Befund, Regel } from "../regel.js";
-import type { Abrechnung } from "../schema.js";
+import { euro, runde, tageInklusive } from "../hilfen";
+import type { Befund, Regel } from "../regel";
+import type { Abrechnung } from "../schema";
 
 /** Summe aller Kosten der Wohnung, inkl. Heizkosten, falls separat ausgewiesen. */
 export function summeKostenMieter(a: Abrechnung): number {

@@ -1,5 +1,5 @@
 import { Abrechnung, ordneKategorieZu, type AbrechnungEingabe, type Kostenposition } from "@biaticheck/pruefkern";
-import type { Rohdaten } from "./rohdaten.js";
+import type { Rohdaten } from "./rohdaten";
 
 export interface Umwandlung {
   abrechnung: AbrechnungEingabe;

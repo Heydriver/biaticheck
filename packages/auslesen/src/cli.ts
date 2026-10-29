@@ -9,7 +9,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { pruefeAbrechnung, type AbrechnungEingabe } from "@biaticheck/pruefkern";
 import { readFile } from "node:fs/promises";
-import { erkenneDokumenttyp, leseAus, vergleiche } from "./index.js";
+import { erkenneDokumenttyp, leseAus, vergleiche } from "./index";
 
 const [pfad, ...rest] = process.argv.slice(2);
 if (!pfad) {

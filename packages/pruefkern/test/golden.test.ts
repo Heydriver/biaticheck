@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pruefeAbrechnung, type Status } from "../src/index.js";
-import { G001 } from "./golden/G-001.js";
+import { pruefeAbrechnung, type Status } from "../src/index";
+import { G001 } from "./golden/G-001";
 
 /**
  * Golden Set: echte, anonymisierte Abrechnungen mit dem vom Experten erwarteten Ergebnis.

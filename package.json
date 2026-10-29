@@ -3,7 +3,11 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
+    "dev": "pnpm --filter @biaticheck/web dev",
+    "build": "pnpm --filter @biaticheck/web build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "test:e2e": "pnpm --filter @biaticheck/web test:e2e",
+    "typecheck": "pnpm -r typecheck",
+    "auslesen": "pnpm --filter @biaticheck/auslesen auslesen"
   }
 }

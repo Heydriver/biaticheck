@@ -1,6 +1,6 @@
-import { euro, runde, tageInklusive, vergleiche } from "../hilfen.js";
-import type { Befund, Regel } from "../regel.js";
-import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema.js";
+import { euro, runde, tageInklusive, vergleiche } from "../hilfen";
+import type { Befund, Regel } from "../regel";
+import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema";
 
 export const I01_NichtUmlagefaehig: Regel = {
   id: "I-01",

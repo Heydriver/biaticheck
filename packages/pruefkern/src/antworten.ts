@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Abrechnung, type AbrechnungEingabe } from "./schema.js";
+import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
 /**
  * Antworten des Kunden auf Rückfragen.

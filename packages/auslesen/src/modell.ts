@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { NUTZER_ANWEISUNG, SYSTEM_PROMPT } from "./prompt.js";
-import { Rohdaten } from "./rohdaten.js";
+import { NUTZER_ANWEISUNG, SYSTEM_PROMPT } from "./prompt";
+import { Rohdaten } from "./rohdaten";
 
 export const MODELL = "claude-opus-5-5";
 

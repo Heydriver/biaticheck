@@ -1,4 +1,4 @@
-import type { AbrechnungEingabe } from "../../src/index.js";
+import type { AbrechnungEingabe } from "../../src/index";
 
 /**
  * G-001 – Großvermieter München, Abrechnungsjahr 2024, EG-Wohnung 84,28 m².

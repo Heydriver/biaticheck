@@ -1,6 +1,6 @@
-import { euro, runde, tageInklusive } from "../hilfen.js";
-import type { Befund, Regel } from "../regel.js";
-import { KOSTENKATEGORIEN } from "../schema.js";
+import { euro, runde, tageInklusive } from "../hilfen";
+import type { Befund, Regel } from "../regel";
+import { KOSTENKATEGORIEN } from "../schema";
 
 export const P01_Vorjahresvergleich: Regel = {
   id: "P-01",

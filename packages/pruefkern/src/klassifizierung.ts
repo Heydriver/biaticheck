@@ -1,4 +1,4 @@
-import type { Kostenkategorie } from "./schema.js";
+import type { Kostenkategorie } from "./schema";
 
 /**
  * Regelbasierte Zuordnung von Positionsbezeichnungen zu Kostenkategorien.

@@ -2,9 +2,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { pruefeAbrechnung } from "@biaticheck/pruefkern";
 import { describe, expect, it, vi } from "vitest";
-import { G001 } from "../../pruefkern/test/golden/G-001.js";
-import { AuslesenFehler, erkenneDokumenttyp, leseAus, pruefeKonsistenz, Rohdaten, vergleiche, wandleUm } from "../src/index.js";
-import { G001_ROH } from "./G-001.roh.js";
+import { G001 } from "../../pruefkern/test/golden/G-001";
+import { AuslesenFehler, erkenneDokumenttyp, leseAus, pruefeKonsistenz, Rohdaten, vergleiche, wandleUm } from "../src/index";
+import { G001_ROH } from "./G-001.roh";
 
 const roh = (): Rohdaten => structuredClone(G001_ROH);
 const PDF = { daten: new TextEncoder().encode("%PDF-1.7 ..."), mimeType: "application/pdf" as const };

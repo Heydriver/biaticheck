@@ -1,4 +1,4 @@
-import type { Rohdaten } from "../src/rohdaten.js";
+import type { Rohdaten } from "../src/rohdaten";
 
 /** So sollte das Modell die Musterabrechnung G-001 idealerweise zurückgeben. */
 const pos = (

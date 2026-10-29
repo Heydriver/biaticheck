@@ -1,4 +1,4 @@
-import { runde } from "./hilfen.js";
+import { runde } from "./hilfen";
 import {
   STANDARD_EINSTELLUNGEN,
   type Einstellungen,
@@ -6,12 +6,12 @@ import {
   type Regelergebnis,
   type Rueckfrage,
   type Status,
-} from "./regel.js";
-import { FORMELLE_REGELN } from "./regeln/formell.js";
-import { INHALTLICHE_REGELN } from "./regeln/inhaltlich.js";
-import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet.js";
-import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch.js";
-import { Abrechnung, type AbrechnungEingabe } from "./schema.js";
+} from "./regel";
+import { FORMELLE_REGELN } from "./regeln/formell";
+import { INHALTLICHE_REGELN } from "./regeln/inhaltlich";
+import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
+import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
+import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
 export const REGELWERK_VERSION = "0.2.0";
 

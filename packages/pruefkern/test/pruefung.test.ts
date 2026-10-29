@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ordneKategorieZu, plusMonate, pruefeAbrechnung, type Regelergebnis } from "../src/index.js";
-import { co2Vermieterquote } from "../src/regeln/inhaltlich.js";
-import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle.js";
+import { ordneKategorieZu, plusMonate, pruefeAbrechnung, type Regelergebnis } from "../src/index";
+import { co2Vermieterquote } from "../src/regeln/inhaltlich";
+import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle";
 
 const HEUTE = "2026-10-29";
 const nur = (ergebnisse: Regelergebnis[], regelId: string) => ergebnisse.filter((e) => e.regelId === regelId);

@@ -7,9 +7,9 @@ import {
   pruefeAbrechnung,
   wendeAntwortAn,
   type AbrechnungEingabe,
-} from "../src/index.js";
-import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle.js";
-import { G001 } from "./golden/G-001.js";
+} from "../src/index";
+import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle";
+import { G001 } from "./golden/G-001";
 
 const HEUTE = "2026-10-29";
 

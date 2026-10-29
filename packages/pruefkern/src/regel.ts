@@ -1,4 +1,4 @@
-import type { Abrechnung } from "./schema.js";
+import type { Abrechnung } from "./schema";
 
 /**
  * Ergebnistypen, die der Kunde sieht:

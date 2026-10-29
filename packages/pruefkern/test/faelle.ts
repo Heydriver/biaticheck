@@ -1,4 +1,4 @@
-import type { AbrechnungEingabe } from "../src/index.js";
+import type { AbrechnungEingabe } from "../src/index";
 
 /**
  * Synthetische Musterfälle (Golden Set, Teil 1).

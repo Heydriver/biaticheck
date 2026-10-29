@@ -1,6 +1,6 @@
-import { antworttyp, type Antworttyp } from "./antworten.js";
-import type { Pruefbericht } from "./pruefung.js";
-import type { Regelbereich, Status } from "./regel.js";
+import { antworttyp, type Antworttyp } from "./antworten";
+import type { Pruefbericht } from "./pruefung";
+import type { Regelbereich, Status } from "./regel";
 
 /**
  * Kostenlose Erstauswertung: bewusst nur Überblick und Titel.

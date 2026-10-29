@@ -1,15 +1,15 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AbrechnungEingabe } from "@biaticheck/pruefkern";
-import { pruefeKonsistenz, type Konsistenz } from "./konsistenz.js";
-import { rufeModellAuf, type Dokument } from "./modell.js";
-import { wandleUm } from "./umwandlung.js";
+import { pruefeKonsistenz, type Konsistenz } from "./konsistenz";
+import { rufeModellAuf, type Dokument } from "./modell";
+import { wandleUm } from "./umwandlung";
 
-export { AuslesenFehler, MODELL, type Dokument, type Dokumenttyp } from "./modell.js";
-export { erkenneDokumenttyp } from "./dateityp.js";
-export { pruefeKonsistenz, type Konsistenz } from "./konsistenz.js";
-export { Rohdaten } from "./rohdaten.js";
-export { wandleUm } from "./umwandlung.js";
-export { vergleiche, type Vergleich } from "./vergleich.js";
+export { AuslesenFehler, MODELL, type Dokument, type Dokumenttyp } from "./modell";
+export { erkenneDokumenttyp } from "./dateityp";
+export { pruefeKonsistenz, type Konsistenz } from "./konsistenz";
+export { Rohdaten } from "./rohdaten";
+export { wandleUm } from "./umwandlung";
+export { vergleiche, type Vergleich } from "./vergleich";
 
 export interface Auslesung {
   /** Nicht gesetzt, wenn das Dokument keine Nebenkostenabrechnung ist. */

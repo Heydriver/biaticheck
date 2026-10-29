@@ -1,4 +1,4 @@
-import type { Dokumenttyp } from "./modell.js";
+import type { Dokumenttyp } from "./modell";
 
 /**
  * Erkennt den Dateityp am Inhalt (Magic Bytes), nicht an Dateiendung oder
