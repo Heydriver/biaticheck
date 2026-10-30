@@ -1,12 +1,108 @@
 @import "tailwindcss";
 
+/* Inter selbst gehostet – keine Anfragen an Google beim Seitenaufruf (DSGVO) */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/inter/800.css";
+
+/* Dunkelmodus folgt data-theme bzw. der Systemeinstellung */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Markenwerte aus dem CSS von www.biati.de:
+ * dunkelgrün #0E3B2E · grün #1FA37E · blau #2E7BB8 · sand #E6E2D8 · dunkel #0E1210/#E8F0EC
+ */
+:root {
+  --grund: #ffffff;
+  --grund-alt: #f7f6f2;
+  --flaeche: rgba(255, 255, 255, 0.86);
+  --text: #0e3b2e;
+  --gedaempft: #557268;
+  --linie: rgba(14, 59, 46, 0.1);
+  --gruen: #1fa37e;
+  --gruen-tief: #178a69;
+  --blau: #2e7bb8;
+  --mint: #e8f5f0;
+  --nebel-1: #cdeadf;
+  --nebel-2: #d5e5f2;
+  --warn-bg: #fcefd6;
+  --warn-fg: #8a5a12;
+  --offen-bg: #e9ece9;
+  --offen-fg: #4b5f58;
+  --ok-bg: #dff3ea;
+  --ok-fg: #0f6b51;
+  --fehler-bg: #fde4e4;
+  --fehler-fg: #9b2226;
+  --dunkelkarte: #0e3b2e;
+  --dunkelkarte-text: #e8f0ec;
+  --schatten: 0 40px 80px -36px rgba(14, 59, 46, 0.35), 0 10px 24px -14px rgba(14, 59, 46, 0.18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --grund: #0a0e0c; --grund-alt: #0e1210; --flaeche: rgba(20, 26, 23, 0.88); --text: #e8f0ec; --gedaempft: #99b2a7;
+    --linie: rgba(255, 255, 255, 0.1); --gruen: #22c08f; --gruen-tief: #1fa37e; --blau: #3e96d4; --mint: #12241d;
+    --nebel-1: #0f3a2c; --nebel-2: #102a3d; --warn-bg: #3a2c12; --warn-fg: #f2c66d; --offen-bg: #222a26; --offen-fg: #b8c9c1;
+    --ok-bg: #133428; --ok-fg: #7fe0bd; --fehler-bg: #3b1618; --fehler-fg: #ffb3b3; --dunkelkarte: #141a17; --dunkelkarte-text: #e8f0ec;
+    --schatten: 0 40px 80px -36px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --grund: #0a0e0c; --grund-alt: #0e1210; --flaeche: rgba(20, 26, 23, 0.88); --text: #e8f0ec; --gedaempft: #99b2a7;
+  --linie: rgba(255, 255, 255, 0.1); --gruen: #22c08f; --gruen-tief: #1fa37e; --blau: #3e96d4; --mint: #12241d;
+  --nebel-1: #0f3a2c; --nebel-2: #102a3d; --warn-bg: #3a2c12; --warn-fg: #f2c66d; --offen-bg: #222a26; --offen-fg: #b8c9c1;
+  --ok-bg: #133428; --ok-fg: #7fe0bd; --fehler-bg: #3b1618; --fehler-fg: #ffb3b3; --dunkelkarte: #141a17; --dunkelkarte-text: #e8f0ec;
+  --schatten: 0 40px 80px -36px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* Der Prüfbereich bleibt immer hell und sachlich – unabhängig von der Systemeinstellung */
+.immer-hell {
+  --grund: #ffffff; --grund-alt: #f7f6f2; --flaeche: #ffffff; --text: #0e3b2e; --gedaempft: #557268; --linie: rgba(14, 59, 46, 0.1);
+  --gruen: #1fa37e; --gruen-tief: #178a69; --blau: #2e7bb8; --mint: #e8f5f0;
+  --warn-bg: #fcefd6; --warn-fg: #8a5a12; --offen-bg: #e9ece9; --offen-fg: #4b5f58; --ok-bg: #dff3ea; --ok-fg: #0f6b51;
+  --fehler-bg: #fde4e4; --fehler-fg: #9b2226; --dunkelkarte: #0e3b2e; --dunkelkarte-text: #e8f0ec;
+  color-scheme: light;
+  background: #f7f6f2;
+  color: #0e3b2e;
+}
+
+@theme inline {
+  --font-sans: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-grund: var(--grund);
+  --color-grund-alt: var(--grund-alt);
+  --color-flaeche: var(--flaeche);
+  --color-text: var(--text);
+  --color-gedaempft: var(--gedaempft);
+  --color-linie: var(--linie);
+  --color-gruen: var(--gruen);
+  --color-gruen-tief: var(--gruen-tief);
+  --color-blau: var(--blau);
+  --color-mint: var(--mint);
+  --color-warn: var(--warn-bg);
+  --color-warn-text: var(--warn-fg);
+  --color-offen: var(--offen-bg);
+  --color-offen-text: var(--offen-fg);
+  --color-ok: var(--ok-bg);
+  --color-ok-text: var(--ok-fg);
+  --color-fehler: var(--fehler-bg);
+  --color-fehler-text: var(--fehler-fg);
+  --color-dunkelkarte: var(--dunkelkarte);
+  --color-dunkelkarte-text: var(--dunkelkarte-text);
+  --shadow-glas: var(--schatten);
+}
+
+/* Bestehende Klassen des Prüfbereichs auf die Markenfarben abbilden */
 @theme {
-  --color-marke-50: #eef7f6;
-  --color-marke-100: #d5ece9;
-  --color-marke-600: #0f766e;
-  --color-marke-700: #0b5e58;
-  --color-marke-900: #083f3b;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-marke-50: #e8f5f0;
+  --color-marke-100: #d5ece4;
+  --color-marke-600: #1fa37e;
+  --color-marke-700: #178a69;
+  --color-marke-900: #0e3b2e;
 }
 
 html {
@@ -14,9 +110,32 @@ html {
 }
 
 body {
-  @apply bg-stone-50 text-stone-900 antialiased;
+  background: var(--grund);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+  letter-spacing: -0.025em;
 }
 
 :focus-visible {
-  @apply outline-2 outline-offset-2 outline-marke-600;
+  outline: 3px solid var(--gruen);
+  outline-offset: 3px;
+}
+
+@keyframes schweben {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -10px; }
+}
+@keyframes laufband {
+  to { transform: translateX(-50%); }
+}
+.schweben { animation: schweben 8s ease-in-out infinite; }
+.laufband { animation: laufband 50s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

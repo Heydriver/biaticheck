@@ -66,14 +66,14 @@ DATABASE_URL=... UPLOAD_DIR=... DATEI_SCHLUESSEL=... pnpm --filter @biaticheck/w
 
 | Baustein | Status |
 |---|---|
-| Prüfkern (Schema, 20 Regeln, Rückfragen, Erstauswertung) | ✅ v0.2 (Regeln im Entwurf) |
+| Prüfkern (Schema, 21 Regeln, Rückfragen, Erstauswertung) | ✅ v0.2 (Regeln im Entwurf) |
 | Golden Set | 1 echter Fall (G-001) |
 | Auslesen (PDF → Schema, Selbstkontrolle) | ✅ – Live-Test mit API-Schlüssel ausstehend |
 | Web-App: Upload, Erstauswertung, Rückfragen (mobil) | ✅ |
 | Automatische Qualitätskontrolle (CI) | ✅ |
 | Interner Prüfbereich (Korrigieren, Freigeben, Messung für Auto-Freigabe) | ✅ |
 | Löschfrist (90 Tage) | ✅ Skript, Cron im Deployment einrichten |
-| Design von biati.de übernehmen | ⏳ wartet auf Netzwerkfreigabe für biati.de |
+| Design von biati.de (Inter, Markenfarben, 3D-Startseite, Erklärvideo, Hell/Dunkel) | ✅ |
 | Bezahlung, ausführlicher Bericht (PDF) | ⏳ Sprint 4 |
 | Deployment biati.de | ⏳ Sprint 4 |
 

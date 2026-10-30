@@ -29,8 +29,8 @@ export function wandleEingabe(typ: Frage["typ"], eingabe: string): unknown {
 
 export function Rueckfragen({ fragen, beantworte }: { fragen: Frage[]; beantworte: (feld: string, wert: unknown) => Promise<void> }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold">Damit wir mehr prüfen können</h2>
+    <section className="grid gap-3">
+      <h2 className="text-xl font-bold">Damit wir mehr prüfen können</h2>
       {fragen.map((f) => (
         <Frageformular key={f.feld} frage={f} beantworte={beantworte} />
       ))}
@@ -46,9 +46,9 @@ function Frageformular({ frage, beantworte }: { frage: Frage; beantworte: (feld:
 
   if (frage.typ === "dokument") {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white p-4 text-sm">
+      <div className="rounded-2xl border border-linie bg-grund p-4 text-sm">
         <p>{frage.frage}</p>
-        <p className="mt-2 text-stone-500">Das Nachreichen von Dokumenten ist in Kürze möglich.</p>
+        <p className="mt-2 text-gedaempft">Das Nachreichen von Dokumenten ist in Kürze möglich.</p>
       </div>
     );
   }
@@ -71,13 +71,13 @@ function Frageformular({ frage, beantworte }: { frage: Frage; beantworte: (feld:
   }
 
   return (
-    <form onSubmit={senden} className="space-y-2 rounded-xl border border-stone-200 bg-white p-4">
+    <form onSubmit={senden} className="grid gap-2.5 rounded-2xl border border-linie bg-grund p-4">
       <label htmlFor={id} className="block text-sm font-medium">
         {frage.frage}
       </label>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {frage.typ === "janein" ? (
-          <select id={id} value={eingabe} onChange={(e) => setEingabe(e.target.value)} className="flex-1 rounded-lg border border-stone-300 px-3 py-2">
+          <select id={id} value={eingabe} onChange={(e) => setEingabe(e.target.value)} className="min-w-0 flex-[1_1_160px] rounded-lg border border-linie bg-grund px-3 py-2.5 text-text">
             <option value="">Bitte wählen</option>
             <option value="ja">Ja</option>
             <option value="nein">Nein</option>
@@ -89,7 +89,7 @@ function Frageformular({ frage, beantworte }: { frage: Frage; beantworte: (feld:
             onChange={(e) => setEingabe(e.target.value)}
             rows={3}
             placeholder="Eine Kostenart pro Zeile"
-            className="flex-1 rounded-lg border border-stone-300 px-3 py-2"
+            className="min-w-0 flex-[1_1_160px] rounded-lg border border-linie bg-grund px-3 py-2.5 text-text"
           />
         ) : (
           <input
@@ -99,15 +99,15 @@ function Frageformular({ frage, beantworte }: { frage: Frage; beantworte: (feld:
             placeholder={frage.typ === "betrag" ? "z. B. 199,94" : undefined}
             value={eingabe}
             onChange={(e) => setEingabe(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-stone-300 px-3 py-2"
+            className="min-w-0 flex-[1_1_160px] rounded-lg border border-linie bg-grund px-3 py-2.5 text-text"
           />
         )}
-        <button type="submit" disabled={sendet} className="shrink-0 rounded-lg bg-marke-600 px-4 py-2 font-semibold text-white disabled:bg-stone-300">
+        <button type="submit" disabled={sendet} className="shrink-0 rounded-lg bg-gruen px-5 py-2.5 font-semibold text-white hover:bg-gruen-tief disabled:opacity-60">
           {sendet ? "…" : "Senden"}
         </button>
       </div>
       {fehler && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-fehler-text">
           {fehler}
         </p>
       )}

@@ -1,35 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "BiatiCheck – Nebenkostenabrechnung prüfen",
-  description: "Laden Sie Ihre Nebenkostenabrechnung hoch und erhalten Sie eine kostenlose Erstauswertung – geprüft nach Expertenregeln.",
+  description: "Laden Sie Ihre Nebenkostenabrechnung hoch und erhalten Sie eine kostenlose Erstauswertung – geprüft nach den Regeln der Experten von Biati Solutions.",
+  icons: { icon: "/biati-logo.svg" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#0f766e" };
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0e0c" },
+  ],
+};
+
+// Setzt das gespeicherte Farbschema vor dem ersten Zeichnen – verhindert kurzes Aufblitzen.
+const THEMA_SKRIPT = `try{var t=localStorage.getItem("bck-thema");if(t==="dark"||t==="light")document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de">
-      <body className="flex min-h-dvh flex-col">
-        <header className="border-b border-stone-200 bg-white">
-          <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-            <Link href="/" className="text-lg font-semibold text-marke-700">
-              BiatiCheck
-            </Link>
-            <span className="text-xs text-stone-500">Nebenkosten prüfen</span>
-          </div>
-        </header>
-        <main className="flex-1">{children}</main>
-        <footer className="border-t border-stone-200 bg-white text-sm text-stone-500">
-          <div className="mx-auto flex max-w-3xl flex-wrap gap-x-6 gap-y-2 px-4 py-4">
-            <Link href="/impressum">Impressum</Link>
-            <Link href="/datenschutz">Datenschutz</Link>
-            <span className="ml-auto">© biati.de</span>
-          </div>
-        </footer>
-      </body>
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEMA_SKRIPT }} />
+      </head>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }

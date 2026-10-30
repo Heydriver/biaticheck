@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@biaticheck/pruefkern": "workspace:*",
     "@remotion/cli": "4.0.534",
     "react": "19.3.1",
     "react-dom": "19.3.1",

@@ -5,30 +5,42 @@ import { useState } from "react";
 
 const MAX_MB = 20;
 
+/** Prüft die Auswahl im Browser – die verbindliche Prüfung (Inhalt, Größe) macht der Server. */
+export function pruefeAuswahl(f: { name: string; type: string; size: number } | undefined): string | undefined {
+  if (!f) return "Bitte wählen Sie zuerst Ihre Abrechnung aus.";
+  const typOk = /^(application\/pdf|image\/jpeg|image\/png)$/.test(f.type) || /\.(pdf|jpe?g|png)$/i.test(f.name);
+  if (!typOk) return "Bitte laden Sie ein PDF oder ein Foto (JPG, PNG) Ihrer Abrechnung hoch.";
+  if (f.size > MAX_MB * 1024 * 1024) return `Die Datei ist größer als ${MAX_MB} MB.`;
+  return undefined;
+}
+
 export function Hochladen() {
   const router = useRouter();
   const [datei, setDatei] = useState<File>();
   const [einwilligung, setEinwilligung] = useState(false);
+  const [ziehen, setZiehen] = useState(false);
   const [laedt, setLaedt] = useState(false);
   const [fehler, setFehler] = useState<string>();
 
   function waehle(f: File | undefined) {
-    setFehler(undefined);
-    if (f && f.size > MAX_MB * 1024 * 1024) {
-      setFehler(`Die Datei ist größer als ${MAX_MB} MB.`);
-      return;
-    }
-    setDatei(f);
+    const problem = f ? pruefeAuswahl(f) : undefined;
+    setFehler(problem);
+    setDatei(problem ? undefined : f);
   }
 
   async function absenden(e: React.FormEvent) {
     e.preventDefault();
-    if (!datei || !einwilligung || laedt) return;
+    if (laedt) return;
+    // Der Knopf ist immer aktiv und erklärt, was noch fehlt – statt stumm ausgegraut zu sein.
+    const problem = pruefeAuswahl(datei);
+    if (problem) return setFehler(problem);
+    if (!einwilligung) return setFehler("Bitte bestätigen Sie, dass Sie mit der Verarbeitung einverstanden sind.");
+
     setLaedt(true);
     setFehler(undefined);
     try {
       const formular = new FormData();
-      formular.set("datei", datei);
+      formular.set("datei", datei!);
       formular.set("einwilligung", "ja");
       const antwort = await fetch("/api/faelle", { method: "POST", body: formular });
       const daten = (await antwort.json().catch(() => ({}))) as { id?: string; token?: string; fehler?: string };
@@ -45,37 +57,61 @@ export function Hochladen() {
     }
   }
 
+  const zustand = fehler && !datei && fehler.includes("PDF oder ein Foto") ? "ungueltig" : datei ? "gewaehlt" : "leer";
+
   return (
-    <form onSubmit={absenden} className="space-y-4 rounded-2xl border border-marke-100 bg-white p-5 shadow-sm sm:p-6">
-      <h2 className="text-xl font-semibold">Abrechnung hochladen</h2>
-
-      <label
-        htmlFor="datei"
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-marke-100 bg-marke-50 px-4 py-8 text-center hover:border-marke-600"
+    <form onSubmit={absenden} noValidate className="grid gap-4 rounded-3xl border border-linie bg-grund p-5 shadow-glas sm:p-7">
+      <div
+        onDragEnter={() => setZiehen(true)}
+        onDragOver={() => setZiehen(true)}
+        onDragLeave={() => setZiehen(false)}
+        onDrop={() => setZiehen(false)}
+        className={`relative grid place-items-center gap-1.5 rounded-2xl border-2 px-4 py-8 text-center transition-colors focus-within:outline-3 focus-within:outline-offset-3 focus-within:outline-gruen ${
+          zustand === "ungueltig"
+            ? "border-fehler-text bg-fehler"
+            : zustand === "gewaehlt"
+              ? "border-solid border-gruen bg-mint"
+              : `border-dashed bg-mint ${ziehen ? "border-gruen" : "border-gruen/40 hover:border-gruen"}`
+        }`}
       >
-        <span className="text-base font-medium text-marke-700">{datei ? datei.name : "PDF oder Foto auswählen"}</span>
-        <span className="text-sm text-stone-500">{datei ? `${(datei.size / 1024 / 1024).toFixed(1)} MB` : `PDF, JPG oder PNG, bis ${MAX_MB} MB`}</span>
-      </label>
-      <input
-        id="datei"
-        name="datei"
-        type="file"
-        accept="application/pdf,image/jpeg,image/png"
-        className="sr-only"
-        onChange={(e) => waehle(e.target.files?.[0])}
-      />
-
-      <label className="flex items-start gap-3 text-sm text-stone-700">
+        {/* Das echte Dateifeld liegt unsichtbar über der ganzen Fläche: Antippen und Hineinziehen funktionieren auf allen Geräten (auch iOS). */}
         <input
+          id="datei"
+          name="datei"
+          type="file"
+          accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png"
+          aria-label="Abrechnung auswählen (PDF oder Foto)"
+          aria-describedby="datei-hinweis"
+          onChange={(e) => waehle(e.target.files?.[0])}
+          className="absolute inset-0 size-full cursor-pointer opacity-0"
+        />
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-gruen" aria-hidden="true">
+          <path d="M12 16V4M7 9l5-5 5 5" />
+          <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+        </svg>
+        <span className="text-[17px] font-bold text-gruen-tief">
+          {datei ? `✓ ${datei.name} (${(datei.size / 1024 / 1024).toFixed(1).replace(".", ",")} MB)` : "PDF oder Foto auswählen"}
+        </span>
+        <span id="datei-hinweis" className="text-sm text-gedaempft">
+          Antippen oder Datei hierher ziehen · PDF, JPG oder PNG, bis {MAX_MB} MB
+        </span>
+      </div>
+
+      <label htmlFor="einwilligung" className="flex items-start gap-3 text-sm text-gedaempft">
+        <input
+          id="einwilligung"
           type="checkbox"
           name="einwilligung"
           checked={einwilligung}
-          onChange={(e) => setEinwilligung(e.target.checked)}
-          className="mt-0.5 size-5 shrink-0 accent-marke-600"
+          onChange={(e) => {
+            setEinwilligung(e.target.checked);
+            if (e.target.checked && fehler?.includes("einverstanden")) setFehler(undefined);
+          }}
+          className="mt-0.5 size-5 shrink-0 accent-[var(--gruen)]"
         />
         <span>
           Ich bin einverstanden, dass meine Abrechnung zur Prüfung verarbeitet und nach 90 Tagen gelöscht wird. Details in der{" "}
-          <a href="/datenschutz" className="underline">
+          <a href="/datenschutz" className="underline underline-offset-2">
             Datenschutzerklärung
           </a>
           .
@@ -83,15 +119,15 @@ export function Hochladen() {
       </label>
 
       {fehler && (
-        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p role="alert" className="rounded-xl bg-warn px-3.5 py-2.5 text-sm text-warn-text">
           {fehler}
         </p>
       )}
 
       <button
         type="submit"
-        disabled={!datei || !einwilligung || laedt}
-        className="w-full rounded-xl bg-marke-600 px-4 py-3 text-base font-semibold text-white hover:bg-marke-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+        disabled={laedt}
+        className="w-full rounded-lg bg-gruen px-6 py-3.5 text-base font-semibold text-white shadow-[0_14px_28px_-16px_rgba(31,163,126,0.8)] hover:bg-gruen-tief disabled:cursor-wait disabled:opacity-60"
       >
         {laedt ? "Wird hochgeladen …" : "Kostenlos prüfen"}
       </button>

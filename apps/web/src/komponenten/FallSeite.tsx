@@ -72,7 +72,7 @@ export function FallSeite({ id }: { id: string }) {
       return (
         <Hinweis titel="Keine Nebenkostenabrechnung erkannt">
           Das hochgeladene Dokument scheint keine Nebenkosten- oder Betriebskostenabrechnung zu sein.{" "}
-          <a href="/" className="underline">
+          <a href="/#pruefen" className="text-gruen-tief underline">
             Andere Datei hochladen
           </a>
         </Hinweis>
@@ -82,7 +82,7 @@ export function FallSeite({ id }: { id: string }) {
         <Hinweis titel="Das Auslesen hat nicht geklappt">
           Bitte versuchen Sie es in ein paar Minuten erneut.
           <button
-            className="mt-4 block rounded-xl bg-marke-600 px-4 py-2 font-semibold text-white"
+            className="mt-4 block rounded-lg bg-gruen px-5 py-2.5 font-semibold text-white hover:bg-gruen-tief"
             onClick={async () => setAnsicht(await anfrage("/erneut", { method: "POST" }).catch(() => ansicht))}
           >
             Erneut versuchen
@@ -100,15 +100,18 @@ export function FallSeite({ id }: { id: string }) {
 }
 
 const STATUS_STIL = {
-  abweichung: { text: "Fehler", klasse: "bg-red-100 text-red-800" },
-  auffaelligkeit: { text: "Auffällig", klasse: "bg-amber-100 text-amber-900" },
-  nicht_pruefbar: { text: "Offen", klasse: "bg-stone-200 text-stone-700" },
+  abweichung: { text: "Fehler", klasse: "bg-fehler text-fehler-text" },
+  auffaelligkeit: { text: "Auffällig", klasse: "bg-warn text-warn-text" },
+  nicht_pruefbar: { text: "Offen", klasse: "bg-offen text-offen-text" },
 } as const;
 
 function Ergebnis({ e, beantworte }: { e: Erstauswertung; beantworte: (feld: string, wert: unknown) => Promise<void> }) {
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Ihre kostenlose Erstauswertung</h1>
+    <div className="grid gap-7">
+      <div className="grid gap-2">
+        <span className="text-xs font-semibold tracking-[0.08em] text-gedaempft uppercase">Kostenlose Erstauswertung</span>
+        <h1 className="text-[clamp(28px,4vw,40px)] leading-tight font-bold">Ihre kostenlose Erstauswertung</h1>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <Kennzahl titel="Sicheres Einsparpotenzial" wert={euro(e.einsparpotenzial)} hervorheben={e.einsparpotenzial > 0} />
@@ -119,19 +122,19 @@ function Ergebnis({ e, beantworte }: { e: Erstauswertung; beantworte: (feld: str
         <Zaehler anzahl={e.anzahl.abweichung} text="Fehler" klasse={STATUS_STIL.abweichung.klasse} />
         <Zaehler anzahl={e.anzahl.auffaelligkeit} text="Auffälligkeiten" klasse={STATUS_STIL.auffaelligkeit.klasse} />
         <Zaehler anzahl={e.anzahl.nicht_pruefbar} text="offene Punkte" klasse={STATUS_STIL.nicht_pruefbar.klasse} />
-        <Zaehler anzahl={e.anzahl.ok} text="ohne Befund" klasse="bg-marke-100 text-marke-900" />
+        <Zaehler anzahl={e.anzahl.ok} text="ohne Befund" klasse="bg-ok text-ok-text" />
       </div>
 
       {e.punkte.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-lg font-semibold">Was uns aufgefallen ist</h2>
-          <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200 bg-white">
+        <section className="grid gap-3">
+          <h2 className="text-xl font-bold">Was uns aufgefallen ist</h2>
+          <ul className="divide-y divide-linie overflow-hidden rounded-2xl border border-linie bg-grund">
             {e.punkte.map((p, i) => (
               <li key={i} className="flex items-start gap-3 px-4 py-3">
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STIL[p.status].klasse}`}>
+                <span className={`min-w-[76px] shrink-0 rounded-full px-2.5 py-0.5 text-center text-xs font-semibold ${STATUS_STIL[p.status].klasse}`}>
                   {STATUS_STIL[p.status].text}
                 </span>
-                <span className="text-sm">{p.titel}</span>
+                <span className="text-[15px]">{p.titel}</span>
               </li>
             ))}
           </ul>
@@ -140,16 +143,14 @@ function Ergebnis({ e, beantworte }: { e: Erstauswertung; beantworte: (feld: str
 
       {e.rueckfragen.length > 0 && <Rueckfragen fragen={e.rueckfragen} beantworte={beantworte} />}
 
-      <section className="rounded-2xl bg-marke-900 p-5 text-white">
+      <section className="grid gap-1.5 rounded-2xl bg-dunkelkarte p-6 text-dunkelkarte-text">
         <h2 className="text-lg font-semibold">Ausführlicher Bericht</h2>
-        <p className="mt-1 text-sm text-marke-100">
-          Erklärung zu jedem Punkt, konkrete Beträge, Musterschreiben an den Vermieter und Ihre nächsten Schritte.
-        </p>
-        <p className="mt-3 text-sm font-semibold">Demnächst verfügbar.</p>
+        <p className="text-sm opacity-85">Erklärung zu jedem Punkt, konkrete Beträge, Musterschreiben an den Vermieter und Ihre nächsten Schritte.</p>
+        <p className="mt-2 text-sm font-semibold">Demnächst verfügbar.</p>
       </section>
 
       <LinkMerken />
-      <p className="text-xs text-stone-500">
+      <p className="text-xs text-gedaempft">
         Geprüft am {new Date(e.geprueftAm).toLocaleDateString("de-DE")} mit Regelwerk {e.regelwerkVersion}. Keine Rechtsberatung.
       </p>
     </div>
@@ -158,16 +159,16 @@ function Ergebnis({ e, beantworte }: { e: Erstauswertung; beantworte: (feld: str
 
 function Kennzahl({ titel, wert, hervorheben }: { titel: string; wert: string; hervorheben: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${hervorheben ? "border-marke-600 bg-marke-50" : "border-stone-200 bg-white"}`}>
-      <div className="text-xs text-stone-600">{titel}</div>
-      <div className="mt-1 text-xl font-bold">{wert}</div>
+    <div className={`rounded-2xl border p-4 ${hervorheben ? "border-gruen bg-mint" : "border-linie bg-grund"}`}>
+      <div className="text-[13px] text-gedaempft">{titel}</div>
+      <div className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">{wert}</div>
     </div>
   );
 }
 
 function Zaehler({ anzahl, text, klasse }: { anzahl: number; text: string; klasse: string }) {
   return (
-    <span className={`rounded-full px-3 py-1 font-medium ${klasse}`}>
+    <span className={`rounded-full px-3 py-1 font-semibold ${klasse}`}>
       {anzahl} {text}
     </span>
   );
@@ -176,24 +177,24 @@ function Zaehler({ anzahl, text, klasse }: { anzahl: number; text: string; klass
 function Laden({ text }: { text: string }) {
   return (
     <div role="status" className="flex flex-col items-center gap-4 py-16 text-center">
-      <span className="size-10 animate-spin rounded-full border-4 border-marke-100 border-t-marke-600" aria-hidden />
-      <p className="text-stone-700">{text}</p>
+      <span className="size-10 animate-spin rounded-full border-4 border-mint border-t-gruen" aria-hidden />
+      <p className="text-gedaempft">{text}</p>
     </div>
   );
 }
 
 function Hinweis({ titel, children }: { titel: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-6">
-      <h1 className="text-xl font-semibold">{titel}</h1>
-      <div className="mt-2 text-stone-700">{children}</div>
+    <div className="rounded-3xl border border-linie bg-grund p-6 shadow-glas sm:p-8">
+      <h1 className="text-2xl font-bold">{titel}</h1>
+      <div className="mt-3 text-gedaempft">{children}</div>
     </div>
   );
 }
 
 function LinkMerken() {
   return (
-    <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+    <p className="mt-4 rounded-xl bg-warn px-3.5 py-2.5 text-sm text-warn-text">
       Bitte speichern Sie diesen Link (Lesezeichen). Nur damit gelangen Sie wieder zu Ihrer Prüfung.
     </p>
   );

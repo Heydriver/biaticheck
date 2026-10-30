@@ -11,7 +11,11 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { ALLE_REGELN } from "@biaticheck/pruefkern";
 import { LOGO_PFAD, MARKE } from "./marke";
+
+/** Anzahl der Prüfregeln – direkt aus dem Regelwerk, damit sie nie veraltet. */
+const ANZAHL_REGELN = ALLE_REGELN.length;
 
 /** Szenen in Frames (30 fps, 25 s). */
 export const SZENEN = {
@@ -296,7 +300,7 @@ function SzenePruefen({ h }: { h: boolean }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 36, maxWidth: h ? undefined : 640 }}>
         <Schritt nummer={2} titel="Prüfen" groesse={h ? 64 : 56} />
         <p style={{ margin: 0, fontSize: h ? 46 : 40, lineHeight: 1.45, color: MARKE.gedaempft }}>
-          Über 20 Prüfregeln aus dem Wissen unserer Energie- und Abrechnungsexperten. Jede Zahl wird nachgerechnet.
+          {ANZAHL_REGELN} Prüfregeln aus dem Wissen unserer Energie- und Abrechnungsexperten. Jede Zahl wird nachgerechnet.
         </p>
       </div>
       <Glaskarte neigung={2} style={{ width: h ? 880 : 760, padding: 48 }}>
@@ -378,7 +382,7 @@ function SzeneErgebnis({ h }: { h: boolean }) {
             opacity: ein(f, 30),
           }}
         >
-          <div style={{ fontSize: 44, fontWeight: 800 }}>20</div>
+          <div style={{ fontSize: 44, fontWeight: 800 }}>{ANZAHL_REGELN}</div>
           <div style={{ fontSize: 20, fontWeight: 500 }}>Regeln geprüft</div>
         </div>
         <div style={{ marginTop: 28, fontSize: 22, color: MARKE.gedaempft, textAlign: "center" }}>Beispiel aus einer echten, anonymisierten Abrechnung</div>
