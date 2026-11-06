@@ -34,13 +34,15 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await zugangsdatum(page, "2025-11-28");
   await expect(page.getByText("Einspruch möglich").locator("..")).toContainText("bis 28.11.2026");
 
-  // Die kostenlose Ansicht ist kurz – und Inhalte der Lösung sind nicht einmal im Quelltext
+  // Modell B: Fehler sind kostenlos sichtbar, Schritte und Schreiben erst nach dem Erledigen-Paket (nicht einmal im Quelltext)
+  await expect(page.getByRole("heading", { name: "Das haben wir gefunden" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten zu niedrig angerechnet" })).toBeVisible();
   const kostenlos = await page.locator("main").innerText();
-  expect(kostenlos.length).toBeLessThan(1200);
-  expect(await page.content()).not.toContain("Vorauszahlungen Heizkosten zu niedrig angerechnet");
+  expect(kostenlos.length).toBeLessThan(1800);
   expect(await page.content()).not.toContain("Unsere Empfehlung");
+  expect(await page.content()).not.toContain("Sehr geehrte Damen und Herren");
 
-  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
+  await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
   await expect(page.getByRole("heading", { name: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung" })).toBeVisible();
   await expect(page.getByText("Senden Sie es bis spätestens 28.11.2026.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten zu niedrig angerechnet" })).toBeVisible();
@@ -52,7 +54,7 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
   expect(text).not.toMatch(/\*\*/);
-  expect(text.length).toBeLessThan(2200);
+  expect(text.length).toBeLessThan(2600);
 
   // Weg 1: Schreiben
   await page.getByRole("button", { name: "Schreiben öffnen" }).click();
@@ -75,7 +77,7 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
 test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => {
   test.skip(test.info().project.name.endsWith("handy"), "Prüfbereich ist für den Desktop gedacht");
   await hochladen(page);
-  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
+  await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
   await page.getByRole("button", { name: "Lieber vom Experten erledigen lassen" }).click();
   await page.locator("#beratung-name").fill("Max Prüfling");
   await page.locator("#beratung-email").fill("max@example.org");
@@ -97,6 +99,6 @@ test("Verspätete Abrechnung: Nachzahlung entfällt", async ({ page }) => {
   await hochladen(page);
   await zugangsdatum(page, "2026-01-15");
   await expect(page.getByRole("heading", { name: /1\.214,88\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
+  await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
   await expect(page.getByRole("heading", { name: "Sie müssen die Nachzahlung nicht bezahlen" })).toBeVisible();
 });

@@ -58,8 +58,10 @@ test("Ablauf: Upload → Expertin erfasst und gibt frei → Kunde sieht Erstausw
   const kunde = await (await browser.newContext()).newPage();
   await kunde.goto(`/fall/${id}#${token}`);
   await expect(kunde.getByRole("heading", { name: /Bis zu 1\.236,44\s€ könnten falsch abgerechnet sein/ })).toBeVisible();
-  // Interne Details (Erklärungen) sind für den Kunden nicht sichtbar
-  await expect(kunde.getByText("Angerechnet sind 1.176,41 €")).toHaveCount(0);
+  // Modell B: Kurzfassung der Fehler ist kostenlos, die ausführliche Erklärung und das Schreiben nicht
+  await expect(kunde.getByText(/^Angerechnet sind 1\.176,41\s€, nach Ihren Monatsbeträgen/)).toBeVisible();
+  await expect(kunde.getByText(/Möglicherweise wurde die Vorauszahlung/)).toHaveCount(0);
+  expect(await kunde.content()).not.toContain("Sehr geehrte Damen und Herren");
 });
 
 test("Interne API: ohne Anmeldung 401, fremde Herkunft 403, Formularfehler verständlich", async ({ page, request }) => {

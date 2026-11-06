@@ -15,9 +15,6 @@ const euro = (n: number) => new Intl.NumberFormat("de-DE", { style: "currency", 
 const zahl = (n: number) => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const datum = (iso: string) => iso.split("-").reverse().join(".");
 
-/** Preis für das Freischalten der Fehler und des nächsten Schritts. */
-export const PREIS = 4.99;
-
 const KARTE = "grid min-w-0 gap-4 rounded-3xl border border-linie bg-grund p-5 sm:p-8";
 const KNOPF = "inline-flex items-center justify-center rounded-lg px-5 py-3 font-semibold disabled:opacity-60";
 const KNOPF_HAUPT = `${KNOPF} bg-gruen text-white hover:bg-gruen-tief`;
@@ -37,10 +34,13 @@ export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stu
           Demo-Modus: Statt Ihrer Datei wurde die Musterabrechnung ausgewertet.
         </p>
       )}
-      <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>
-        {!ansicht.stufe2 && <Freischalten modus={ansicht.freischaltung} freischalten={aktionen.freischalten} />}
-      </Ergebnis>
-      {ansicht.stufe2 && <Loesung s1={ansicht.stufe1} s2={ansicht.stufe2} aktionen={aktionen} />}
+      <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>{null}</Ergebnis>
+      {ansicht.fehler && ansicht.fehler.length > 0 && <Gefunden fehler={ansicht.fehler} />}
+      {ansicht.stufe2 ? (
+        <Loesung s1={ansicht.stufe1} s2={ansicht.stufe2} aktionen={aktionen} />
+      ) : (
+        ansicht.preis !== undefined && <Angebot preis={ansicht.preis} modus={ansicht.freischaltung} freischalten={aktionen.freischalten} />
+      )}
     </div>
   );
 }
@@ -132,11 +132,44 @@ function Vergleich({ s1 }: { s1: Stufe1 }) {
   );
 }
 
-function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischalten: () => Promise<void> }) {
+function Gefunden({ fehler }: { fehler: NonNullable<FallAnsicht["fehler"]> }) {
+  return (
+    <section className={KARTE} aria-labelledby="gefunden-titel">
+      <h2 id="gefunden-titel" className="text-lg font-bold">
+        Das haben wir gefunden
+      </h2>
+      <ul className="grid">
+        {fehler.map((p, i) => (
+          <li key={i} className="flex items-baseline justify-between gap-3 border-t border-linie py-3.5 first:border-0 first:pt-0">
+            <div className="min-w-0">
+              <h3 className="font-semibold">{p.titel}</h3>
+              <p className="text-[15px] text-gedaempft">{p.satz}</p>
+            </div>
+            {p.betrag !== undefined && <span className="font-bold whitespace-nowrap tabular-nums">{euro(p.betrag)}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Erledigen-Paket: erscheint nur, wenn sich das Paket für den Kunden lohnt. */
+function Angebot({ preis, modus, freischalten }: { preis: number; modus: "test" | "aus"; freischalten: () => Promise<void> }) {
   const [laedt, setLaedt] = useState(false);
   const [fehler, setFehler] = useState<string>();
-  if (modus !== "test") return <p className="font-semibold">Die Lösung ist in Kürze verfügbar.</p>;
   return (
+    <section className="grid gap-4 rounded-3xl bg-dunkelkarte p-5 text-dunkelkarte-text sm:p-8" aria-labelledby="angebot-titel">
+      <p className="text-sm opacity-75">Erledigen-Paket</p>
+      <h2 id="angebot-titel" className="text-[clamp(22px,4vw,30px)] leading-tight font-bold tracking-tight">
+        Wir erledigen den Rest für Sie
+      </h2>
+      <ul className="grid list-disc gap-1 pl-5">
+        <li>Genauer Betrag, den Sie wirklich zahlen müssen</li>
+        <li>Ihre nächsten Schritte mit Terminen</li>
+        <li>Fertiges Schreiben an Ihre Hausverwaltung</li>
+        <li>Auf Wunsch Beratung durch unsere Experten</li>
+      </ul>
+      {modus !== "test" ? <p className="font-semibold">Das Erledigen-Paket ist in Kürze verfügbar.</p> : (
     <div className="grid gap-2">
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -154,7 +187,7 @@ function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischa
           }}
           className={KNOPF_HAUPT}
         >
-          {laedt ? "Einen Moment …" : `Fehler anzeigen für ${euro(PREIS)}`}
+          {laedt ? "Einen Moment …" : `Für ${euro(preis)} erledigen`}
         </button>
         <span className="text-sm text-gedaempft">Testmodus: Es wird nichts berechnet.</span>
       </div>
@@ -164,6 +197,9 @@ function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischa
         </p>
       )}
     </div>
+      )}
+      <p className="text-sm opacity-75">Sie zahlen nur, weil wir mindestens 30 € mögliche Ersparnis gefunden haben.</p>
+    </section>
   );
 }
 
@@ -172,7 +208,6 @@ function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischa
 function Loesung({ s1, s2, aktionen }: { s1: Stufe1; s2: Stufe2; aktionen: Aktionen }) {
   const [weg, setWeg] = useState<"schreiben" | "beratung" | null>(null);
   const e = s2.empfehlung;
-  const beanstandet = s2.auffaelligkeiten.filter((p) => p.status !== "nicht_pruefbar");
   // Eingangsdatum wird oben abgefragt – nicht doppelt aufführen
   const offen = s2.auffaelligkeiten.filter((p) => p.status === "nicht_pruefbar" && p.regelId !== "F-02" && p.regelId !== "F-03");
   const weitereFragen = [...s2.rueckfragen, ...s1.rueckfragen.filter((r) => r.feld !== "meta.zugangAm")];
@@ -209,14 +244,6 @@ function Loesung({ s1, s2, aktionen }: { s1: Stufe1; s2: Stufe2; aktionen: Aktio
       {weg === "schreiben" && <Anschreiben s2={s2} />}
       {weg === "beratung" && <Beratung beratungAnfragen={aktionen.beratungAnfragen} />}
 
-      {beanstandet.length > 0 && (
-        <section className={KARTE} aria-labelledby="punkte-titel">
-          <h2 id="punkte-titel" className="text-lg font-bold">
-            Das beanstanden wir
-          </h2>
-          <Punkte liste={beanstandet} />
-        </section>
-      )}
 
       {(offen.length > 0 || weitereFragen.length > 0) && (
         <details className={`${KARTE} [&[open]>summary]:mb-2`}>
