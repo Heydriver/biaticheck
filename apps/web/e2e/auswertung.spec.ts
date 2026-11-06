@@ -40,7 +40,7 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   expect(await page.content()).not.toContain("Vorauszahlungen Heizkosten zu niedrig angerechnet");
   expect(await page.content()).not.toContain("Unsere Empfehlung");
 
-  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
   await expect(page.getByRole("heading", { name: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung" })).toBeVisible();
   await expect(page.getByText("Senden Sie es bis spätestens 28.11.2026.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten zu niedrig angerechnet" })).toBeVisible();
@@ -75,7 +75,7 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
 test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => {
   test.skip(test.info().project.name.endsWith("handy"), "Prüfbereich ist für den Desktop gedacht");
   await hochladen(page);
-  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
   await page.getByRole("button", { name: "Lieber vom Experten erledigen lassen" }).click();
   await page.locator("#beratung-name").fill("Max Prüfling");
   await page.locator("#beratung-email").fill("max@example.org");
@@ -97,6 +97,6 @@ test("Verspätete Abrechnung: Nachzahlung entfällt", async ({ page }) => {
   await hochladen(page);
   await zugangsdatum(page, "2026-01-15");
   await expect(page.getByRole("heading", { name: /1\.214,88\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
-  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await page.getByRole("button", { name: /^Fehler anzeigen für 4,99\s€$/ }).click();
   await expect(page.getByRole("heading", { name: "Sie müssen die Nachzahlung nicht bezahlen" })).toBeVisible();
 });

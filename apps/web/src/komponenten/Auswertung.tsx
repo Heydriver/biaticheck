@@ -15,6 +15,9 @@ const euro = (n: number) => new Intl.NumberFormat("de-DE", { style: "currency", 
 const zahl = (n: number) => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const datum = (iso: string) => iso.split("-").reverse().join(".");
 
+/** Preis für das Freischalten der Fehler und des nächsten Schritts. */
+export const PREIS = 4.99;
+
 const KARTE = "grid min-w-0 gap-4 rounded-3xl border border-linie bg-grund p-5 sm:p-8";
 const KNOPF = "inline-flex items-center justify-center rounded-lg px-5 py-3 font-semibold disabled:opacity-60";
 const KNOPF_HAUPT = `${KNOPF} bg-gruen text-white hover:bg-gruen-tief`;
@@ -151,9 +154,9 @@ function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischa
           }}
           className={KNOPF_HAUPT}
         >
-          {laedt ? "Einen Moment …" : "Lösung ansehen"}
+          {laedt ? "Einen Moment …" : `Fehler anzeigen für ${euro(PREIS)}`}
         </button>
-        <span className="text-sm text-gedaempft">Testmodus: ohne Bezahlung</span>
+        <span className="text-sm text-gedaempft">Testmodus: Es wird nichts berechnet.</span>
       </div>
       {fehler && (
         <p role="alert" className="text-sm text-fehler-text">
