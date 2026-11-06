@@ -156,6 +156,16 @@ export interface Auffaelligkeit {
   grundlage: string;
   /** Formulierung für das Anschreiben an die Hausverwaltung (sachlich, an den Vermieter gerichtet). */
   brief: string;
+  /** Kurzfassung für den Kunden: kurzer Titel und ein Satz, ohne Fachsprache. */
+  kurz: { titel: string; satz: string };
+}
+
+/** Die eine Empfehlung, die der Kunde zuerst sieht. */
+export interface Empfehlung {
+  titel: string;
+  text: string;
+  /** Hauptknopf: Schreiben an die Hausverwaltung, Expertenberatung oder nichts zu tun. */
+  aktion: "schreiben" | "beratung" | "keine";
 }
 
 export interface Stufe2 {
@@ -164,6 +174,7 @@ export interface Stufe2 {
   rueckfragen: { feld: string; frage: string; typ: Antworttyp }[];
   /** Zusammenfassung in ganzen Sätzen – ohne Aufzählungszeichen, Hervorhebungen oder Symbole. */
   zusammenfassung: string[];
+  empfehlung: Empfehlung;
   anschreiben: { betreff: string; text: string };
 }
 
@@ -188,6 +199,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
         betrag: e.betragZugunstenMieter !== undefined && e.betragZugunstenMieter > 0 ? e.betragZugunstenMieter : undefined,
         grundlage: GRUNDLAGEN.get(e.regelId) ?? "",
         brief: briefpunkt(e, a),
+        kurz: kurzfassung(e, a),
       };
     });
 
@@ -197,6 +209,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
       .filter((r) => !STUFE1_FELDER.has(r.feld))
       .map((r) => ({ feld: r.feld, frage: r.frage, typ: antworttyp(r.feld)! })),
     zusammenfassung: erstelleZusammenfassung(stufe1, auffaelligkeiten),
+    empfehlung: erstelleEmpfehlung(stufe1, auffaelligkeiten),
     anschreiben: erstelleAnschreiben(a, auffaelligkeiten.filter((p) => gehoertInsAnschreiben(p, bericht)), stufe1),
   };
 }
@@ -254,6 +267,112 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
   if (f.status === "abgelaufen" && f.bis) saetze.push(`Die Frist für Einwände ist am ${datumDE(f.bis)} abgelaufen.`);
   if (f.status === "unbekannt") saetze.push("Tragen Sie das Zugangsdatum der Abrechnung ein, damit wir Ihre Frist für Einwände berechnen können.");
   return saetze;
+}
+
+/** Eine klare Empfehlung statt vieler Einzelschritte. */
+export function erstelleEmpfehlung(s1: Stufe1, punkte: Auffaelligkeit[]): Empfehlung {
+  const f = s1.widerspruchsfrist;
+  const saldo = s1.kosten.saldo ?? 0;
+  const beanstandet = punkte.filter((p) => p.status !== "nicht_pruefbar");
+  const frist = f.status === "offen" && f.bis ? ` Senden Sie es bis spätestens ${datumDE(f.bis)}.` : "";
+
+  if (f.status === "abgelaufen")
+    return {
+      titel: "Die Frist für Einwände ist abgelaufen",
+      text: "Einwände sind nur noch in Ausnahmefällen möglich. Unsere Experten prüfen, ob das bei Ihnen zutrifft.",
+      aktion: "beratung",
+    };
+  if (punkte.some((p) => p.regelId === "F-02" && p.status === "abweichung") && saldo > 0)
+    return {
+      titel: "Sie müssen die Nachzahlung nicht bezahlen",
+      text: `Die Abrechnung kam zu spät. Damit entfällt die Nachzahlung von ${euro(saldo)}. Teilen Sie das Ihrer Hausverwaltung mit dem vorbereiteten Schreiben mit.`,
+      aktion: "schreiben",
+    };
+  if (beanstandet.length)
+    return {
+      titel: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung",
+      text: `Darin fordern wir die Klärung von ${beanstandet.length === 1 ? "einem Punkt" : `${beanstandet.length} Punkten`}, die Sie Geld kosten können.${frist}`,
+      aktion: "schreiben",
+    };
+  if (punkte.length)
+    return {
+      titel: "Keine Fehler gefunden",
+      text: "Einige Punkte lassen sich nur mit Ihrem Mietvertrag prüfen. Das übernehmen unsere Experten für Sie.",
+      aktion: "beratung",
+    };
+  return { titel: "Ihre Abrechnung ist in Ordnung", text: "Wir haben keine Fehler gefunden.", aktion: "keine" };
+}
+
+/**
+ * Kurzfassung eines Befunds für den Kunden: kurzer Titel und ein Satz.
+ * Ohne eigene Formulierung: Titel der Regel und der erste Satz der Erklärung.
+ */
+export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; satz: string } {
+  const b = e.beleg ?? {};
+  const rohName = (e.positionId ? a.kostenpositionen.find((p) => p.id === e.positionId)?.bezeichnung : undefined) ?? e.titel.replace(/^[^:]*: /, "");
+  // Paragraphen-Verweise aus Positionsnamen entfernen („§ 2 Nr. 13 – Versicherung“ → „Versicherung“)
+  const name = rohName.replace(/^§\s*\d+[^–-]*[–-]\s*/, "").trim() || rohName;
+  const k = (titel: string, satz: string) => ({ titel, satz });
+  const s = e.status;
+
+  switch (e.regelId) {
+    case "F-01":
+      return s === "abweichung" ? k("Zeitraum zu lang", "Eine Abrechnung darf höchstens 12 Monate umfassen.") : k("Zeitraum fehlt", "Der Abrechnungszeitraum ist nicht erkennbar.");
+    case "F-02":
+      if (s === "abweichung") return k("Abrechnung kam zu spät", "Eine Nachzahlung müssen Sie deshalb nicht leisten.");
+      if (s === "nicht_pruefbar") return k("Eingangsdatum fehlt", "Davon hängt ab, ob Sie überhaupt nachzahlen müssen.");
+      return k("Abrechnung kam zu spät", "Ein Guthaben steht Ihnen trotzdem zu.");
+    case "F-03":
+      return s === "nicht_pruefbar" ? k("Eingangsdatum fehlt", "Damit berechnen wir Ihre Frist für Einwände.") : k("Frist abgelaufen", "Einwände sind nur noch in Ausnahmefällen möglich.");
+    case "F-04":
+      return k(`Angaben fehlen: ${name}`, "Gesamtkosten oder Verteilung sind nicht angegeben.");
+    case "F-05":
+      return k("Pauschale vereinbart", "Bei einer Pauschale darf nicht nachberechnet werden.");
+    case "R-01":
+      return s === "abweichung" ? k(`Rechenfehler: ${name}`, "Ihr Anteil ist falsch berechnet.") : k("Anteile nicht nachrechenbar", "Gesamtkosten oder Verteilung fehlen.");
+    case "R-02":
+      return k("Summe falsch addiert", "Die Einzelposten ergeben eine andere Summe.");
+    case "R-03":
+      return s === "abweichung" ? k("Nachzahlung falsch berechnet", "Kosten minus Vorauszahlungen ergibt einen anderen Betrag.") : k("Vorauszahlungen fehlen", "Ohne sie lässt sich die Nachzahlung nicht prüfen.");
+    case "R-04":
+      return k("Unterschiedliche Flächen", "Für Ihre Wohnung werden verschiedene Größen angesetzt.");
+    case "R-05": {
+      const art = b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten";
+      const jahr = zahl(b.jahr), erwartet = zahl(b.erwartet);
+      return k(
+        (zahl(b.differenz) ?? 0) > 0 ? `Vorauszahlungen ${art} zu niedrig angerechnet` : `Vorauszahlungen ${art} abweichend angerechnet`,
+        jahr !== undefined && erwartet !== undefined ? `Angerechnet sind ${euro(jahr)}, nach Ihren Monatsbeträgen wären es ${euro(erwartet)}.` : "Die angerechneten Zahlungen passen nicht zu Ihren Monatsbeträgen.",
+      );
+    }
+    case "I-01":
+      return k(`Nicht erlaubt: ${name}`, "Diese Kosten darf der Vermieter nicht auf Sie umlegen.");
+    case "I-02":
+      return s === "abweichung" ? k(`Nicht vereinbart: ${name}`, "Steht nicht in Ihrem Mietvertrag und darf nicht umgelegt werden.") : k(name, "Nur erlaubt, wenn es in Ihrem Mietvertrag steht.");
+    case "I-03":
+      return k(`Unklar: ${name}`, "Es ist nicht erkennbar, wofür diese Kosten sind.");
+    case "I-04":
+      if (s === "abweichung") return k("Heizung nicht nach Verbrauch abgerechnet", "Sie dürfen Ihren Anteil um 15 % kürzen.");
+      if (s === "nicht_pruefbar") return k("Heizkostenabrechnung fehlt", "Ohne sie lassen sich die Heizkosten nicht prüfen.");
+      return k("Heizkosten ungewöhnlich verteilt", "Der Anteil nach Verbrauch liegt außerhalb des Üblichen.");
+    case "I-05":
+      return s === "abweichung" ? k(`Kabelfernsehen: ${name}`, "Seit Juli 2024 nicht mehr umlagefähig.") : k(`Kabelfernsehen: ${name}`, "Erlaubt sind nur Kosten bis Juni 2024.");
+    case "I-06":
+      return s === "abweichung" ? k("Aufzug trotz Erdgeschoss", "Ihr Mietvertrag nimmt Sie davon aus.") : k("Aufzug im Erdgeschoss", "Nur unzulässig, wenn Ihr Mietvertrag das so regelt.");
+    case "I-07":
+      return k(`Reparaturen in „${name}“?`, "Reparaturen dürfen nicht auf Mieter umgelegt werden.");
+    case "I-08":
+      return k("CO₂-Kosten falsch verteilt", "Einen Teil davon muss der Vermieter selbst tragen.");
+    case "P-01":
+      if (s === "nicht_pruefbar") return k("Vorjahresabrechnung fehlt", "Mit ihr erkennen wir ungewöhnliche Preissprünge.");
+      return e.titel.startsWith("Neue") ? k(`Neu: ${name}`, "Diese Kosten gab es im Vorjahr nicht.") : k(`Stark gestiegen: ${name}`, "Deutlich teurer als im Vorjahr.");
+    case "P-02":
+      return s === "nicht_pruefbar" ? k("Wohnfläche fehlt", "Damit vergleichen wir Ihre Kosten mit anderen.") : k("Nebenkosten über Durchschnitt", "Deutlich teurer als bei vergleichbaren Wohnungen.");
+    case "P-03": {
+      const m3 = zahl(b.proM3);
+      return k("Warmwasser sehr teuer", m3 !== undefined ? `${euro(m3)} je m³, üblich sind bis etwa 20 €.` : "Deutlich teurer als üblich.");
+    }
+  }
+  return k(e.titel, e.erklaerung.split(/(?<=\.)\s/)[0]!);
 }
 
 const zahl = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);

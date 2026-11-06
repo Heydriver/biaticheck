@@ -40,14 +40,16 @@ Auslesen einer echten Abrechnung und Vergleich mit dem Golden Set (benötigt `AN
 pnpm auslesen pfad/zur/abrechnung.pdf --golden G-001
 ```
 
-## Ergebnisstufen für den Kunden
+## Ergebnis für den Kunden
 
-| Stufe | Inhalt | Zugang |
+Leitlinie: Der Kunde will keine Details, sondern eine Lösung. Wenig Text, kein Fachjargon, ein Hauptknopf.
+
+| Teil | Inhalt | Zugang |
 |---|---|---|
-| **1.1** Fehlerpotenzial und Widerspruchsfrist | sicheres und zu klärendes Einsparpotenzial, Anzahl der Befunde, Frist für Einwände mit verbleibenden Tagen, Abrechnungsfrist des Vermieters | kostenlos |
-| **1.2** Kosten und Vergleich | Betriebs- und Heizkosten, Vorauszahlungen, Nachzahlung; Vergleich je m² und Monat mit dem DMB-Betriebskostenspiegel, regional nach PLZ-Gebiet ab 10 eigenen Fällen | kostenlos |
-| **2** Ausführliche Auswertung | jeder Befund mit Erklärung und Lösungsvorschlag, Zusammenfassung | nach Freischaltung |
-| Abschluss | Anschreiben an die Hausverwaltung (Vorlage) oder Anfrage einer Expertenberatung | nach Freischaltung |
+| Ergebnis | eine Kernaussage (z. B. „Bis zu 1.236,44 € könnten falsch abgerechnet sein.“), Anzahl der Punkte, Nachzahlung, Frist für Einspruch, Abweichung vom Durchschnitt (DMB-Betriebskostenspiegel, regional nach PLZ ab 10 Fällen) | kostenlos |
+| Lösung | **eine** Empfehlung (`empfehlung`) mit Hauptknopf: Schreiben an die Hausverwaltung oder Experten beauftragen; darunter die beanstandeten Punkte als Einzeiler (`kurz`); Punkte, die nur mit dem Mietvertrag prüfbar sind, eingeklappt | nach Freischaltung |
+
+Die ausführlichen Texte (`befund`, `loesung`, `zusammenfassung`) bleiben im Datenmodell für Experten und den späteren PDF-Bericht, werden dem Kunden aber nicht angezeigt. Tests begrenzen die Länge der Kurztexte und die Textmenge der Seite.
 
 Stufe 2 wird erst nach der Freischaltung an den Browser geschickt. Lösungsvorschläge stehen in den Regeln bzw. zentral in `packages/pruefkern/src/stufen.ts` (`LOESUNGSVORSCHLAEGE`); ein Test stellt sicher, dass jeder Befund einen hat und Kundentexte keine Emojis oder Formatierungszeichen enthalten. Vergleichswerte: `packages/pruefkern/src/vergleich.ts` (Quelle je Wert).
 

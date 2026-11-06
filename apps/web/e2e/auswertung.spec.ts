@@ -2,13 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 import { TEST_EXPERTE } from "./vorbereitung";
 
 const PDF = Buffer.from("%PDF-1.7\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF");
+const ERGEBNIS = /Bis zu 1\.236,44\s€ könnten falsch abgerechnet sein/;
 
 async function hochladen(page: Page) {
   await page.goto("/");
   await page.locator("#datei").setInputFiles({ name: "abrechnung.pdf", mimeType: "application/pdf", buffer: PDF });
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Kostenlos prüfen" }).click();
-  await expect(page.getByRole("heading", { name: "Ihr Einsparpotenzial" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("heading", { name: ERGEBNIS })).toBeVisible({ timeout: 15_000 });
 }
 
 async function zugangsdatum(page: Page, iso: string) {
@@ -17,61 +18,56 @@ async function zugangsdatum(page: Page, iso: string) {
   await feld.locator("xpath=ancestor::form").getByRole("button", { name: "Senden" }).click();
 }
 
-test("Stufe 1 → Freischalten → Stufe 2 → Abschluss", async ({ page }) => {
+test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", async ({ page }) => {
   const fehler: string[] = [];
   page.on("pageerror", (e) => fehler.push(e.message));
   await hochladen(page);
 
-  // Demo deutlich gekennzeichnet
   await expect(page.getByRole("note")).toContainText("Demo-Modus");
+  await expect(page.getByText("Wir haben 5 Punkte gefunden, die Sie Geld kosten können.")).toBeVisible();
+  await expect(page.getByText("Ihre Nachzahlung").locator("..")).toContainText("1.214,88 €");
+  await expect(page.getByText("Ihre Nebenkosten").locator("..")).toContainText("45 % über Durchschnitt");
 
-  // Stufe 1.1: Fehlerpotenzial
-  await expect(page.getByText("1.1 Fehlerpotenzial")).toBeVisible();
-  await expect(page.getByText("1.236,44 €")).toBeVisible();
-
-  // Widerspruchsfrist: unmögliches Datum wird verständlich abgewiesen …
+  // Eingangsdatum: unmögliches Datum wird verständlich abgewiesen, gültiges ergibt die Frist
   await zugangsdatum(page, "2025-11-20");
   await expect(page.getByRole("alert").filter({ hasText: "vor dem Datum der Abrechnung" })).toBeVisible();
-  // … gültiges Datum ergibt die Frist (Abrechnung vom 25.11.2025, Zugang 28.11.2025 → Einwände bis 28.11.2026)
   await zugangsdatum(page, "2025-11-28");
-  await expect(page.getByText("28.11.2026")).toBeVisible();
-  await expect(page.getByText("eingehalten", { exact: true })).toBeVisible();
+  await expect(page.getByText("Einspruch möglich").locator("..")).toContainText("bis 28.11.2026");
 
-  // Stufe 1.2: Kosten und Vergleich
-  await expect(page.getByText("Nachzahlung", { exact: true })).toBeVisible();
-  await expect(page.getByText("Nachzahlung", { exact: true }).locator("..")).toContainText("1.214,88 €");
-  await expect(page.getByText(/Quelle: Deutscher Mieterbund, Betriebskostenspiegel für Deutschland, Abrechnungsjahr 2024/)).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Müll und Straßenreinigung" })).toBeVisible();
+  // Die kostenlose Ansicht ist kurz – und Inhalte der Lösung sind nicht einmal im Quelltext
+  const kostenlos = await page.locator("main").innerText();
+  expect(kostenlos.length).toBeLessThan(1200);
+  expect(await page.content()).not.toContain("Vorauszahlungen Heizkosten zu niedrig angerechnet");
+  expect(await page.content()).not.toContain("Unsere Empfehlung");
 
-  // Stufe 2 ist vor dem Freischalten nicht einmal im Quelltext
-  expect(await page.content()).not.toContain("Vorauszahlungen Heizkosten prüfen");
-  expect(await page.content()).not.toContain("Lösungsvorschlag");
+  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await expect(page.getByRole("heading", { name: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung" })).toBeVisible();
+  await expect(page.getByText("Senden Sie es bis spätestens 28.11.2026.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten zu niedrig angerechnet" })).toBeVisible();
+  // Offene Punkte sind eingeklappt
+  await expect(page.getByText(/weitere Punkte prüfen wir mit Ihrem Mietvertrag/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dachrinnenreinigung" })).toBeHidden();
 
-  // Freischalten
-  await page.getByRole("button", { name: "Jetzt freischalten" }).click();
-  await expect(page.getByRole("heading", { name: "Auffälligkeiten und Lösungsvorschläge" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten prüfen" })).toBeVisible();
-  await expect(page.getByText("Lösungsvorschlag").first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Zusammenfassung" })).toBeVisible();
-  await expect(page.getByText(/^Wir haben Ihre Abrechnung 2024 anhand von \d+ Prüfregeln untersucht/)).toBeVisible();
-
-  // Abschluss: Anschreiben an die Hausverwaltung
-  await expect(page.locator("#anschreiben")).toHaveValue(/^Sehr geehrte Damen und Herren,/);
-  await expect(page.getByRole("link", { name: "Im E-Mail-Programm öffnen" })).toHaveAttribute("href", /^mailto:\?subject=Betriebskostenabrechnung%202024/);
-
-  // Keine Emojis und keine Markdown-Reste auf der Seite
+  // Keine Emojis, keine Markdown-Reste, wenig Text
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
   expect(text).not.toMatch(/\*\*/);
+  expect(text.length).toBeLessThan(2200);
 
-  // Abschluss: Beratung anfragen – erst Einwilligung, dann gesendet
+  // Weg 1: Schreiben
+  await page.getByRole("button", { name: "Schreiben öffnen" }).click();
+  await expect(page.locator("#anschreiben")).toHaveValue(/^Sehr geehrte Damen und Herren,/);
+  await expect(page.getByRole("link", { name: "Per E-Mail senden" })).toHaveAttribute("href", /^mailto:\?subject=Betriebskostenabrechnung%202024/);
+
+  // Weg 2: Experte – erst Einwilligung, dann gesendet
+  await page.getByRole("button", { name: "Lieber vom Experten erledigen lassen" }).click();
   await page.locator("#beratung-name").fill("Erika Musterfrau");
   await page.locator("#beratung-email").fill("erika@example.org");
-  await page.getByRole("button", { name: "Beratung anfragen" }).click();
+  await page.getByRole("button", { name: "Rückruf anfordern" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "kontaktieren dürfen" })).toBeVisible();
   await page.locator("#beratung-einwilligung").check();
-  await page.getByRole("button", { name: "Beratung anfragen" }).click();
-  await expect(page.getByText("Vielen Dank. Wir haben Ihre Anfrage erhalten")).toBeVisible();
+  await page.getByRole("button", { name: "Rückruf anfordern" }).click();
+  await expect(page.getByText("Danke, wir melden uns.")).toBeVisible();
 
   expect(fehler).toEqual([]);
 });
@@ -79,12 +75,13 @@ test("Stufe 1 → Freischalten → Stufe 2 → Abschluss", async ({ page }) => {
 test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => {
   test.skip(test.info().project.name.endsWith("handy"), "Prüfbereich ist für den Desktop gedacht");
   await hochladen(page);
-  await page.getByRole("button", { name: "Jetzt freischalten" }).click();
+  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await page.getByRole("button", { name: "Lieber vom Experten erledigen lassen" }).click();
   await page.locator("#beratung-name").fill("Max Prüfling");
   await page.locator("#beratung-email").fill("max@example.org");
   await page.locator("#beratung-einwilligung").check();
-  await page.getByRole("button", { name: "Beratung anfragen" }).click();
-  await expect(page.getByText("Vielen Dank")).toBeVisible();
+  await page.getByRole("button", { name: "Rückruf anfordern" }).click();
+  await expect(page.getByText("Danke, wir melden uns.")).toBeVisible();
 
   const intern = await (await browser.newContext()).newPage();
   await intern.goto(new URL("/intern/anmelden", page.url()).toString());
@@ -96,10 +93,10 @@ test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => 
   await expect(intern.getByText("max@example.org")).toBeVisible();
 });
 
-test("Verspätete Abrechnung: die ganze Nachzahlung wird zum sicheren Einsparpotenzial", async ({ page }) => {
+test("Verspätete Abrechnung: Nachzahlung entfällt", async ({ page }) => {
   await hochladen(page);
-  // Abrechnung 2024 hätte bis 31.12.2025 zugehen müssen
   await zugangsdatum(page, "2026-01-15");
-  await expect(page.getByText("Sicheres Einsparpotenzial").locator("..")).toContainText("1.214,88 €");
-  await expect(page.getByText(/versäumt – eine Nachforderung ist grundsätzlich ausgeschlossen/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /1\.214,88\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
+  await page.getByRole("button", { name: "Lösung ansehen" }).click();
+  await expect(page.getByRole("heading", { name: "Sie müssen die Nachzahlung nicht bezahlen" })).toBeVisible();
 });

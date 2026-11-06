@@ -1,19 +1,24 @@
 "use client";
 
-import type { Kennwert, Stufe1, Stufe2 } from "@biaticheck/pruefkern";
+import type { Auffaelligkeit, Stufe1, Stufe2 } from "@biaticheck/pruefkern";
 import { useState } from "react";
 import type { FallAnsicht } from "@/server/ansicht";
 import { Rueckfragen } from "./Rueckfragen";
+
+/**
+ * Ergebnis für Kunden, die keine Details wollen, sondern eine Lösung:
+ * eine Kernaussage, drei Fakten, eine Empfehlung mit einem Hauptknopf,
+ * danach nur kurze Einzeiler. Alles Weitere bleibt eingeklappt.
+ */
 
 const euro = (n: number) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
 const zahl = (n: number) => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 const datum = (iso: string) => iso.split("-").reverse().join(".");
 
-const STATUS = {
-  abweichung: { text: "Fehler", klasse: "bg-fehler text-fehler-text" },
-  auffaelligkeit: { text: "Auffällig", klasse: "bg-warn text-warn-text" },
-  nicht_pruefbar: { text: "Offen", klasse: "bg-offen text-offen-text" },
-} as const;
+const KARTE = "grid min-w-0 gap-4 rounded-3xl border border-linie bg-grund p-5 sm:p-8";
+const KNOPF = "inline-flex items-center justify-center rounded-lg px-5 py-3 font-semibold disabled:opacity-60";
+const KNOPF_HAUPT = `${KNOPF} bg-gruen text-white hover:bg-gruen-tief`;
+const KNOPF_NEBEN = `${KNOPF} border border-linie bg-grund text-text`;
 
 type Aktionen = {
   beantworte: (feld: string, wert: unknown) => Promise<void>;
@@ -22,348 +27,220 @@ type Aktionen = {
 };
 
 export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stufe1: Stufe1 }; aktionen: Aktionen }) {
-  const s1 = ansicht.stufe1;
   return (
-    <div className="grid gap-10">
+    <div className="grid gap-5">
       {ansicht.demo && (
-        <p role="note" className="rounded-xl border border-blau/40 bg-[color-mix(in_srgb,var(--blau)_12%,transparent)] px-4 py-3 text-sm">
-          <strong>Demo-Modus:</strong> Statt Ihrer Datei wurde die Musterabrechnung ausgewertet. Das automatische Auslesen ist in dieser Testumgebung noch nicht
-          eingerichtet.
+        <p role="note" className="text-sm text-gedaempft">
+          Demo-Modus: Statt Ihrer Datei wurde die Musterabrechnung ausgewertet.
         </p>
       )}
-
-      <header className="grid gap-2">
-        <span className="text-xs font-semibold tracking-[0.08em] text-gedaempft uppercase">Ihre Auswertung{s1.abrechnungsjahr ? ` · Abrechnung ${s1.abrechnungsjahr}` : ""}</span>
-        <h1 className="text-[clamp(28px,4vw,40px)] leading-tight font-bold">Ihr Einsparpotenzial</h1>
-      </header>
-
-      <Stufe nummer="1" titel="Kostenlose Auswertung">
-        <Fehlerpotenzial s1={s1} />
-        <Widerspruchsfrist s1={s1} beantworte={aktionen.beantworte} />
-        <Kosten s1={s1} />
-        <Vergleich s1={s1} beantworte={aktionen.beantworte} />
-      </Stufe>
-
-      {ansicht.stufe2 ? (
-        <>
-          <Stufe nummer="2" titel="Ausführliche Auswertung">
-            <Auffaelligkeiten s2={ansicht.stufe2} />
-            {ansicht.stufe2.rueckfragen.length > 0 && <Rueckfragen fragen={ansicht.stufe2.rueckfragen} beantworte={aktionen.beantworte} />}
-            <Zusammenfassung s2={ansicht.stufe2} />
-          </Stufe>
-          <Abschluss s2={ansicht.stufe2} beratungAnfragen={aktionen.beratungAnfragen} />
-        </>
-      ) : (
-        <Freischalten s1={s1} modus={ansicht.freischaltung} freischalten={aktionen.freischalten} />
-      )}
+      <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>
+        {!ansicht.stufe2 && <Freischalten modus={ansicht.freischaltung} freischalten={aktionen.freischalten} />}
+      </Ergebnis>
+      {ansicht.stufe2 && <Loesung s1={ansicht.stufe1} s2={ansicht.stufe2} aktionen={aktionen} />}
     </div>
   );
 }
 
-function Stufe({ nummer, titel, children }: { nummer: string; titel: string; children: React.ReactNode }) {
+// ---------- Kostenlos: Ergebnis auf einen Blick ----------
+
+function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktionen["beantworte"]; children: React.ReactNode }) {
+  const f = s1.fehlerpotenzial;
+  const anzahl = f.anzahl.abweichung + f.anzahl.auffaelligkeit;
+  const summe = f.sicher + f.zuKlaeren;
+  const titel =
+    f.sicher > 0
+      ? `${euro(f.sicher)} müssen Sie nicht bezahlen.`
+      : summe > 0
+        ? `Bis zu ${euro(summe)} könnten falsch abgerechnet sein.`
+        : anzahl
+          ? "Ihre Abrechnung hat Auffälligkeiten."
+          : "Ihre Abrechnung sieht korrekt aus.";
+  const saldo = s1.kosten.saldo;
+
   return (
-    <section className="grid gap-5" aria-labelledby={`stufe-${nummer}`}>
-      <div className="flex items-center gap-3">
-        <span className="grid size-9 place-items-center rounded-full bg-gruen font-bold text-white">{nummer}</span>
-        <h2 id={`stufe-${nummer}`} className="text-xl font-bold">
-          {titel}
-        </h2>
-      </div>
+    <section className={KARTE} aria-labelledby="ergebnis-titel">
+      <p className="text-sm text-gedaempft">Ihre Abrechnung{s1.abrechnungsjahr ? ` ${s1.abrechnungsjahr}` : ""}</p>
+      <h1 id="ergebnis-titel" className="text-[clamp(24px,4.4vw,34px)] leading-tight font-bold tracking-tight">
+        {titel}
+      </h1>
+      <p>{anzahl ? `Wir haben ${anzahl === 1 ? "einen Punkt" : `${anzahl} Punkte`} gefunden, die Sie Geld kosten können.` : "Wir haben keine Fehler gefunden."}</p>
+      <dl className="grid border-t border-linie sm:grid-cols-3 sm:border-b">
+        {saldo !== undefined && (
+          <Fakt titel={saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}>
+            <dd className="text-xl font-bold tabular-nums">{euro(Math.abs(saldo))}</dd>
+          </Fakt>
+        )}
+        <Frist s1={s1} beantworte={beantworte} />
+        <Vergleich s1={s1} />
+      </dl>
       {children}
     </section>
   );
 }
 
-function Karte({ titel, unterzeile, children }: { titel: string; unterzeile?: string; children: React.ReactNode }) {
+function Fakt({ titel, children }: { titel: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-4 rounded-3xl border border-linie bg-grund p-5 shadow-glas sm:p-6">
-      <div className="grid gap-1">
-        <h3 className="text-lg font-bold">{titel}</h3>
-        {unterzeile && <p className="text-sm text-gedaempft">{unterzeile}</p>}
-      </div>
+    <div className="grid content-start gap-0.5 border-b border-linie py-3.5 sm:border-0 sm:py-4 sm:pr-4">
+      <dt className="text-sm text-gedaempft">{titel}</dt>
       {children}
     </div>
   );
 }
 
-function Kennzahl({ titel, wert, hinweis, betont }: { titel: string; wert: string; hinweis?: string; betont?: boolean }) {
-  return (
-    <div className={`grid content-start gap-1 rounded-2xl border p-4 ${betont ? "border-gruen bg-mint" : "border-linie"}`}>
-      <span className="text-[13px] text-gedaempft">{titel}</span>
-      <span className="text-2xl font-extrabold tracking-tight tabular-nums">{wert}</span>
-      {hinweis && <span className="text-xs text-gedaempft">{hinweis}</span>}
-    </div>
-  );
-}
-
-// ---------- Stufe 1.1 ----------
-
-function Fehlerpotenzial({ s1 }: { s1: Stufe1 }) {
-  const f = s1.fehlerpotenzial;
-  return (
-    <Karte titel="1.1 Fehlerpotenzial" unterzeile="Was Sie nach unserer Prüfung möglicherweise zu viel bezahlen.">
-      <div className="grid grid-cols-2 gap-3">
-        <Kennzahl titel="Sicheres Einsparpotenzial" wert={euro(f.sicher)} hinweis="aus eindeutigen Fehlern" betont={f.sicher > 0} />
-        <Kennzahl titel="Zu klären" wert={euro(f.zuKlaeren)} hinweis="kann sich als Ersparnis erweisen" betont={f.zuKlaeren > 0} />
-      </div>
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Chip klasse={STATUS.abweichung.klasse}>{f.anzahl.abweichung} Fehler</Chip>
-        <Chip klasse={STATUS.auffaelligkeit.klasse}>{f.anzahl.auffaelligkeit} Auffälligkeiten</Chip>
-        <Chip klasse={STATUS.nicht_pruefbar.klasse}>{f.anzahl.nicht_pruefbar} offene Punkte</Chip>
-        <Chip klasse="bg-ok text-ok-text">{f.anzahl.ok} ohne Befund</Chip>
-      </div>
-    </Karte>
-  );
-}
-
-function Chip({ klasse, children }: { klasse: string; children: React.ReactNode }) {
-  return <span className={`rounded-full px-3 py-1 font-semibold ${klasse}`}>{children}</span>;
-}
-
-function Widerspruchsfrist({ s1, beantworte }: { s1: Stufe1; beantworte: Aktionen["beantworte"] }) {
+function Frist({ s1, beantworte }: { s1: Stufe1; beantworte: Aktionen["beantworte"] }) {
   const w = s1.widerspruchsfrist;
-  const knapp = w.status === "offen" && (w.tageVerbleibend ?? 99) <= 30;
-  const frageZugang = s1.rueckfragen.filter((r) => r.feld === "meta.zugangAm");
+  const frage = s1.rueckfragen.filter((r) => r.feld === "meta.zugangAm");
   return (
-    <Karte titel="Widerspruchsfrist" unterzeile="Einwände gegen die Abrechnung sind nur innerhalb von 12 Monaten nach Erhalt möglich.">
+    <Fakt titel="Einspruch möglich">
       {w.status === "offen" && w.bis && (
-        <div className={`grid gap-1 rounded-2xl p-4 ${knapp ? "bg-warn text-warn-text" : "bg-mint"}`}>
-          <span className="text-sm">Einwände möglich bis</span>
-          <span className="text-2xl font-extrabold tabular-nums">{datum(w.bis)}</span>
-          <span className="text-sm font-semibold">
-            {w.tageVerbleibend === 0 ? "Heute ist der letzte Tag." : `Noch ${w.tageVerbleibend} ${w.tageVerbleibend === 1 ? "Tag" : "Tage"}.`}
-            {knapp ? " Handeln Sie zeitnah." : ""}
-          </span>
-        </div>
+        <>
+          <dd className={`text-xl font-bold tabular-nums ${(w.tageVerbleibend ?? 99) <= 30 ? "text-warn-text" : ""}`}>bis {datum(w.bis)}</dd>
+          <dd className="text-[13px] text-gedaempft">
+            {w.tageVerbleibend === 0 ? "heute letzter Tag" : `noch ${w.tageVerbleibend} ${w.tageVerbleibend === 1 ? "Tag" : "Tage"}`}
+          </dd>
+        </>
       )}
       {w.status === "abgelaufen" && w.bis && (
-        <p className="rounded-2xl bg-fehler p-4 text-fehler-text">Die Frist für Einwände ist am {datum(w.bis)} abgelaufen.</p>
+        <>
+          <dd className="text-xl font-bold text-warn-text">abgelaufen</dd>
+          <dd className="text-[13px] text-gedaempft">am {datum(w.bis)}</dd>
+        </>
       )}
-      {w.status === "unbekannt" && frageZugang.length > 0 && <Rueckfragen fragen={frageZugang} beantworte={beantworte} ohneUeberschrift />}
-      <p className="text-sm text-gedaempft">
-        Abrechnungsfrist des Vermieters{w.abrechnungsfrist.bis ? ` (bis ${datum(w.abrechnungsfrist.bis)})` : ""}:{" "}
-        <strong className="text-text">
-          {w.abrechnungsfrist.status === "eingehalten" ? "eingehalten" : w.abrechnungsfrist.status === "versaeumt" ? "versäumt – eine Nachforderung ist grundsätzlich ausgeschlossen" : "noch nicht prüfbar"}
-        </strong>
-      </p>
-    </Karte>
-  );
-}
-
-// ---------- Stufe 1.2 ----------
-
-function Kosten({ s1 }: { s1: Stufe1 }) {
-  const k = s1.kosten;
-  const saldo = k.saldo;
-  return (
-    <Karte titel="1.2 Ihre Kosten" unterzeile="So setzt sich Ihre Abrechnung zusammen.">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {k.betriebskosten !== undefined && <Kennzahl titel="Betriebskosten" wert={euro(k.betriebskosten)} />}
-        {k.heizkosten !== undefined && <Kennzahl titel="Heiz- und Warmwasserkosten" wert={euro(k.heizkosten)} />}
-        {k.vorauszahlungen !== undefined && <Kennzahl titel="Ihre Vorauszahlungen" wert={euro(k.vorauszahlungen)} />}
-        {saldo !== undefined && <Kennzahl titel={saldo >= 0 ? "Nachzahlung" : "Guthaben"} wert={euro(Math.abs(saldo))} betont={saldo > 0} />}
-      </div>
-    </Karte>
-  );
-}
-
-function Vergleich({ s1, beantworte }: { s1: Stufe1; beantworte: Aktionen["beantworte"] }) {
-  const frageWerte = s1.rueckfragen.filter((r) => r.feld === "meta.plz" || r.feld === "flaechen.wohnflaecheMieter");
-  if (!s1.vergleich.ok) {
-    return (
-      <Karte titel="Vergleich mit anderen Abrechnungen">
-        <p className="text-gedaempft">{s1.vergleich.grund}</p>
-        {frageWerte.length > 0 && <Rueckfragen fragen={frageWerte} beantworte={beantworte} ohneUeberschrift />}
-      </Karte>
-    );
-  }
-  const v = s1.vergleich.vergleich;
-  const skala = Math.max(v.gesamt.ihr, v.gesamt.maximum ?? 0, v.gesamt.durchschnitt ?? 0) * 1.08;
-  return (
-    <Karte titel="Vergleich mit anderen Abrechnungen" unterzeile={`Kosten je m² Wohnfläche und Monat · Vergleich: ${v.region}${v.fallzahl ? ` (${v.fallzahl} Abrechnungen)` : ""}`}>
-      <div className="grid gap-5">
-        <Balken titel="Nebenkosten gesamt" k={v.gesamt} skala={skala} />
-        <Balken titel="Heizung und Warmwasser" k={v.heizungWarmwasser} skala={skala} />
-        <Balken titel="Kalte Betriebskosten" k={v.kalt} skala={skala} />
-      </div>
-      {v.gruppen.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[420px] text-sm tabular-nums">
-            <caption className="pb-2 text-left font-semibold">Einzelne Kostenarten</caption>
-            <thead className="text-gedaempft">
-              <tr className="border-b border-linie">
-                <th className="py-2 text-left font-medium">Kostenart</th>
-                <th className="py-2 pl-4 text-right font-medium">Ihre Kosten</th>
-                <th className="py-2 pl-4 text-right font-medium">Durchschnitt</th>
-                <th className="py-2 pl-4 text-right font-medium">Abweichung</th>
-              </tr>
-            </thead>
-            <tbody>
-              {v.gruppen.map((g) => (
-                <tr key={g.gruppe} className="border-b border-linie last:border-0">
-                  <td className="py-2">{g.name}</td>
-                  <td className="py-2 pl-4 text-right">{zahl(g.ihr)} €</td>
-                  <td className="py-2 pl-4 text-right text-gedaempft">{g.durchschnitt !== undefined ? `${zahl(g.durchschnitt)} €` : "–"}</td>
-                  <td className={`py-2 pl-4 text-right font-semibold ${(g.abweichungProzent ?? 0) > 20 ? "text-warn-text" : ""}`}>
-                    {g.abweichungProzent !== undefined ? `${g.abweichungProzent > 0 ? "+" : ""}${g.abweichungProzent} %` : "–"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {w.status === "unbekannt" && (
+        <dd>{frage.length > 0 ? <Rueckfragen fragen={frage.map((f) => ({ ...f, frage: "Wann kam die Abrechnung an?" }))} beantworte={beantworte} ohneUeberschrift /> : "unbekannt"}</dd>
       )}
-      <p className="text-xs text-gedaempft">
-        Quelle: {v.quelle}.
-        {v.regionalFolgt ? ` Der Vergleich für das ${v.regionalFolgt} folgt, sobald genug Abrechnungen aus Ihrer Region vorliegen.` : ""}
-      </p>
-      {frageWerte.length > 0 && <Rueckfragen fragen={frageWerte} beantworte={beantworte} ohneUeberschrift />}
-    </Karte>
+    </Fakt>
   );
 }
 
-function Balken({ titel, k, skala }: { titel: string; k: Kennwert; skala: number }) {
-  const breite = (x: number) => `${Math.min(100, (x / skala) * 100)}%`;
-  const ueber = (k.abweichungProzent ?? 0) > 0;
+function Vergleich({ s1 }: { s1: Stufe1 }) {
+  if (!s1.vergleich.ok) return null;
+  const g = s1.vergleich.vergleich.gesamt;
+  if (g.abweichungProzent === undefined || g.durchschnitt === undefined) return null;
+  const a = g.abweichungProzent;
   return (
-    <div className="grid gap-1.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
-        <span className="font-semibold">{titel}</span>
-        <span className="tabular-nums">
-          Ihre Kosten <strong>{zahl(k.ihr)} €</strong>
-          {k.durchschnitt !== undefined && (
-            <>
-              {" "}
-              · Durchschnitt {zahl(k.durchschnitt)} €
-              {k.abweichungProzent !== undefined && (
-                <strong className={ueber ? "text-warn-text" : "text-ok-text"}>
-                  {" "}
-                  ({ueber ? "+" : ""}
-                  {k.abweichungProzent} %)
-                </strong>
-              )}
-            </>
-          )}
-        </span>
-      </div>
-      <div className="relative h-3.5 rounded-full bg-offen" role="img" aria-label={`${titel}: ${zahl(k.ihr)} € je m² und Monat${k.durchschnitt !== undefined ? `, Durchschnitt ${zahl(k.durchschnitt)} €` : ""}`}>
-        <div className="h-full rounded-full bg-gradient-to-r from-[#1fa37e] to-[#2e7bb8]" style={{ width: breite(k.ihr) }} />
-        {k.durchschnitt !== undefined && <span className="absolute -top-1 h-5.5 w-0.5 rounded bg-text" style={{ left: breite(k.durchschnitt) }} title="Durchschnitt" />}
-      </div>
-    </div>
+    <Fakt titel="Ihre Nebenkosten">
+      <dd className="text-xl font-bold">{a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
+      <dd className="text-[13px] text-gedaempft" title={`Quelle: ${s1.vergleich.vergleich.quelle}`}>
+        {zahl(g.ihr)} € statt {zahl(g.durchschnitt)} € je m² im Monat
+      </dd>
+    </Fakt>
   );
 }
 
-// ---------- Freischalten ----------
-
-function Freischalten({ s1, modus, freischalten }: { s1: Stufe1; modus: "test" | "aus"; freischalten: () => Promise<void> }) {
+function Freischalten({ modus, freischalten }: { modus: "test" | "aus"; freischalten: () => Promise<void> }) {
   const [laedt, setLaedt] = useState(false);
   const [fehler, setFehler] = useState<string>();
-  const n = s1.fehlerpotenzial.anzahl;
-  const punkte = n.abweichung + n.auffaelligkeit + n.nicht_pruefbar;
+  if (modus !== "test") return <p className="font-semibold">Die Lösung ist in Kürze verfügbar.</p>;
   return (
-    <section className="grid gap-4 rounded-3xl bg-dunkelkarte p-6 text-dunkelkarte-text sm:p-8" aria-labelledby="freischalten-titel">
-      <span className="text-xs font-semibold tracking-[0.08em] uppercase opacity-80">Stufe 2</span>
-      <h2 id="freischalten-titel" className="text-2xl font-bold">
-        Ausführliche Auswertung freischalten
-      </h2>
-      <ul className="grid gap-2 text-[15px]">
-        <li>Alle {punkte} Befunde mit Erklärung, wie wir sie festgestellt haben</li>
-        <li>Konkrete Lösungsvorschläge zu jedem Punkt</li>
-        <li>Zusammenfassung Ihrer Abrechnung</li>
-        <li>Anschreiben an Ihre Hausverwaltung und auf Wunsch Beratung durch unsere Experten</li>
-      </ul>
-      {modus === "test" ? (
-        <>
-          <button
-            type="button"
-            disabled={laedt}
-            onClick={async () => {
-              setLaedt(true);
-              setFehler(undefined);
-              try {
-                await freischalten();
-              } catch (e) {
-                setFehler(e instanceof Error ? e.message : "Freischalten fehlgeschlagen");
-                setLaedt(false);
-              }
-            }}
-            className="justify-self-start rounded-lg bg-gruen px-6 py-3.5 font-semibold text-white hover:bg-gruen-tief disabled:opacity-60"
-          >
-            {laedt ? "Wird freigeschaltet …" : "Jetzt freischalten"}
-          </button>
-          <p className="text-sm opacity-80">Testmodus: Die Freischaltung erfolgt ohne Bezahlung.</p>
-        </>
-      ) : (
-        <p className="font-semibold">Die ausführliche Auswertung ist in Kürze verfügbar.</p>
-      )}
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          disabled={laedt}
+          onClick={async () => {
+            setLaedt(true);
+            setFehler(undefined);
+            try {
+              await freischalten();
+            } catch (e) {
+              setFehler(e instanceof Error ? e.message : "Freischalten fehlgeschlagen");
+              setLaedt(false);
+            }
+          }}
+          className={KNOPF_HAUPT}
+        >
+          {laedt ? "Einen Moment …" : "Lösung ansehen"}
+        </button>
+        <span className="text-sm text-gedaempft">Testmodus: ohne Bezahlung</span>
+      </div>
       {fehler && (
-        <p role="alert" className="rounded-xl bg-fehler px-3.5 py-2.5 text-sm text-fehler-text">
+        <p role="alert" className="text-sm text-fehler-text">
           {fehler}
         </p>
       )}
-    </section>
-  );
-}
-
-// ---------- Stufe 2 ----------
-
-function Auffaelligkeiten({ s2 }: { s2: Stufe2 }) {
-  if (s2.auffaelligkeiten.length === 0) {
-    return <Karte titel="Auffälligkeiten">Wir haben keine Fehler oder Auffälligkeiten festgestellt.</Karte>;
-  }
-  return (
-    <div className="grid gap-4">
-      <h3 className="text-lg font-bold">Auffälligkeiten und Lösungsvorschläge</h3>
-      <ol className="grid gap-4">
-        {s2.auffaelligkeiten.map((p, i) => (
-          <li key={`${p.regelId}-${i}`} className="grid gap-3 rounded-3xl border border-linie bg-grund p-5 shadow-glas sm:p-6">
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS[p.status].klasse}`}>{STATUS[p.status].text}</span>
-              <h4 className="min-w-0 flex-1 text-[17px] font-semibold">{p.titel}</h4>
-              {p.betrag !== undefined && <span className="font-bold tabular-nums">{euro(p.betrag)}</span>}
-            </div>
-            <div className="grid gap-1">
-              <span className="text-xs font-semibold tracking-[0.06em] text-gedaempft uppercase">Befund</span>
-              <p className="text-[15px]">{p.befund}</p>
-            </div>
-            <div className="grid gap-1 rounded-2xl bg-mint p-4">
-              <span className="text-xs font-semibold tracking-[0.06em] text-gruen-tief uppercase">Lösungsvorschlag</span>
-              <p className="text-[15px]">{p.loesung}</p>
-            </div>
-            {p.grundlage && <p className="text-xs text-gedaempft">Grundlage: {p.grundlage}</p>}
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }
 
-function Zusammenfassung({ s2 }: { s2: Stufe2 }) {
+// ---------- Nach Freischaltung: eine Empfehlung, kurze Punkte ----------
+
+function Loesung({ s1, s2, aktionen }: { s1: Stufe1; s2: Stufe2; aktionen: Aktionen }) {
+  const [weg, setWeg] = useState<"schreiben" | "beratung" | null>(null);
+  const e = s2.empfehlung;
+  const beanstandet = s2.auffaelligkeiten.filter((p) => p.status !== "nicht_pruefbar");
+  // Eingangsdatum wird oben abgefragt – nicht doppelt aufführen
+  const offen = s2.auffaelligkeiten.filter((p) => p.status === "nicht_pruefbar" && p.regelId !== "F-02" && p.regelId !== "F-03");
+  const weitereFragen = [...s2.rueckfragen, ...s1.rueckfragen.filter((r) => r.feld !== "meta.zugangAm")];
+
+  const knoepfe =
+    e.aktion === "keine"
+      ? null
+      : (e.aktion === "beratung"
+          ? [
+              ["beratung", "Experten beauftragen"],
+              ["schreiben", "Schreiben selbst senden"],
+            ]
+          : [
+              ["schreiben", "Schreiben öffnen"],
+              ["beratung", "Lieber vom Experten erledigen lassen"],
+            ]
+        ).map(([ziel, text], i) => (
+          <button key={ziel} type="button" onClick={() => setWeg(ziel as "schreiben" | "beratung")} className={i === 0 ? KNOPF_HAUPT : KNOPF_NEBEN}>
+            {text}
+          </button>
+        ));
+
   return (
-    <Karte titel="Zusammenfassung">
-      <div className="grid gap-3 text-[15px] leading-relaxed">
-        {s2.zusammenfassung.map((satz, i) => (
-          <p key={i}>{satz}</p>
-        ))}
-      </div>
-    </Karte>
+    <>
+      <section className="grid gap-4 rounded-3xl bg-dunkelkarte p-5 text-dunkelkarte-text sm:p-8" aria-labelledby="empfehlung-titel">
+        <p className="text-sm opacity-75">Unsere Empfehlung</p>
+        <h2 id="empfehlung-titel" className="text-[clamp(22px,4vw,30px)] leading-tight font-bold tracking-tight">
+          {e.titel}
+        </h2>
+        <p>{e.text}</p>
+        {knoepfe && <div className="flex flex-wrap gap-3">{knoepfe}</div>}
+      </section>
+
+      {weg === "schreiben" && <Anschreiben s2={s2} />}
+      {weg === "beratung" && <Beratung beratungAnfragen={aktionen.beratungAnfragen} />}
+
+      {beanstandet.length > 0 && (
+        <section className={KARTE} aria-labelledby="punkte-titel">
+          <h2 id="punkte-titel" className="text-lg font-bold">
+            Das beanstanden wir
+          </h2>
+          <Punkte liste={beanstandet} />
+        </section>
+      )}
+
+      {(offen.length > 0 || weitereFragen.length > 0) && (
+        <details className={`${KARTE} [&[open]>summary]:mb-2`}>
+          <summary className="cursor-pointer font-semibold">
+            {offen.length > 0 ? `${offen.length} weitere ${offen.length === 1 ? "Punkt prüfen" : "Punkte prüfen"} wir mit Ihrem Mietvertrag` : "Noch genauer prüfen"}
+          </summary>
+          {offen.length > 0 && <Punkte liste={offen} />}
+          {weitereFragen.length > 0 && <Rueckfragen fragen={weitereFragen} beantworte={aktionen.beantworte} />}
+        </details>
+      )}
+    </>
   );
 }
 
-// ---------- Abschluss ----------
-
-function Abschluss({ s2, beratungAnfragen }: { s2: Stufe2; beratungAnfragen: Aktionen["beratungAnfragen"] }) {
+function Punkte({ liste }: { liste: Auffaelligkeit[] }) {
   return (
-    <section className="grid gap-5" aria-labelledby="abschluss-titel">
-      <h2 id="abschluss-titel" className="text-xl font-bold">
-        Wie möchten Sie weitermachen?
-      </h2>
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Anschreiben s2={s2} />
-        <Beratung beratungAnfragen={beratungAnfragen} />
-      </div>
-    </section>
+    <ul className="grid">
+      {liste.map((p, i) => (
+        <li key={`${p.regelId}-${i}`} className="flex items-baseline justify-between gap-3 border-t border-linie py-3.5 first:border-0 first:pt-0">
+          <div className="min-w-0">
+            <h3 className="font-semibold">{p.kurz.titel}</h3>
+            <p className="text-[15px] text-gedaempft">{p.kurz.satz}</p>
+          </div>
+          {p.betrag !== undefined && <span className="font-bold whitespace-nowrap tabular-nums">{euro(p.betrag)}</span>}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -372,22 +249,23 @@ function Anschreiben({ s2 }: { s2: Stufe2 }) {
   const [kopiert, setKopiert] = useState(false);
   const mailto = `mailto:?subject=${encodeURIComponent(s2.anschreiben.betreff)}&body=${encodeURIComponent(text)}`;
   async function kopieren() {
-    const voll = `Betreff: ${s2.anschreiben.betreff}\n\n${text}`;
     try {
-      await navigator.clipboard.writeText(voll);
+      await navigator.clipboard.writeText(`Betreff: ${s2.anschreiben.betreff}\n\n${text}`);
       setKopiert(true);
     } catch {
       (document.getElementById("anschreiben") as HTMLTextAreaElement | null)?.select();
     }
   }
   return (
-    <Karte titel="E-Mail an Ihre Hausverwaltung" unterzeile="Vorlage mit Ihren Einwänden und der Bitte um Belegeinsicht. Ergänzen Sie Name und Anschrift.">
-      <label className="grid gap-1 text-sm">
-        <span className="font-semibold">Betreff</span>
-        <span className="rounded-lg border border-linie bg-grund-alt px-3 py-2">{s2.anschreiben.betreff}</span>
-      </label>
+    <section className={KARTE} aria-labelledby="anschreiben-titel">
+      <div className="grid gap-1">
+        <h2 id="anschreiben-titel" className="text-lg font-bold">
+          Ihr Schreiben an die Hausverwaltung
+        </h2>
+        <p className="text-sm text-gedaempft">Name und Anschrift ergänzen, dann absenden.</p>
+      </div>
       <label htmlFor="anschreiben" className="grid gap-1 text-sm">
-        <span className="font-semibold">Text</span>
+        <span className="text-gedaempft">Betreff: {s2.anschreiben.betreff}</span>
         <textarea
           id="anschreiben"
           value={text}
@@ -395,64 +273,66 @@ function Anschreiben({ s2 }: { s2: Stufe2 }) {
             setText(e.target.value);
             setKopiert(false);
           }}
-          rows={14}
+          rows={12}
           className="w-full rounded-lg border border-linie bg-grund px-3 py-2 font-sans text-sm leading-relaxed text-text"
         />
       </label>
       <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={kopieren} className="rounded-lg bg-gruen px-5 py-2.5 font-semibold text-white hover:bg-gruen-tief">
+        <a href={mailto} className={KNOPF_HAUPT}>
+          Per E-Mail senden
+        </a>
+        <button type="button" onClick={kopieren} className={KNOPF_NEBEN}>
           {kopiert ? "Kopiert" : "Text kopieren"}
         </button>
-        <a href={mailto} className="rounded-lg border border-linie px-5 py-2.5 font-semibold">
-          Im E-Mail-Programm öffnen
-        </a>
       </div>
-      <p className="text-xs text-gedaempft">Bitte prüfen Sie die Vorlage vor dem Versand. Sie ersetzt keine Rechtsberatung im Einzelfall.</p>
-    </Karte>
+    </section>
   );
 }
 
 function Beratung({ beratungAnfragen }: { beratungAnfragen: Aktionen["beratungAnfragen"] }) {
-  const [werte, setWerte] = useState({ name: "", email: "", telefon: "", erreichbarkeit: "", nachricht: "" });
+  const [werte, setWerte] = useState({ name: "", email: "", telefon: "" });
   const [einwilligung, setEinwilligung] = useState(false);
   const [zustand, setZustand] = useState<"bereit" | "sendet" | "gesendet">("bereit");
   const [fehler, setFehler] = useState<string>();
   const feld = (name: keyof typeof werte) => ({
     id: `beratung-${name}`,
     value: werte[name],
-    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setWerte((w) => ({ ...w, [name]: e.target.value })),
-    className: "w-full rounded-lg border border-linie bg-grund px-3 py-2.5 text-text",
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setWerte((w) => ({ ...w, [name]: e.target.value })),
+    className: "w-full rounded-lg border border-linie bg-grund px-3 py-2.5 font-normal text-text",
   });
 
   if (zustand === "gesendet") {
     return (
-      <Karte titel="Beratung durch unsere Experten">
-        <p role="status" className="rounded-2xl bg-mint p-4">
-          Vielen Dank. Wir haben Ihre Anfrage erhalten und melden uns in der Regel innerhalb von zwei Werktagen bei Ihnen.
-        </p>
-      </Karte>
+      <section className={KARTE} role="status">
+        <h2 className="text-lg font-bold">Danke, wir melden uns.</h2>
+        <p className="text-sm text-gedaempft">In der Regel innerhalb von zwei Werktagen.</p>
+      </section>
     );
   }
 
   return (
-    <Karte titel="Beratung durch unsere Experten" unterzeile="Wir gehen Ihre Abrechnung mit Ihnen durch und besprechen das weitere Vorgehen.">
-      <form
-        noValidate
-        className="grid gap-3"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!einwilligung) return setFehler("Bitte bestätigen Sie, dass wir Sie kontaktieren dürfen.");
-          setZustand("sendet");
-          setFehler(undefined);
-          try {
-            await beratungAnfragen({ ...werte, einwilligung });
-            setZustand("gesendet");
-          } catch (err) {
-            setFehler(err instanceof Error ? err.message : "Senden fehlgeschlagen");
-            setZustand("bereit");
-          }
-        }}
-      >
+    <form
+      noValidate
+      className={KARTE}
+      aria-labelledby="beratung-titel"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!einwilligung) return setFehler("Bitte bestätigen Sie, dass wir Sie kontaktieren dürfen.");
+        setZustand("sendet");
+        setFehler(undefined);
+        try {
+          await beratungAnfragen({ ...werte, einwilligung });
+          setZustand("gesendet");
+        } catch (err) {
+          setFehler(err instanceof Error ? err.message : "Senden fehlgeschlagen");
+          setZustand("bereit");
+        }
+      }}
+    >
+      <h2 id="beratung-titel" className="text-lg font-bold">
+        Unsere Experten übernehmen das für Sie
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-3">
         <label htmlFor="beratung-name" className="grid gap-1 text-sm font-semibold">
           Name
           <input {...feld("name")} autoComplete="name" required />
@@ -465,27 +345,19 @@ function Beratung({ beratungAnfragen }: { beratungAnfragen: Aktionen["beratungAn
           Telefon (optional)
           <input {...feld("telefon")} type="tel" autoComplete="tel" />
         </label>
-        <label htmlFor="beratung-erreichbarkeit" className="grid gap-1 text-sm font-semibold">
-          Wann sind Sie gut erreichbar? (optional)
-          <input {...feld("erreichbarkeit")} placeholder="z. B. werktags ab 17 Uhr" />
-        </label>
-        <label htmlFor="beratung-nachricht" className="grid gap-1 text-sm font-semibold">
-          Ihre Nachricht (optional)
-          <textarea {...feld("nachricht")} rows={3} />
-        </label>
-        <label htmlFor="beratung-einwilligung" className="flex items-start gap-3 text-sm text-gedaempft">
-          <input id="beratung-einwilligung" type="checkbox" checked={einwilligung} onChange={(e) => setEinwilligung(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-[var(--gruen)]" />
-          <span>Ich bin einverstanden, dass Biati Solutions mich zu meiner Abrechnung kontaktiert.</span>
-        </label>
-        {fehler && (
-          <p role="alert" className="rounded-xl bg-warn px-3.5 py-2.5 text-sm text-warn-text">
-            {fehler}
-          </p>
-        )}
-        <button type="submit" disabled={zustand === "sendet"} className="justify-self-start rounded-lg bg-gruen px-5 py-2.5 font-semibold text-white hover:bg-gruen-tief disabled:opacity-60">
-          {zustand === "sendet" ? "Wird gesendet …" : "Beratung anfragen"}
-        </button>
-      </form>
-    </Karte>
+      </div>
+      <label htmlFor="beratung-einwilligung" className="flex items-start gap-3 text-sm text-gedaempft">
+        <input id="beratung-einwilligung" type="checkbox" checked={einwilligung} onChange={(e) => setEinwilligung(e.target.checked)} className="mt-0.5 size-5 shrink-0 accent-[var(--gruen)]" />
+        <span>Biati Solutions darf mich zu meiner Abrechnung kontaktieren.</span>
+      </label>
+      {fehler && (
+        <p role="alert" className="text-sm text-fehler-text">
+          {fehler}
+        </p>
+      )}
+      <button type="submit" disabled={zustand === "sendet"} className={`${KNOPF_HAUPT} justify-self-start`}>
+        {zustand === "sendet" ? "Wird gesendet …" : "Rückruf anfordern"}
+      </button>
+    </form>
   );
 }

@@ -214,3 +214,50 @@ describe("Vergleichswerte", () => {
     expect(vergleicheKosten(Abrechnung.parse(a))).toMatchObject({ ok: false, grund: expect.stringContaining("Wohnfläche") });
   });
 });
+
+describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
+  it("G-001: eine Empfehlung mit Frist, kurze Einzeiler", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
+    expect(s2.empfehlung).toEqual({
+      titel: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung",
+      text: "Darin fordern wir die Klärung von 5 Punkten, die Sie Geld kosten können. Senden Sie es bis spätestens 28.11.2026.",
+      aktion: "schreiben",
+    });
+    const r05 = s2.auffaelligkeiten.find((p) => p.regelId === "R-05")!;
+    expect(r05.kurz).toEqual({
+      titel: "Vorauszahlungen Heizkosten zu niedrig angerechnet",
+      satz: `Angerechnet sind ${euro(1176.41)}, nach Ihren Monatsbeträgen wären es ${euro(2399.28)}.`,
+    });
+  });
+
+  it("verspätete Abrechnung: Nachzahlung entfällt", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
+    expect(s2.empfehlung.titel).toBe("Sie müssen die Nachzahlung nicht bezahlen");
+    expect(s2.empfehlung.text).toContain(euro(1214.88));
+  });
+
+  it("abgelaufene Frist: Beratung statt Schreiben", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"), "2027-01-10");
+    expect(s2.empfehlung.aktion).toBe("beratung");
+  });
+
+  it("korrekte Abrechnung: nichts zu tun", () => {
+    const { s2 } = stufen(korrekteAbrechnung());
+    expect(["keine", "beratung"]).toContain(s2.empfehlung.aktion);
+  });
+
+  it("jede Kurzfassung ist kurz und sauber", () => {
+    const VERBOTEN = [/\p{Extended_Pictographic}/u, /\*\*/, /§/];
+    for (const fall of [korrekteAbrechnung(), fehlerhafteAbrechnung(), G001]) {
+      for (const heute of ["2026-01-01", "2028-01-01"]) {
+        const { s2 } = stufen(fall, heute);
+        for (const p of s2.auffaelligkeiten) {
+          expect(p.kurz.titel.length, p.kurz.titel).toBeLessThanOrEqual(60);
+          expect(p.kurz.satz.length, p.kurz.satz).toBeLessThanOrEqual(110);
+          for (const m of VERBOTEN) expect(`${p.kurz.titel} ${p.kurz.satz}`).not.toMatch(m);
+        }
+        expect(s2.empfehlung.text.length).toBeLessThanOrEqual(200);
+      }
+    }
+  });
+});
