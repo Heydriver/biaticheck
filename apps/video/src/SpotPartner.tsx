@@ -24,8 +24,8 @@ import { LOGO_PFAD, MARKE } from "./marke";
  */
 
 /** Dauer der Aufnahmen für Szene 6 und 7 (nach dem Erzeugen eintragen). */
-const S6_SEK = 18.5;
-const S7_SEK = 12.8;
+const S6_SEK = 17.9;
+const S7_SEK = 11.4;
 
 const FPS = 30;
 const VORLAUF = 20;
