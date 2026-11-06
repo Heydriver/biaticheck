@@ -111,12 +111,32 @@ describe("Stufe 2 – Auffälligkeiten, Lösungsvorschläge, Zusammenfassung", (
 
   it("Anschreiben an die Hausverwaltung listet Einwände und Klärungspunkte", () => {
     expect(s2.anschreiben.betreff).toBe("Betriebskostenabrechnung 2025, Wohnung 2. OG links: Einwände und Bitte um Belegeinsicht");
-    expect(s2.anschreiben.text).toContain(`1. Nicht umlagefähig: Verwaltungskosten (${euro(144)})`);
+    expect(s2.anschreiben.text).toContain(`1. Verwaltungskosten (${euro(144)}): Diese Kosten sind nicht als Betriebskosten umlagefähig.`);
+    expect(s2.anschreiben.text).toContain(`Hausreinigung: Nach dem angegebenen Verteilerschlüssel ergeben sich ${euro(180)}, berechnet wurden ${euro(198)}.`);
     // keine Dopplung und kein Durchschnittsvergleich im Brief
     expect(s2.anschreiben.text).not.toContain("Neue Kostenart: Verwaltungskosten");
     expect(s2.anschreiben.text).not.toContain("Überdurchschnittlich hohe Nebenkosten");
     expect(s2.anschreiben.text).toContain("Zu folgenden Punkten bitte ich um Erläuterung");
     expect(s2.anschreiben.text).toContain("[Ihr Name]");
+  });
+});
+
+describe("Anschreiben für die Musterabrechnung G-001", () => {
+  const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28", HEUTE));
+  const brief = s2.anschreiben.text;
+
+  it("formuliert jeden Punkt sachlich mit konkreten Zahlen", () => {
+    expect(brief).toContain(`Angerechnete Vorauszahlungen für Heizkosten: ${euro(1176.41)}. Bitte gleichen Sie diesen Betrag mit meinen tatsächlichen Zahlungen im Abrechnungszeitraum ab.`);
+    expect(brief).toContain("Satellitenanlage: Bitte belegen Sie, dass nur Kosten bis zum 30.06.2024 enthalten sind.");
+    expect(brief).toContain("Unterschiedliche Flächen: In der Heizkostenabrechnung werden 82,19 m² angesetzt, in der Betriebskostenabrechnung 84,28 m².");
+    expect(brief).toContain("Aufzugskosten Prüf./Wart.: Bitte legen Sie den Wartungsvertrag vor");
+    expect(brief).toContain(`Warmwasserkosten von ${euro(31.14)} je m³`);
+  });
+
+  it("enthält keine an den Kunden gerichteten Aufforderungen", () => {
+    const punkte = brief.split("\n").filter((z) => /^\d+\. /.test(z));
+    expect(punkte.length).toBeGreaterThan(3);
+    for (const z of punkte) expect(z, z).not.toMatch(/ prüfen(:|$)/);
   });
 });
 

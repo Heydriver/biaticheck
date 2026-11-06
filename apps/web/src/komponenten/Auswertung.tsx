@@ -193,18 +193,18 @@ function Vergleich({ s1, beantworte }: { s1: Stufe1; beantworte: Aktionen["beant
             <thead className="text-gedaempft">
               <tr className="border-b border-linie">
                 <th className="py-2 text-left font-medium">Kostenart</th>
-                <th className="py-2 text-right font-medium">Ihre Kosten</th>
-                <th className="py-2 text-right font-medium">Durchschnitt</th>
-                <th className="py-2 text-right font-medium">Abweichung</th>
+                <th className="py-2 pl-4 text-right font-medium">Ihre Kosten</th>
+                <th className="py-2 pl-4 text-right font-medium">Durchschnitt</th>
+                <th className="py-2 pl-4 text-right font-medium">Abweichung</th>
               </tr>
             </thead>
             <tbody>
               {v.gruppen.map((g) => (
                 <tr key={g.gruppe} className="border-b border-linie last:border-0">
                   <td className="py-2">{g.name}</td>
-                  <td className="py-2 text-right">{zahl(g.ihr)} €</td>
-                  <td className="py-2 text-right text-gedaempft">{g.durchschnitt !== undefined ? `${zahl(g.durchschnitt)} €` : "–"}</td>
-                  <td className={`py-2 text-right font-semibold ${(g.abweichungProzent ?? 0) > 20 ? "text-warn-text" : ""}`}>
+                  <td className="py-2 pl-4 text-right">{zahl(g.ihr)} €</td>
+                  <td className="py-2 pl-4 text-right text-gedaempft">{g.durchschnitt !== undefined ? `${zahl(g.durchschnitt)} €` : "–"}</td>
+                  <td className={`py-2 pl-4 text-right font-semibold ${(g.abweichungProzent ?? 0) > 20 ? "text-warn-text" : ""}`}>
                     {g.abweichungProzent !== undefined ? `${g.abweichungProzent > 0 ? "+" : ""}${g.abweichungProzent} %` : "–"}
                   </td>
                 </tr>

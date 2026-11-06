@@ -154,6 +154,8 @@ export interface Auffaelligkeit {
   loesung: string;
   betrag?: number;
   grundlage: string;
+  /** Formulierung für das Anschreiben an die Hausverwaltung (sachlich, an den Vermieter gerichtet). */
+  brief: string;
 }
 
 export interface Stufe2 {
@@ -185,6 +187,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
         loesung,
         betrag: e.betragZugunstenMieter !== undefined && e.betragZugunstenMieter > 0 ? e.betragZugunstenMieter : undefined,
         grundlage: GRUNDLAGEN.get(e.regelId) ?? "",
+        brief: briefpunkt(e, a),
       };
     });
 
@@ -253,6 +256,70 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
   return saetze;
 }
 
+const zahl = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
+/**
+ * Formuliert einen Befund als Punkt im Brief an die Hausverwaltung: sachlich,
+ * an den Vermieter gerichtet, mit den konkreten Zahlen. Ohne eigene Formulierung
+ * wird der Titel ohne Handlungsaufforderung verwendet.
+ */
+export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
+  const b = e.beleg ?? {};
+  const position = e.positionId ? a.kostenpositionen.find((p) => p.id === e.positionId) : undefined;
+  const name = position?.bezeichnung;
+  const betrag = e.betragZugunstenMieter !== undefined && e.betragZugunstenMieter > 0 ? ` (${euro(e.betragZugunstenMieter)})` : "";
+
+  switch (e.regelId) {
+    case "F-02":
+      if (e.status === "abweichung" && typeof b.stichtag === "string" && typeof b.fristEnde === "string")
+        return `Die Abrechnung ist mir erst am ${datumDE(b.stichtag)} zugegangen, nach Ablauf der Abrechnungsfrist am ${datumDE(b.fristEnde)}. Eine Nachforderung ist daher ausgeschlossen.`;
+      break;
+    case "R-01":
+      if (name && zahl(b.erwartet) !== undefined && zahl(b.berechnet) !== undefined)
+        return `${name}: Nach dem angegebenen Verteilerschlüssel ergeben sich ${euro(zahl(b.erwartet)!)}, berechnet wurden ${euro(zahl(b.berechnet)!)}.`;
+      break;
+    case "R-02":
+      return `Die Summe der Einzelpositionen stimmt nicht mit der ausgewiesenen Gesamtsumme überein${betrag}.`;
+    case "R-03":
+      return `Das ausgewiesene Abrechnungsergebnis stimmt nicht mit Kosten abzüglich Vorauszahlungen überein${betrag}.`;
+    case "R-04":
+      if (zahl(b.heizflaeche) !== undefined && zahl(b.wohnflaeche) !== undefined)
+        return `Unterschiedliche Flächen: In der Heizkostenabrechnung werden ${zahlDE(zahl(b.heizflaeche)!)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(zahl(b.wohnflaeche)!)} m². Bitte erläutern Sie die Abweichung.`;
+      return "Für meine Wohnung werden unterschiedliche Flächen angesetzt. Bitte erläutern Sie die Abweichung.";
+    case "R-05":
+      if (zahl(b.jahr) !== undefined)
+        return `Angerechnete Vorauszahlungen für ${b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten"}: ${euro(zahl(b.jahr)!)}. Bitte gleichen Sie diesen Betrag mit meinen tatsächlichen Zahlungen im Abrechnungszeitraum ab.`;
+      break;
+    case "I-01":
+      if (name) return `${name}${betrag}: Diese Kosten sind nicht als Betriebskosten umlagefähig.`;
+      break;
+    case "I-02":
+      if (name) return `${name}${betrag}: Diese Kostenart ist im Mietvertrag nicht als sonstige Betriebskosten vereinbart.`;
+      break;
+    case "I-04":
+      if (e.status === "abweichung") return `Meine Heizkosten wurden nicht nach Verbrauch abgerechnet. Ich kürze meinen Anteil um 15 %${betrag}.`;
+      return "Bitte erläutern Sie den gewählten Verteilerschlüssel der Heizkosten.";
+    case "I-05":
+      if (name) return `${name}: Bitte belegen Sie, dass nur Kosten bis zum 30.06.2024 enthalten sind.`;
+      break;
+    case "I-06":
+      if (e.status === "abweichung") return `Aufzugskosten${betrag}: Nach meinem Mietvertrag sind Erdgeschosswohnungen davon ausgenommen.`;
+      break;
+    case "I-07":
+      if (name) return `${name}: Bitte legen Sie den Wartungsvertrag vor und weisen Sie aus, ob darin Reparaturkosten enthalten sind.`;
+      break;
+    case "I-08":
+      return "Die Aufteilung der CO₂-Kosten entspricht nicht dem Stufenmodell nach dem CO2KostAufG. Bitte korrigieren Sie die Aufteilung.";
+    case "P-01":
+      return `${e.titel.replace(/^Starker Anstieg: |^Neue Kostenart: /, "")}: Bitte erläutern Sie ${e.titel.startsWith("Neue") ? "diese neu abgerechnete Kostenart" : "den deutlichen Kostenanstieg gegenüber dem Vorjahr"} und legen Sie die Belege vor.`;
+    case "P-03":
+      if (zahl(b.proM3) !== undefined)
+        return `Warmwasserkosten von ${euro(zahl(b.proM3)!)} je m³: Bitte legen Sie die Belege zu Energie, Entkalkung und Wartung vor.`;
+      break;
+  }
+  return e.titel.replace(/^(.*) prüfen: (.*)$/, "$2 ($1)").replace(/ prüfen$/, "");
+}
+
 /** Sachliches Anschreiben an die Hausverwaltung – Vorlage zum Anpassen, keine Rechtsberatung. */
 export function erstelleAnschreiben(a: Abrechnung, punkte: Auffaelligkeit[], s1: Stufe1): { betreff: string; text: string } {
   const z = a.meta.abrechnungszeitraum;
@@ -269,11 +336,11 @@ export function erstelleAnschreiben(a: Abrechnung, punkte: Auffaelligkeit[], s1:
   ];
   if (fehler.length) {
     zeilen.push("", "Ich erhebe Einwände gegen folgende Punkte:");
-    fehler.forEach((p, i) => zeilen.push(`${i + 1}. ${p.titel}${p.betrag ? ` (${euro(p.betrag)})` : ""}`));
+    fehler.forEach((p, i) => zeilen.push(`${i + 1}. ${p.brief}`));
   }
   if (klaeren.length) {
     zeilen.push("", "Zu folgenden Punkten bitte ich um Erläuterung und Einsicht in die zugehörigen Belege:");
-    klaeren.forEach((p, i) => zeilen.push(`${i + 1}. ${p.titel}`));
+    klaeren.forEach((p, i) => zeilen.push(`${i + 1}. ${p.brief}`));
   }
   if (!fehler.length && !klaeren.length) zeilen.push("", "Bitte senden Sie mir die zugehörigen Belege zur Einsicht.");
   zeilen.push(
