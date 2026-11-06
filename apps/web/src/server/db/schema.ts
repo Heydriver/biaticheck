@@ -32,6 +32,10 @@ export const faelle = pgTable(
     auslesung: jsonb("auslesung").$type<AuslesungMeta>(),
     fehler: text("fehler"),
     freigegebenAm: timestamp("freigegeben_am", { withTimezone: true }),
+    /** Zeitpunkt der Freischaltung von Stufe 2 (ausführliche Auswertung). */
+    bezahltAm: timestamp("bezahlt_am", { withTimezone: true }),
+    /** Art der Freischaltung: "test" (Testmodus) oder z. B. "stripe". */
+    zahlungsart: text("zahlungsart"),
     /** Löschfrist (Datensparsamkeit). */
     loeschenAm: timestamp("loeschen_am", { withTimezone: true }).notNull(),
     erstelltAm: timestamp("erstellt_am", { withTimezone: true }).notNull().defaultNow(),
@@ -93,5 +97,20 @@ export const sitzungen = pgTable("sitzungen", {
   /** SHA-256 des Sitzungstokens aus dem Cookie. */
   tokenHash: text("token_hash").notNull().unique(),
   laeuftAbAm: timestamp("laeuft_ab_am", { withTimezone: true }).notNull(),
+  erstelltAm: timestamp("erstellt_am", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Anfragen nach einer ausführlichen Beratung durch einen Experten. */
+export const beratungsanfragen = pgTable("beratungsanfragen", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  fallId: uuid("fall_id")
+    .notNull()
+    .references(() => faelle.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  telefon: text("telefon"),
+  erreichbarkeit: text("erreichbarkeit"),
+  nachricht: text("nachricht"),
+  status: text("status", { enum: ["neu", "in_bearbeitung", "erledigt"] }).notNull().default("neu"),
   erstelltAm: timestamp("erstellt_am", { withTimezone: true }).notNull().defaultNow(),
 });

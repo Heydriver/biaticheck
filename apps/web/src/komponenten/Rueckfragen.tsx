@@ -1,15 +1,17 @@
 "use client";
 
-import type { Erstauswertung } from "@biaticheck/pruefkern";
+import type { Stufe1 } from "@biaticheck/pruefkern";
 import { useState } from "react";
 
-type Frage = Erstauswertung["rueckfragen"][number];
+type Frage = Stufe1["rueckfragen"][number];
 
 /** Wandelt die Eingabe je Antworttyp in den Wert um, den der Server erwartet. */
 export function wandleEingabe(typ: Frage["typ"], eingabe: string): unknown {
   switch (typ) {
     case "datum":
       return eingabe;
+    case "plz":
+      return /^\d{5}$/.test(eingabe.trim()) ? eingabe.trim() : undefined;
     case "betrag":
     case "zahl": {
       const zahl = Number(eingabe.replace(/\./g, "").replace(",", "."));
@@ -27,10 +29,18 @@ export function wandleEingabe(typ: Frage["typ"], eingabe: string): unknown {
   }
 }
 
-export function Rueckfragen({ fragen, beantworte }: { fragen: Frage[]; beantworte: (feld: string, wert: unknown) => Promise<void> }) {
+export function Rueckfragen({
+  fragen,
+  beantworte,
+  ohneUeberschrift = false,
+}: {
+  fragen: Frage[];
+  beantworte: (feld: string, wert: unknown) => Promise<void>;
+  ohneUeberschrift?: boolean;
+}) {
   return (
     <section className="grid gap-3">
-      <h2 className="text-xl font-bold">Damit wir mehr prüfen können</h2>
+      {!ohneUeberschrift && <h3 className="text-lg font-bold">Damit wir mehr prüfen können</h3>}
       {fragen.map((f) => (
         <Frageformular key={f.feld} frage={f} beantworte={beantworte} />
       ))}
@@ -95,8 +105,9 @@ function Frageformular({ frage, beantworte }: { frage: Frage; beantworte: (feld:
           <input
             id={id}
             type={frage.typ === "datum" ? "date" : "text"}
-            inputMode={frage.typ === "datum" ? undefined : "decimal"}
-            placeholder={frage.typ === "betrag" ? "z. B. 199,94" : undefined}
+            inputMode={frage.typ === "datum" ? undefined : frage.typ === "plz" ? "numeric" : "decimal"}
+            maxLength={frage.typ === "plz" ? 5 : undefined}
+            placeholder={frage.typ === "betrag" ? "z. B. 199,94" : frage.typ === "plz" ? "z. B. 80937" : undefined}
             value={eingabe}
             onChange={(e) => setEingabe(e.target.value)}
             className="min-w-0 flex-[1_1_160px] rounded-lg border border-linie bg-grund px-3 py-2.5 text-text"

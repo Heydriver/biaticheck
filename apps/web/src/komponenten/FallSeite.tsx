@@ -1,12 +1,10 @@
 "use client";
 
-import type { Erstauswertung } from "@biaticheck/pruefkern";
 import { useCallback, useEffect, useState } from "react";
 import type { FallAnsicht } from "@/server/ansicht";
-import { Rueckfragen } from "./Rueckfragen";
+import { Auswertung } from "./Auswertung";
 
 const ABFRAGE_INTERVALL_MS = 3000;
-const euro = (n: number) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
 
 export function FallSeite({ id }: { id: string }) {
   const [token, setToken] = useState<string>();
@@ -90,88 +88,25 @@ export function FallSeite({ id }: { id: string }) {
         </Hinweis>
       );
     case "fertig":
-      return ansicht.erstauswertung ? (
-        <Ergebnis
-          e={ansicht.erstauswertung}
-          beantworte={async (feld, wert) => setAnsicht(await anfrage("/antworten", { method: "POST", body: JSON.stringify({ feld, wert }) }))}
-        />
+      return ansicht.stufe1 ? (
+        <>
+          <Auswertung
+            ansicht={{ ...ansicht, stufe1: ansicht.stufe1 }}
+            aktionen={{
+              beantworte: async (feld, wert) => setAnsicht(await anfrage("/antworten", { method: "POST", body: JSON.stringify({ feld, wert }) })),
+              freischalten: async () => setAnsicht(await anfrage("/freischalten", { method: "POST" })),
+              beratungAnfragen: async (daten) => {
+                await anfrage("/beratung", { method: "POST", body: JSON.stringify(daten) });
+              },
+            }}
+          />
+          <LinkMerken />
+          <p className="mt-4 text-xs text-gedaempft">
+            Geprüft am {new Date(ansicht.stufe1.geprueftAm).toLocaleDateString("de-DE")} mit Regelwerk {ansicht.stufe1.regelwerkVersion}. Keine Rechtsberatung.
+          </p>
+        </>
       ) : null;
   }
-}
-
-const STATUS_STIL = {
-  abweichung: { text: "Fehler", klasse: "bg-fehler text-fehler-text" },
-  auffaelligkeit: { text: "Auffällig", klasse: "bg-warn text-warn-text" },
-  nicht_pruefbar: { text: "Offen", klasse: "bg-offen text-offen-text" },
-} as const;
-
-function Ergebnis({ e, beantworte }: { e: Erstauswertung; beantworte: (feld: string, wert: unknown) => Promise<void> }) {
-  return (
-    <div className="grid gap-7">
-      <div className="grid gap-2">
-        <span className="text-xs font-semibold tracking-[0.08em] text-gedaempft uppercase">Kostenlose Erstauswertung</span>
-        <h1 className="text-[clamp(28px,4vw,40px)] leading-tight font-bold">Ihre kostenlose Erstauswertung</h1>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <Kennzahl titel="Sicheres Einsparpotenzial" wert={euro(e.einsparpotenzial)} hervorheben={e.einsparpotenzial > 0} />
-        <Kennzahl titel="Zu klären" wert={euro(e.klaerungspotenzial)} hervorheben={e.klaerungspotenzial > 0} />
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Zaehler anzahl={e.anzahl.abweichung} text="Fehler" klasse={STATUS_STIL.abweichung.klasse} />
-        <Zaehler anzahl={e.anzahl.auffaelligkeit} text="Auffälligkeiten" klasse={STATUS_STIL.auffaelligkeit.klasse} />
-        <Zaehler anzahl={e.anzahl.nicht_pruefbar} text="offene Punkte" klasse={STATUS_STIL.nicht_pruefbar.klasse} />
-        <Zaehler anzahl={e.anzahl.ok} text="ohne Befund" klasse="bg-ok text-ok-text" />
-      </div>
-
-      {e.punkte.length > 0 && (
-        <section className="grid gap-3">
-          <h2 className="text-xl font-bold">Was uns aufgefallen ist</h2>
-          <ul className="divide-y divide-linie overflow-hidden rounded-2xl border border-linie bg-grund">
-            {e.punkte.map((p, i) => (
-              <li key={i} className="flex items-start gap-3 px-4 py-3">
-                <span className={`min-w-[76px] shrink-0 rounded-full px-2.5 py-0.5 text-center text-xs font-semibold ${STATUS_STIL[p.status].klasse}`}>
-                  {STATUS_STIL[p.status].text}
-                </span>
-                <span className="text-[15px]">{p.titel}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {e.rueckfragen.length > 0 && <Rueckfragen fragen={e.rueckfragen} beantworte={beantworte} />}
-
-      <section className="grid gap-1.5 rounded-2xl bg-dunkelkarte p-6 text-dunkelkarte-text">
-        <h2 className="text-lg font-semibold">Ausführlicher Bericht</h2>
-        <p className="text-sm opacity-85">Erklärung zu jedem Punkt, konkrete Beträge, Musterschreiben an den Vermieter und Ihre nächsten Schritte.</p>
-        <p className="mt-2 text-sm font-semibold">Demnächst verfügbar.</p>
-      </section>
-
-      <LinkMerken />
-      <p className="text-xs text-gedaempft">
-        Geprüft am {new Date(e.geprueftAm).toLocaleDateString("de-DE")} mit Regelwerk {e.regelwerkVersion}. Keine Rechtsberatung.
-      </p>
-    </div>
-  );
-}
-
-function Kennzahl({ titel, wert, hervorheben }: { titel: string; wert: string; hervorheben: boolean }) {
-  return (
-    <div className={`rounded-2xl border p-4 ${hervorheben ? "border-gruen bg-mint" : "border-linie bg-grund"}`}>
-      <div className="text-[13px] text-gedaempft">{titel}</div>
-      <div className="mt-1 text-2xl font-extrabold tracking-tight tabular-nums">{wert}</div>
-    </div>
-  );
-}
-
-function Zaehler({ anzahl, text, klasse }: { anzahl: number; text: string; klasse: string }) {
-  return (
-    <span className={`rounded-full px-3 py-1 font-semibold ${klasse}`}>
-      {anzahl} {text}
-    </span>
-  );
 }
 
 function Laden({ text }: { text: string }) {

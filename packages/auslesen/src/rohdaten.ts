@@ -38,6 +38,7 @@ export const Rohdaten = z.object({
   nutzungszeitraumBis: datum,
   erstelltAm: datum.describe("Datum des Abrechnungsschreibens"),
   wohnung: z.string().nullable().describe("Lage der Wohnung im Haus, z. B. 'EG links' – keine Straße, keine Namen"),
+  plz: z.string().nullable().describe("Postleitzahl des abgerechneten Objekts (5 Ziffern), nicht die des Vermieters"),
   geschoss: z.number().int().nullable().describe("0 = Erdgeschoss, 1 = 1. OG, -1 = Souterrain"),
   wohnflaecheMieter: zahl,
   gesamtflaeche: zahl,

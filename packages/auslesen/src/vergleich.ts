@@ -30,6 +30,7 @@ export function vergleiche(golden: AbrechnungEingabe, gelesen: AbrechnungEingabe
   pruefe("abrechnungszeitraum.bis", golden.meta.abrechnungszeitraum?.bis, gelesen.meta.abrechnungszeitraum?.bis);
   pruefe("erstelltAm", golden.meta.erstelltAm, gelesen.meta.erstelltAm);
   pruefe("geschoss", golden.meta.geschoss, gelesen.meta.geschoss);
+  pruefe("plz", golden.meta.plz, gelesen.meta.plz);
   pruefe("wohnflaecheMieter", golden.flaechen?.wohnflaecheMieter, gelesen.flaechen?.wohnflaecheMieter);
   pruefe("gesamtflaeche", golden.flaechen?.gesamtflaeche, gelesen.flaechen?.gesamtflaeche);
   pruefe("vorauszahlungen", golden.vorauszahlungen, gelesen.vorauszahlungen);

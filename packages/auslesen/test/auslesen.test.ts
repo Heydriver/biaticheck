@@ -151,3 +151,16 @@ describe("Plausibilität einzelner Werte", () => {
     expect(hinweise.join()).toMatch(/700 % unplausibel/);
   });
 });
+
+describe("Postleitzahl", () => {
+  it.each([
+    ["80937", "80937"],
+    ["80 937", "80937"],
+    ["8093", undefined],
+    ["D-80937", undefined],
+  ])("%j → %j", (eingabe, erwartet) => {
+    const r = roh();
+    r.plz = eingabe;
+    expect(wandleUm(r).abrechnung.meta.plz).toBe(erwartet);
+  });
+});

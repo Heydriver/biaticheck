@@ -3,7 +3,6 @@ import {
   ALLE_REGELN,
   ANTWORT_FELDER,
   AntwortFehler,
-  erstelleErstauswertung,
   pruefeAbrechnung,
   wendeAntwortAn,
   type AbrechnungEingabe,
@@ -50,6 +49,13 @@ describe("Rückfragen", () => {
     expect(nachher.ergebnisse.find((e) => e.regelId === "F-03")?.titel).toBe("Einwendungen möglich bis 28.11.2026");
   });
 
+  it("weist unmögliche Zugangsdaten mit verständlicher Meldung ab", () => {
+    // G-001: Abrechnung vom 25.11.2025
+    expect(() => wendeAntwortAn(G001, "meta.zugangAm", "2025-11-20", "2026-11-06")).toThrow("vor dem Datum der Abrechnung");
+    expect(() => wendeAntwortAn(G001, "meta.zugangAm", "2026-12-01", "2026-11-06")).toThrow("in der Zukunft");
+    expect(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-25", "2026-11-06").meta.zugangAm).toBe("2025-11-25");
+  });
+
   it("legt fehlende Zwischenobjekte an und verändert das Original nicht", () => {
     const original = korrekteAbrechnung();
     const neu = wendeAntwortAn(original, "mietvertrag.aufzugAusgenommen", true);
@@ -72,26 +78,7 @@ describe("Rückfragen", () => {
   });
 });
 
-describe("Erstauswertung (kostenlos)", () => {
-  const bericht = pruefeAbrechnung(fehlerhafteAbrechnung(), { heute: HEUTE });
-  const erst = erstelleErstauswertung(bericht);
-  const json = JSON.stringify(erst);
-
-  it("enthält keine Inhalte des bezahlten Berichts", () => {
-    for (const e of bericht.ergebnisse) {
-      expect(json).not.toContain(e.erklaerung);
-      if (e.naechsterSchritt) expect(json).not.toContain(e.naechsterSchritt);
-    }
-    expect(json).not.toContain("beleg");
-    expect(json).not.toContain("betragZugunstenMieter");
-  });
-
-  it("zeigt Überblick, Potenzial und auffällige Punkte – schwerste zuerst", () => {
-    expect(erst.einsparpotenzial).toBe(198);
-    expect(erst.punkte[0]?.status).toBe("abweichung");
-    expect(erst.punkte.every((p) => (p.status as string) !== "ok")).toBe(true);
-  });
-
+describe("Regelwerk", () => {
   it("alle Regeln haben eindeutige IDs", () => {
     const ids = ALLE_REGELN.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);

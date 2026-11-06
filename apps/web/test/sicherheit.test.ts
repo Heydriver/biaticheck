@@ -107,6 +107,18 @@ describe("Konfiguration", () => {
   it("lehnt zu kurze Schlüssel ab", () => {
     expect(EnvSchema.safeParse({ ...basis, DATEI_SCHLUESSEL: "kurz" }).success).toBe(false);
   });
+  it("Freischaltung ohne Bezahlung: im Produktivbetrieb standardmäßig aus, nur mit ausdrücklicher Erlaubnis", () => {
+    const prod = { ...basis, NODE_ENV: "production", DATEI_SCHLUESSEL: SCHLUESSEL };
+    expect(EnvSchema.parse(prod).ZAHLUNG_MODUS).toBe("aus");
+    expect(EnvSchema.parse(basis).ZAHLUNG_MODUS).toBe("test");
+    expect(EnvSchema.safeParse({ ...prod, ZAHLUNG_MODUS: "test" }).success).toBe(false);
+    expect(EnvSchema.parse({ ...prod, ZAHLUNG_MODUS: "test", ERLAUBE_TESTZAHLUNG: "true" }).ZAHLUNG_MODUS).toBe("test");
+  });
+
+  it("Demo-Auslesen ist im Produktivbetrieb verboten", () => {
+    expect(EnvSchema.safeParse({ ...basis, NODE_ENV: "production", DATEI_SCHLUESSEL: SCHLUESSEL, DEMO_AUSLESEN: "true" }).success).toBe(false);
+  });
+
   it("Freigabe durch Experten ist standardmäßig an", () => {
     expect(EnvSchema.parse(basis).FREIGABE_ERFORDERLICH).toBe(true);
   });
@@ -125,17 +137,35 @@ describe("Statusentscheidung", () => {
 
 describe("Kundenansicht", () => {
   const bericht = pruefeAbrechnung(G001, { heute: "2026-10-29" });
-  const fall = (status: (typeof faelle.$inferSelect)["status"]) =>
-    ({ id: "x", status, bericht, daten: G001, erstelltAm: new Date(), zugangHash: "geheim", auslesung: null }) as unknown as typeof faelle.$inferSelect;
+  const fall = (status: (typeof faelle.$inferSelect)["status"], bezahltAm: Date | null = null) =>
+    ({ id: "x", status, bericht, daten: G001, erstelltAm: new Date(), zugangHash: "geheim", auslesung: null, bezahltAm }) as unknown as typeof faelle.$inferSelect;
+  const ansicht = (f: typeof faelle.$inferSelect) => erstelleFallAnsicht(f, { zahlungModus: "test", heute: "2026-11-06" });
 
-  it("zeigt vor der Freigabe kein Ergebnis", () => {
-    expect(erstelleFallAnsicht(fall("expertenpruefung")).erstauswertung).toBeUndefined();
+  it("zeigt vor der Freigabe durch Experten kein Ergebnis", () => {
+    const a = ansicht(fall("expertenpruefung"));
+    expect(a.stufe1).toBeUndefined();
+    expect(a.stufe2).toBeUndefined();
   });
 
-  it("gibt nie interne Daten, Hash oder bezahlte Inhalte heraus", () => {
-    const json = JSON.stringify(erstelleFallAnsicht(fall("fertig")));
+  it("ohne Freischaltung: Stufe 1 ja, aber keinerlei Inhalte aus Stufe 2 im Browser", () => {
+    const a = ansicht(fall("fertig"));
+    expect(a.stufe1?.fehlerpotenzial.zuKlaeren).toBe(1236.44);
+    expect(a.stufe2).toBeUndefined();
+    const json = JSON.stringify(a);
     expect(json).not.toContain("geheim");
     expect(json).not.toContain("kostenpositionen");
-    for (const e of bericht.ergebnisse) expect(json).not.toContain(e.erklaerung);
+    for (const e of bericht.ergebnisse) {
+      if (e.status === "ok") continue;
+      expect(json).not.toContain(e.titel);
+      expect(json).not.toContain(e.erklaerung);
+      if (e.naechsterSchritt) expect(json).not.toContain(e.naechsterSchritt);
+    }
+  });
+
+  it("nach der Freischaltung: Stufe 2 mit Lösungsvorschlägen und Anschreiben", () => {
+    const a = ansicht(fall("fertig", new Date()));
+    expect(a.bezahlt).toBe(true);
+    expect(a.stufe2?.auffaelligkeiten.length).toBeGreaterThan(0);
+    expect(a.stufe2?.anschreiben.betreff).toContain("Betriebskostenabrechnung 2024");
   });
 });

@@ -57,7 +57,7 @@ test("Ablauf: Upload → Expertin erfasst und gibt frei → Kunde sieht Erstausw
   // Kunde (eigener Browser ohne Experten-Cookie) sieht seine Erstauswertung
   const kunde = await (await browser.newContext()).newPage();
   await kunde.goto(`/fall/${id}#${token}`);
-  await expect(kunde.getByRole("heading", { name: "Ihre kostenlose Erstauswertung" })).toBeVisible();
+  await expect(kunde.getByRole("heading", { name: "Ihr Einsparpotenzial" })).toBeVisible();
   await expect(kunde.getByText("1.236,44 €")).toBeVisible();
   // Interne Details (Erklärungen) sind für den Kunden nicht sichtbar
   await expect(kunde.getByText("Angerechnet sind 1.176,41 €")).toHaveCount(0);

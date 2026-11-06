@@ -93,7 +93,8 @@ test("API verweigert Zugriff mit falschem Token und setzt Sicherheits-Header", a
   const richtig = await request.get(`/api/faelle/${id}`, { headers: { "x-zugang": token } });
   expect(richtig.status()).toBe(200);
   const daten = await richtig.json();
-  expect(Object.keys(daten).sort()).toEqual(["erstelltAm", "id", "status"]);
+  // Vor der Auswertung nur Status-Felder – keine Inhalte
+  expect(Object.keys(daten).sort()).toEqual(["bezahlt", "demo", "erstelltAm", "freischaltung", "id", "status"]);
   expect(richtig.headers()["x-frame-options"]).toBe("DENY");
   expect(richtig.headers()["cache-control"]).toContain("no-store");
 });

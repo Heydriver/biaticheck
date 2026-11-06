@@ -10,10 +10,11 @@ import { Abrechnung, type AbrechnungEingabe } from "./schema";
  * Rückfrage, die eine Regel stellen kann, hier registriert ist.
  */
 
-export type Antworttyp = "datum" | "betrag" | "zahl" | "janein" | "liste" | "dokument";
+export type Antworttyp = "datum" | "plz" | "betrag" | "zahl" | "janein" | "liste" | "dokument";
 
 export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
   "meta.zugangAm": "datum",
+  "meta.plz": "plz",
   vorauszahlungen: "betrag",
   "vorauszahlungenDetail.monatlich.betriebskosten": "betrag",
   "vorauszahlungenDetail.monatlich.heizkosten": "betrag",
@@ -26,6 +27,7 @@ export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
 };
 
 const WERT_SCHEMA: Record<Exclude<Antworttyp, "dokument">, z.ZodType> = {
+  plz: z.string().trim().regex(/^\d{5}$/),
   datum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((s) => !Number.isNaN(Date.parse(s)), "ungültiges Datum"),
   betrag: z.number().finite().min(0).max(1_000_000),
   zahl: z.number().finite().positive().max(1_000_000),
@@ -37,13 +39,26 @@ export function antworttyp(feld: string): Antworttyp | undefined {
   return ANTWORT_FELDER[feld];
 }
 
-export class AntwortFehler extends Error {}
+export class AntwortFehler extends Error {
+  /** true: Meldung ist für den Kunden formuliert und darf angezeigt werden. */
+  constructor(
+    message: string,
+    readonly fuerKunden = false,
+  ) {
+    super(message);
+  }
+}
 
 /**
  * Übernimmt eine Antwort in die Abrechnung. Gibt eine neue Abrechnung zurück
  * (das Original bleibt unverändert) und prüft das Ergebnis gegen das Schema.
  */
-export function wendeAntwortAn(eingabe: AbrechnungEingabe, feld: string, wert: unknown): AbrechnungEingabe {
+export function wendeAntwortAn(
+  eingabe: AbrechnungEingabe,
+  feld: string,
+  wert: unknown,
+  heute: string = new Date().toISOString().slice(0, 10),
+): AbrechnungEingabe {
   const typ = antworttyp(feld);
   if (!typ) throw new AntwortFehler(`Unbekanntes Feld: ${feld}`);
   if (typ === "dokument") throw new AntwortFehler(`Feld ${feld} wird per Dokument beantwortet`);
@@ -64,5 +79,22 @@ export function wendeAntwortAn(eingabe: AbrechnungEingabe, feld: string, wert: u
 
   const ergebnis = Abrechnung.safeParse(kopie);
   if (!ergebnis.success) throw new AntwortFehler(`Antwort für ${feld} passt nicht zum Datenschema`);
+  pruefePlausibilitaet(feld, ergebnis.data, heute);
   return kopie as AbrechnungEingabe;
+}
+
+/** Fachlich unmögliche Antworten mit verständlicher Meldung abweisen. */
+function pruefePlausibilitaet(feld: string, a: z.infer<typeof Abrechnung>, heute: string) {
+  if (feld === "meta.zugangAm" && a.meta.zugangAm) {
+    if (a.meta.zugangAm > heute) throw new AntwortFehler("Das Zugangsdatum liegt in der Zukunft.", true);
+    const frueheste = a.meta.erstelltAm ?? a.meta.abrechnungszeitraum?.bis;
+    if (frueheste && a.meta.zugangAm < frueheste) {
+      throw new AntwortFehler(
+        a.meta.erstelltAm
+          ? "Das Zugangsdatum liegt vor dem Datum der Abrechnung. Bitte prüfen Sie Ihre Eingabe."
+          : "Das Zugangsdatum liegt vor dem Ende des Abrechnungszeitraums. Bitte prüfen Sie Ihre Eingabe.",
+        true,
+      );
+    }
+  }
 }

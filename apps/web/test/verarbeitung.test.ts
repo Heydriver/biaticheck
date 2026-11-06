@@ -74,6 +74,16 @@ describe("Verarbeitung eines Falls", () => {
     expect(fall.auslesung?.konsistenz.gruende[0]).toMatch(/Positionen ergeben/);
   });
 
+  it("Demo-Modus ohne API-Schlüssel: Musterabrechnung, klar als Demo gekennzeichnet", async () => {
+    const id = await neuerFall();
+    await verarbeiteFall(id, deps({ demoAuslesen: true }));
+    const fall = await lade(id);
+    expect(fall.status).toBe("fertig");
+    expect(fall.auslesung?.modell).toBe("demo");
+    expect(fall.auslesung?.hinweise[0]).toMatch(/Demo-Modus/);
+    expect(fall.daten?.meta.plz).toBe("80937");
+  });
+
   it("ohne API-Schlüssel landet der Fall beim Experten", async () => {
     const id = await neuerFall();
     await verarbeiteFall(id, deps());

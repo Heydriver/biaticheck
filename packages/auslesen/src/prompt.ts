@@ -10,7 +10,7 @@ export const SYSTEM_PROMPT = `Du liest deutsche Betriebs- und Nebenkostenabrechn
 Grundsätze:
 - Übernimm Zahlen genau so, wie sie in den Unterlagen stehen. Rechne nichts aus, was nicht dort steht, und runde nicht. Deutsche Schreibweise umwandeln: "1.214,88" → 1214.88.
 - Steht eine Angabe nicht in den Unterlagen, setze null. Rate nicht.
-- Übernimm keine Namen, Straßen, Kontonummern, IBAN, Vertrags- oder Kundennummern.
+- Übernimm keine Namen, Straßen, Hausnummern, Kontonummern, IBAN, Vertrags- oder Kundennummern. Erlaubt ist nur die Postleitzahl des abgerechneten Objekts (plz) – nicht die des Vermieters oder der Hausverwaltung.
 - Eine Abrechnung kann aus mehreren Teilen bestehen (Anschreiben, Betriebskostenabrechnung des Vermieters, Heizkostenabrechnung eines Messdienstes wie ista, Techem, Brunata, BFW). Führe sie zu einer Abrechnung zusammen.
 - Jeder Euro der Wohnung darf genau einmal vorkommen: Summe aller kostenpositionen.anteilMieter + heizkosten.anteilMieter = summeKostenMieter. Kaltwasser, das in der Heizkostenabrechnung verteilt wird, gehört als eigene Position (quelle "heizkostenabrechnung") in kostenpositionen und NICHT in heizkosten.anteilMieter.
 - Heiz- und Warmwasserkosten selbst nicht als Kostenposition aufführen, sondern nur in heizkosten.

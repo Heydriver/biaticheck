@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { erstelleFallAnsicht } from "@/server/ansicht";
-import { abhaengigkeiten, ladeFallMitZugang } from "@/server/dienste";
+import { abhaengigkeiten, ladeFallMitZugang, kundenansicht } from "@/server/dienste";
 import { beantworteRueckfrage, FallFehler } from "@/server/verarbeitung";
 import { fehler, json, ZUGANG_HEADER } from "../../../antwort";
 
@@ -25,5 +24,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     throw e;
   }
   const aktualisiert = await ladeFallMitZugang(id, req.headers.get(ZUGANG_HEADER));
-  return json(erstelleFallAnsicht(aktualisiert!));
+  return json(await kundenansicht(aktualisiert!));
 }

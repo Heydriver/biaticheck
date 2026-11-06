@@ -32,6 +32,7 @@ export const G001_ROH: Rohdaten = {
   nutzungszeitraumBis: "2024-12-31",
   erstelltAm: "2025-11-25",
   wohnung: "EG links",
+  plz: "80937",
   geschoss: 0,
   wohnflaecheMieter: 84.28,
   gesamtflaeche: 3187.97,

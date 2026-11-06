@@ -40,6 +40,19 @@ Auslesen einer echten Abrechnung und Vergleich mit dem Golden Set (benötigt `AN
 pnpm auslesen pfad/zur/abrechnung.pdf --golden G-001
 ```
 
+## Ergebnisstufen für den Kunden
+
+| Stufe | Inhalt | Zugang |
+|---|---|---|
+| **1.1** Fehlerpotenzial und Widerspruchsfrist | sicheres und zu klärendes Einsparpotenzial, Anzahl der Befunde, Frist für Einwände mit verbleibenden Tagen, Abrechnungsfrist des Vermieters | kostenlos |
+| **1.2** Kosten und Vergleich | Betriebs- und Heizkosten, Vorauszahlungen, Nachzahlung; Vergleich je m² und Monat mit dem DMB-Betriebskostenspiegel, regional nach PLZ-Gebiet ab 10 eigenen Fällen | kostenlos |
+| **2** Ausführliche Auswertung | jeder Befund mit Erklärung und Lösungsvorschlag, Zusammenfassung | nach Freischaltung |
+| Abschluss | Anschreiben an die Hausverwaltung (Vorlage) oder Anfrage einer Expertenberatung | nach Freischaltung |
+
+Stufe 2 wird erst nach der Freischaltung an den Browser geschickt. Lösungsvorschläge stehen in den Regeln bzw. zentral in `packages/pruefkern/src/stufen.ts` (`LOESUNGSVORSCHLAEGE`); ein Test stellt sicher, dass jeder Befund einen hat und Kundentexte keine Emojis oder Formatierungszeichen enthalten. Vergleichswerte: `packages/pruefkern/src/vergleich.ts` (Quelle je Wert).
+
+Konfiguration: `ZAHLUNG_MODUS` (`test` = Freischaltung ohne Bezahlung, im Produktivbetrieb nur mit `ERLAUBE_TESTZAHLUNG=true`; Standard dort `aus`), `DEMO_AUSLESEN=true` wertet ohne API-Schlüssel die Musterabrechnung aus (im Produktivbetrieb gesperrt).
+
 ## Interner Prüfbereich
 
 Unter `/intern` korrigieren Experten ausgelesene Daten (PDF und Formular nebeneinander), prüfen neu und geben Ergebnisse für Kunden frei. Bei jeder Freigabe wird protokolliert, welche Felder und Regelergebnisse der Experte gegenüber der KI geändert hat – die Datengrundlage für die schrittweise Auto-Freigabe je Regel.
@@ -66,7 +79,7 @@ DATABASE_URL=... UPLOAD_DIR=... DATEI_SCHLUESSEL=... pnpm --filter @biaticheck/w
 
 | Baustein | Status |
 |---|---|
-| Prüfkern (Schema, 21 Regeln, Rückfragen, Erstauswertung) | ✅ v0.2 (Regeln im Entwurf) |
+| Prüfkern (Schema, 21 Regeln, Rückfragen, Ergebnisstufen, Kostenvergleich) | ✅ v0.2 (Regeln im Entwurf) |
 | Golden Set | 1 echter Fall (G-001) |
 | Auslesen (PDF → Schema, Selbstkontrolle) | ✅ – Live-Test mit API-Schlüssel ausstehend |
 | Web-App: Upload, Erstauswertung, Rückfragen (mobil) | ✅ |
@@ -74,7 +87,8 @@ DATABASE_URL=... UPLOAD_DIR=... DATEI_SCHLUESSEL=... pnpm --filter @biaticheck/w
 | Interner Prüfbereich (Korrigieren, Freigeben, Messung für Auto-Freigabe) | ✅ |
 | Löschfrist (90 Tage) | ✅ Skript, Cron im Deployment einrichten |
 | Design von biati.de (Inter, Markenfarben, 3D-Startseite, Erklärvideo, Hell/Dunkel) | ✅ |
-| Bezahlung, ausführlicher Bericht (PDF) | ⏳ Sprint 4 |
+| Ergebnisstufen, Anschreiben, Beratungsanfrage | ✅ (Freischaltung vorerst im Testmodus) |
+| Bezahlung (Stripe) | ⏳ wartet auf Stripe-Konto |
 | Deployment biati.de | ⏳ Sprint 4 |
 
 Vor dem Livegang: Impressum und Datenschutzerklärung (`apps/web/src/app/impressum`, `.../datenschutz`) ausfüllen und rechtlich prüfen lassen.

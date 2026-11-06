@@ -16,6 +16,9 @@ export default async function InternLayout({ children }: { children: React.React
         <Link href="/intern" className="font-semibold">
           Prüfbereich
         </Link>
+        <Link href="/intern/beratung" className="text-marke-100 hover:text-white">
+          Beratungsanfragen
+        </Link>
         <span className="ml-auto text-marke-100">{experte.name}</span>
         <Abmelden />
       </div>

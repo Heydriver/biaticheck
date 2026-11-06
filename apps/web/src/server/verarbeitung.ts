@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { AuslesenFehler, leseAus, type Auslesung, type Dokument } from "@biaticheck/auslesen";
 import {
   AntwortFehler,
+  MUSTERABRECHNUNG,
   pruefeAbrechnung,
   wendeAntwortAn,
   type AbrechnungEingabe,
@@ -18,7 +19,21 @@ export interface Abhaengigkeiten {
   /** Ohne Client wird nicht automatisch ausgelesen – der Fall geht an einen Experten. */
   client?: Anthropic;
   freigabeErforderlich: boolean;
+  /** Ohne Client: Musterabrechnung als Demo-Ergebnis verwenden (nur Entwicklung/Test). */
+  demoAuslesen?: boolean;
   heute?: () => string;
+}
+
+/** Demo-Modus: Statt der hochgeladenen Datei wird die Musterabrechnung ausgewertet – für Tests ohne API-Schlüssel. */
+function demoAuslesung(): Auslesung {
+  return {
+    abrechnung: structuredClone(MUSTERABRECHNUNG),
+    istNebenkostenabrechnung: true,
+    konsistenz: { konsistent: true, gruende: [] },
+    hinweise: ["Demo-Modus: Statt der hochgeladenen Datei wurde die Musterabrechnung ausgewertet."],
+    modell: "demo",
+    nutzung: { eingabeTokens: 0, ausgabeTokens: 0 },
+  };
 }
 
 /** Entscheidet, ob ein Ergebnis direkt sichtbar ist oder zum Experten geht. */
@@ -73,7 +88,7 @@ export async function verarbeiteFall(fallId: string, deps: Abhaengigkeiten): Pro
   if (beansprucht.length === 0) return;
 
   try {
-    if (!deps.client) {
+    if (!deps.client && !deps.demoAuslesen) {
       await setzeStatus(db, fallId, "expertenpruefung", "Automatisches Auslesen ist nicht konfiguriert");
       await protokolliere(db, fallId, "system", "auslesen_uebersprungen");
       return;
@@ -90,7 +105,7 @@ export async function verarbeiteFall(fallId: string, deps: Abhaengigkeiten): Pro
 
     let auslesung: Auslesung;
     try {
-      auslesung = await leseAus(deps.client, geladen);
+      auslesung = deps.client ? await leseAus(deps.client, geladen) : demoAuslesung();
     } catch (fehler) {
       if (!(fehler instanceof AuslesenFehler)) throw fehler;
       await setzeStatus(db, fallId, fehler.wiederholbar ? "fehler" : "expertenpruefung", fehler.message);
@@ -159,7 +174,7 @@ export async function beantworteRueckfrage(
     try {
       daten = wendeAntwortAn(fall.daten, feld, wert);
     } catch (fehler) {
-      if (fehler instanceof AntwortFehler) throw new FallFehler(400, "Die Antwort ist ungültig");
+      if (fehler instanceof AntwortFehler) throw new FallFehler(400, fehler.fuerKunden ? fehler.message : "Die Antwort ist ungültig");
       throw fehler;
     }
     const bericht = pruefeAbrechnung(daten, { heute: deps.heute?.() });

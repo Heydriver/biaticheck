@@ -136,6 +136,8 @@ export const Abrechnung = z.object({
   meta: z.object({
     objektAdresse: z.string().optional(),
     wohnung: z.string().optional(),
+    /** Postleitzahl des Objekts – nur für den regionalen Kostenvergleich, keine Adresse. */
+    plz: z.string().regex(/^\d{5}$/, "PLZ mit 5 Ziffern").optional(),
     /** Geschoss der Wohnung: 0 = Erdgeschoss, -1 = Souterrain, 1 = 1. OG … */
     geschoss: z.number().int().optional(),
     vermieter: z.string().optional(),

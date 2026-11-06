@@ -1,6 +1,5 @@
 import { after, type NextRequest } from "next/server";
-import { erstelleFallAnsicht } from "@/server/ansicht";
-import { abhaengigkeiten, ladeFallMitZugang, uploadBegrenzung } from "@/server/dienste";
+import { abhaengigkeiten, ladeFallMitZugang, uploadBegrenzung, kundenansicht } from "@/server/dienste";
 import { verarbeiteFall } from "@/server/verarbeitung";
 import { clientIp, fehler, json, ZUGANG_HEADER } from "../../../antwort";
 
@@ -15,5 +14,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!uploadBegrenzung().erlaube(clientIp(req))) return fehler(429, "Zu viele Versuche. Bitte später erneut.");
 
   after(() => verarbeiteFall(id, abhaengigkeiten()).catch((e) => console.error(`Fall ${id}: erneuter Versuch fehlgeschlagen`, e)));
-  return json({ ...erstelleFallAnsicht(fall), status: "hochgeladen" }, 202);
+  return json({ ...(await kundenansicht(fall)), status: "hochgeladen" }, 202);
 }

@@ -20,6 +20,13 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
     return undefined;
   };
   const wert = <T>(v: T | null): T | undefined => (v === null ? undefined : v);
+  const plzOderNichts = (v: string | null): string | undefined => {
+    if (v === null) return undefined;
+    const ziffern = v.replace(/\s/g, "");
+    if (/^\d{5}$/.test(ziffern)) return ziffern;
+    hinweise.push(`Ungültige PLZ "${v}" – verworfen`);
+    return undefined;
+  };
   const positiv = (v: number | null): number | undefined => (v !== null && v > 0 ? v : undefined);
 
   const zeitraum = (vonRoh: string | null, bisRoh: string | null, feld: string) => {
@@ -76,6 +83,7 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
   const abrechnung: AbrechnungEingabe = {
     meta: {
       wohnung: wert(roh.wohnung),
+      plz: plzOderNichts(roh.plz),
       geschoss: wert(roh.geschoss),
       abrechnungszeitraum: zeitraum(roh.abrechnungszeitraumVon, roh.abrechnungszeitraumBis, "abrechnungszeitraum"),
       nutzungszeitraum: zeitraum(roh.nutzungszeitraumVon, roh.nutzungszeitraumBis, "nutzungszeitraum"),
