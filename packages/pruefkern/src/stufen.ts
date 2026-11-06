@@ -206,6 +206,8 @@ export interface Stufe2 {
   /** Zusammenfassung in ganzen Sätzen – ohne Aufzählungszeichen, Hervorhebungen oder Symbole. */
   zusammenfassung: string[];
   empfehlung: Empfehlung;
+  /** Konkretes Ergebnis: korrigierte Nachzahlung, nächste Schritte mit Terminen, Belege, Steuerhinweis. */
+  fahrplan: Fahrplan;
   anschreiben: { betreff: string; text: string };
 }
 
@@ -241,6 +243,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
       .map((r) => ({ feld: r.feld, frage: r.frage, typ: antworttyp(r.feld)! })),
     zusammenfassung: erstelleZusammenfassung(stufe1, auffaelligkeiten),
     empfehlung: erstelleEmpfehlung(stufe1, auffaelligkeiten),
+    fahrplan: erstelleFahrplan(stufe1, auffaelligkeiten, bericht, a),
     anschreiben: erstelleAnschreiben(a, auffaelligkeiten.filter((p) => gehoertInsAnschreiben(p, bericht)), stufe1),
   };
 }
@@ -535,4 +538,96 @@ export function personalisiereAnschreiben(anschreiben: { betreff: string; text: 
     text,
     an: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined,
   };
+}
+
+// ---------- Fahrplan: konkrete Ergebnisse für die bezahlte Auswertung ----------
+
+export interface Schritt {
+  titel: string;
+  text: string;
+  /** Letzter Tag, ISO-Datum. */
+  bis?: string;
+}
+
+export interface Fahrplan {
+  /** Nachzahlung laut Abrechnung und nach Abzug der eindeutigen Fehler (positiv = Nachzahlung). */
+  zahlung?: { laut: number; hoechstens: number; entfaellt: boolean };
+  schritte: Schritt[];
+  /** Unterlagen, die die Hausverwaltung vorlegen soll. */
+  belege: string[];
+  /** Steuerlich begünstigte Beträge nach § 35a EStG laut Abrechnung. */
+  steuer?: { haushaltsnah: number; handwerker: number; ersparnisBis: number };
+  /** Punkte, die sich erst mit dem Mietvertrag prüfen lassen. */
+  mietvertragOffen: number;
+}
+
+/** Steuerermäßigung nach § 35a EStG: 20 % der Arbeitskosten. Der Betrag laut Abrechnung kann Material enthalten, daher „bis zu“. */
+const STEUERSATZ_35A = 0.2;
+
+function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
+  const name = e.positionId ? a.kostenpositionen.find((p) => p.id === e.positionId)?.bezeichnung : undefined;
+  switch (e.regelId) {
+    case "R-01": return name ? `Gesamtkosten und Verteilerschlüssel für „${name}“` : undefined;
+    case "R-04": return "Flächenaufstellung für Wohn- und Heizfläche";
+    case "R-05": return "Aufstellung der angerechneten Vorauszahlungen";
+    case "I-01": case "I-03": return name ? `Rechnungen zu „${name}“` : undefined;
+    case "I-04": return "Heizkostenabrechnung des Messdienstes";
+    case "I-05": return name ? `Vertrag und Rechnungen zu „${name}“` : "Vertrag und Rechnungen zum Kabel- oder Satellitenanschluss";
+    case "I-07": return name ? `Wartungsvertrag und Rechnungen zu „${name}“` : undefined;
+    case "I-08": return "Aufteilung der CO₂-Kosten";
+    case "P-01": return name && e.status !== "nicht_pruefbar" ? `Rechnungen zu „${name}“` : undefined;
+    case "P-03": return "Rechnungen für Energie und Warmwasserbereitung";
+  }
+  return undefined;
+}
+
+/**
+ * Leitet aus dem Prüfergebnis die konkreten nächsten Schritte ab.
+ * Fachlich vom Expertenteam zu bestätigen (insbesondere Zahlungs- und Zurückbehaltungshinweise).
+ */
+export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: Pruefbericht, a: Abrechnung): Fahrplan {
+  const saldo = s1.kosten.saldo;
+  const { sicher, zuKlaeren } = s1.fehlerpotenzial;
+  const entfaellt = punkte.some((p) => (p.regelId === "F-02" || p.regelId === "F-05") && p.status === "abweichung");
+  const beanstandet = punkte.filter((p) => p.status !== "nicht_pruefbar");
+  const f = s1.widerspruchsfrist;
+  const schritte: Schritt[] = [];
+
+  const zahlung = saldo !== undefined && saldo > 0 ? { laut: saldo, hoechstens: entfaellt ? 0 : runde(Math.max(0, saldo - sicher)), entfaellt } : undefined;
+
+  if (zahlung?.entfaellt) {
+    schritte.push({ titel: "Nachzahlung nicht bezahlen", text: `Die ${euro(zahlung.laut)} schulden Sie nicht. Das teilen Sie mit dem Schreiben mit.` });
+  } else if (zahlung && sicher > 0) {
+    schritte.push({
+      titel: `Höchstens ${euro(zahlung.hoechstens)} statt ${euro(zahlung.laut)} zahlen`,
+      text: `Die ${euro(sicher)} aus eindeutigen Fehlern ziehen Sie ab.${zuKlaeren > 0 ? " Den Rest erst zahlen, wenn die offenen Punkte geklärt sind." : ""}`,
+    });
+  } else if (zahlung && zuKlaeren > 0) {
+    schritte.push({ titel: "Nachzahlung noch nicht bezahlen", text: "Warten Sie mit der Zahlung, bis die Hausverwaltung die Punkte geklärt und Ihnen die Belege gezeigt hat." });
+  }
+
+  if (beanstandet.length || entfaellt) {
+    schritte.push({
+      titel: "Schreiben an die Hausverwaltung senden",
+      text: "Das Schreiben ist fertig vorbereitet. Per E-Mail oder als Brief, am besten mit Nachweis.",
+      bis: f.status === "offen" ? f.bis : undefined,
+    });
+  }
+
+  const belege = [...new Set(bericht.ergebnisse.filter((e) => e.status === "abweichung" || e.status === "auffaelligkeit").map((e) => belegFuer(e, a)).filter((b): b is string => !!b))];
+  if (belege.length) schritte.push({ titel: "Belege einsehen", text: `Die Hausverwaltung muss Ihnen ${belege.length === 1 ? "eine Unterlage" : `${belege.length} Unterlagen`} zeigen. Wir haben sie im Schreiben angefordert.` });
+
+  if (beanstandet.length || entfaellt) {
+    schritte.push({ titel: "Antwort abwarten", text: "Die Hausverwaltung hat 14 Tage Zeit. Kommt keine Antwort oder eine Ablehnung, übernehmen unsere Experten." });
+  }
+
+  const mietvertragOffen = a.mietvertrag ? 0 : punkte.filter((p) => p.status === "nicht_pruefbar" && (p.regelId === "I-02" || p.regelId === "I-06")).length;
+  if (mietvertragOffen) schritte.push({ titel: "Mietvertrag hochladen", text: `Damit prüfen wir ${mietvertragOffen === 1 ? "einen weiteren Punkt" : `${mietvertragOffen} weitere Punkte`}.` });
+
+  const summe = (art: "haushaltsnah" | "handwerker") => runde(a.kostenpositionen.filter((p) => p.steuerlich35a === art).reduce((x, p) => x + p.anteilMieter, 0));
+  const haushaltsnah = summe("haushaltsnah"), handwerker = summe("handwerker");
+  const steuer = haushaltsnah + handwerker > 0 ? { haushaltsnah, handwerker, ersparnisBis: runde((haushaltsnah + handwerker) * STEUERSATZ_35A) } : undefined;
+  if (steuer) schritte.push({ titel: "Steuern sparen", text: `${euro(haushaltsnah + handwerker)} aus Ihrer Abrechnung sind steuerlich begünstigt. Das senkt Ihre Steuer um bis zu ${euro(steuer.ersparnisBis)}.` });
+
+  return { zahlung, schritte, belege, steuer, mietvertragOffen };
 }

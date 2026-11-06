@@ -302,3 +302,31 @@ describe("Fehlerquote und persönliches Anschreiben", () => {
     expect(p.an).toBeUndefined();
   });
 });
+
+describe("Fahrplan: konkrete Ergebnisse", () => {
+  it("G-001 mit Zugang: Schritte mit Frist, Belege, Mietvertrag, Steuer", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
+    const f = s2.fahrplan;
+    expect(f.zahlung).toEqual({ laut: 1214.88, hoechstens: 1214.88, entfaellt: false });
+    expect(f.schritte.map((s) => s.titel)).toEqual(["Nachzahlung noch nicht bezahlen", "Schreiben an die Hausverwaltung senden", "Belege einsehen", "Antwort abwarten", "Mietvertrag hochladen", "Steuern sparen"]);
+    expect(f.schritte[1]!.bis).toBe("2026-11-28");
+    expect(f.belege).toContain("Rechnungen für Energie und Warmwasserbereitung");
+    expect(f.mietvertragOffen).toBe(3);
+    expect(f.steuer!.ersparnisBis).toBeGreaterThan(0);
+  });
+
+  it("mit Mietvertrag: neue Fehler senken die Zahlung, Schritt Mietvertrag entfällt", () => {
+    const mitVertrag = { ...wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"), mietvertrag: { vereinbarteSonstigeKosten: ["Dachrinnenreinigung"], aufzugAusgenommen: true } };
+    const { s2 } = stufen(mitVertrag);
+    expect(s2.fahrplan.mietvertragOffen).toBe(0);
+    expect(s2.fahrplan.schritte.map((s) => s.titel)).not.toContain("Mietvertrag hochladen");
+    expect(s2.fahrplan.schritte[0]!.titel).toMatch(/^Höchstens .* statt .* zahlen$/);
+    expect(s2.fahrplan.zahlung!.hoechstens).toBeLessThan(1214.88);
+  });
+
+  it("verspätete Abrechnung: Nachzahlung entfällt", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
+    expect(s2.fahrplan.zahlung).toMatchObject({ hoechstens: 0, entfaellt: true });
+    expect(s2.fahrplan.schritte[0]!.titel).toBe("Nachzahlung nicht bezahlen");
+  });
+});
