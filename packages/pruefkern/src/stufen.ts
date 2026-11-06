@@ -53,6 +53,20 @@ export function loesungsvorschlag(e: Regelergebnis): string | undefined {
 
 // ---------- Stufe 1 ----------
 
+export type Fehlerstufe = "hoch" | "mittel" | "gering" | "keins";
+
+/**
+ * Fehlerpotenzial als einfache Aussage: Anteil der Prüfregeln, die einen Fehler
+ * oder eine Auffälligkeit melden. Ein sicher bezifferbarer Fehler ist immer „hoch“.
+ * Schwellen sind vom Expertenteam zu bestätigen.
+ */
+export function fehlerstufe(quote: number, sicher: number): Fehlerstufe {
+  if (sicher > 0 || quote >= 20) return "hoch";
+  if (quote >= 10) return "mittel";
+  if (quote > 0) return "gering";
+  return "keins";
+}
+
 export type Friststatus = "offen" | "abgelaufen" | "unbekannt";
 
 export interface Stufe1 {
@@ -66,6 +80,12 @@ export interface Stufe1 {
     /** Beträge, die sich nach Klärung als Ersparnis erweisen können. */
     zuKlaeren: number;
     anzahl: Record<Status, number>;
+    /** Anteil der Prüfregeln mit Fehler oder Auffälligkeit, in Prozent. */
+    quote: number;
+    /** Zahl der Prüfregeln mit Fehler oder Auffälligkeit / Zahl aller Prüfregeln. */
+    regelnAuffaellig: number;
+    regelnGesamt: number;
+    stufe: Fehlerstufe;
   };
   widerspruchsfrist: {
     status: Friststatus;
@@ -128,11 +148,22 @@ export function erstelleStufe1(
   const rueckfragen = z.rueckfragen.filter((r) => STUFE1_FELDER.has(r.feld));
   if (!a.meta.plz && !rueckfragen.some((r) => r.feld === FRAGE_PLZ.feld)) rueckfragen.push(FRAGE_PLZ);
 
+  const regelnAuffaellig = new Set(bericht.ergebnisse.filter((e) => e.status === "abweichung" || e.status === "auffaelligkeit").map((e) => e.regelId)).size;
+  const quote = Math.round((regelnAuffaellig / ALLE_REGELN.length) * 100);
+
   return {
     regelwerkVersion: bericht.regelwerkVersion,
     geprueftAm: bericht.geprueftAm,
     abrechnungsjahr: zeitraum ? Number(zeitraum.bis.slice(0, 4)) : undefined,
-    fehlerpotenzial: { sicher: z.einsparpotenzial, zuKlaeren: z.klaerungspotenzial, anzahl: { ...z.anzahl } },
+    fehlerpotenzial: {
+      sicher: z.einsparpotenzial,
+      zuKlaeren: z.klaerungspotenzial,
+      anzahl: { ...z.anzahl },
+      quote,
+      regelnAuffaellig,
+      regelnGesamt: ALLE_REGELN.length,
+      stufe: fehlerstufe(quote, z.einsparpotenzial),
+    },
     widerspruchsfrist: { ...widerspruch, abrechnungsfrist },
     kosten: { betriebskosten, heizkosten, vorauszahlungen: a.vorauszahlungen, saldo: a.ausgewiesen.saldo },
     vergleich: vergleicheKosten(a, optionen.regional),
@@ -472,4 +503,36 @@ export function erstelleAnschreiben(a: Abrechnung, punkte: Auffaelligkeit[], s1:
     `[Ihre Anschrift${wohnung}]`,
   );
   return { betreff: `Betriebskostenabrechnung ${jahr}${wohnung}: Einwände und Bitte um Belegeinsicht`, text: zeilen.join("\n") };
+}
+
+// ---------- Persönliches Anschreiben ----------
+
+/** Angaben für das Anschreiben. Werden nicht im Prüfdatensatz gespeichert. */
+export interface Kontakt {
+  mieterName?: string;
+  mieterAnschrift?: string;
+  vermieterName?: string;
+  vermieterAnschrift?: string;
+  vermieterEmail?: string;
+  /** Mieter-, Kunden- oder Vertragsnummer, wie sie die Hausverwaltung verwendet. */
+  mieternummer?: string;
+}
+
+const sauber = (t?: string) => (t ?? "").replace(/\s+\n/g, "\n").trim();
+
+/** Setzt Name, Anschriften und Mieternummer in die Vorlage ein. Fehlende Angaben bleiben als Platzhalter stehen. */
+export function personalisiereAnschreiben(anschreiben: { betreff: string; text: string }, k: Kontakt): { betreff: string; text: string; an?: string } {
+  let text = anschreiben.text;
+  const name = sauber(k.mieterName), anschrift = sauber(k.mieterAnschrift);
+  if (name) text = text.replace("[Ihr Name]", name);
+  if (anschrift) text = text.replace(/\[Ihre Anschrift[^\]]*\]/, anschrift);
+  const empfaenger = [sauber(k.vermieterName), sauber(k.vermieterAnschrift)].filter(Boolean).join("\n");
+  if (empfaenger) text = `${empfaenger}\n\n${text}`;
+  const nummer = sauber(k.mieternummer);
+  const email = sauber(k.vermieterEmail);
+  return {
+    betreff: nummer ? `${anschreiben.betreff}, Mieternummer ${nummer}` : anschreiben.betreff,
+    text,
+    an: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined,
+  };
 }

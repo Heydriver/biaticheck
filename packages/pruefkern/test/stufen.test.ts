@@ -14,6 +14,8 @@ import {
   wendeAntwortAn,
   Abrechnung,
   euro,
+  fehlerstufe,
+  personalisiereAnschreiben,
   type AbrechnungEingabe,
 } from "../src/index";
 import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle";
@@ -259,5 +261,44 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
         expect(s2.empfehlung.text.length).toBeLessThanOrEqual(200);
       }
     }
+  });
+});
+
+describe("Fehlerquote und persönliches Anschreiben", () => {
+  it("G-001: 5 von 21 Prüfregeln auffällig, Fehlerpotenzial hoch", () => {
+    const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
+    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 5, regelnGesamt: ALLE_REGELN.length, quote: Math.round((5 / ALLE_REGELN.length) * 100), stufe: "hoch" });
+  });
+
+  it("Stufen nach Quote, sicherer Fehler immer hoch", () => {
+    expect(fehlerstufe(0, 0)).toBe("keins");
+    expect(fehlerstufe(5, 0)).toBe("gering");
+    expect(fehlerstufe(10, 0)).toBe("mittel");
+    expect(fehlerstufe(20, 0)).toBe("hoch");
+    expect(fehlerstufe(5, 10)).toBe("hoch");
+  });
+
+  it("setzt Name, Anschriften, Mieternummer und Empfänger ein", () => {
+    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
+    const p = personalisiereAnschreiben(s2.anschreiben, {
+      mieterName: "Erika Musterfrau",
+      mieterAnschrift: "Musterweg 1\n80937 München",
+      vermieterName: "Muster Hausverwaltung GmbH",
+      vermieterAnschrift: "Hauptstraße 5\n80331 München",
+      vermieterEmail: "service@muster-hv.de",
+      mieternummer: "4711",
+    });
+    expect(p.text.startsWith("Muster Hausverwaltung GmbH\nHauptstraße 5\n80331 München\n\nSehr geehrte Damen und Herren,")).toBe(true);
+    expect(p.text).toContain("Erika Musterfrau\nMusterweg 1\n80937 München");
+    expect(p.text).not.toMatch(/\[Ihr/);
+    expect(p.betreff).toMatch(/Mieternummer 4711$/);
+    expect(p.an).toBe("service@muster-hv.de");
+  });
+
+  it("ohne Angaben bleiben die Platzhalter, ungültige E-Mail wird nicht übernommen", () => {
+    const { s2 } = stufen(G001);
+    const p = personalisiereAnschreiben(s2.anschreiben, { vermieterEmail: "keine-mail" });
+    expect(p.text).toContain("[Ihr Name]");
+    expect(p.an).toBeUndefined();
   });
 });
