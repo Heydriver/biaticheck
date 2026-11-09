@@ -23,6 +23,9 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | I-06 | Aufzugskosten bei EG-Wohnung | BGH VIII ZR 103/06; Mietvertrag | Abweichung bei vertraglicher Ausnahme | Rückfrage Mietvertrag |
 | I-07 | Wartung ohne Reparaturanteil (Vollwartung, Handwerkerleistung) | § 1 Abs. 2 BetrKV | Auffälligkeit | – |
 | I-08 | CO₂-Kosten nach Stufenmodell aufgeteilt | CO2KostAufG | Abweichung | – |
+| I-09 | Wasser nach Verbrauch, wenn ein Wasserzähler vorhanden ist | § 556a Abs. 1 S. 2 BGB | ohne Angabe: Prüfbedarf (ohne Betrag); mit Zähler: Auffälligkeit | Rückfrage: eigener Wasserzähler? |
+| I-10 | Rauchwarnmelder: nur Wartung, keine Miete | BGH VIII ZR 379/20 | „Miete“: Abweichung mit Betrag; gemischt oder unklar: Auffälligkeit ohne Betrag | Rechnung mit getrennter Miete/Wartung |
+| I-11 | Hauswart ohne Reparatur-, Verwaltungs- oder Bereitschaftsanteil | § 2 Nr. 14, § 1 Abs. 2 BetrKV | Hinweis im Namen oder > 130 % des DMB-Werts (0,37 €/m²/Monat): Auffälligkeit ohne Betrag | Hauswartvertrag, Leistungsverzeichnis |
 | P-01 | Vorjahresvergleich (> 10 % und > 25 €; neue Kostenarten) | Wirtschaftlichkeitsgebot | Auffälligkeit | Rückfrage Vorjahresabrechnung |
 | P-02 | Kalte Nebenkosten pro m² und Monat (Schwelle 2,50 € – **Entwurf**) | Betriebskostenspiegel | Auffälligkeit | Rückfrage Wohnfläche |
 | P-03 | Warmwasserkosten pro m³ (Schwelle 20 € – **Entwurf**) | Wirtschaftlichkeitsgebot | Auffälligkeit | – |

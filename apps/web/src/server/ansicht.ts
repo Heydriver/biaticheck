@@ -16,6 +16,8 @@ export interface FehlerKurz {
   titel: string;
   satz: string;
   betrag?: number;
+  /** Bei Prüfbedarf: Frage an den Kunden, die den Punkt klärt. */
+  rueckfrage?: { feld: string; frage: string; typ: Stufe1["rueckfragen"][number]["typ"] };
 }
 
 export interface FallAnsicht {
@@ -51,7 +53,7 @@ export function erstelleFallAnsicht(
     .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}) }));
   const pruefbedarf = stufe2?.auffaelligkeiten
     .filter((p) => p.status === "pruefbedarf")
-    .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}) }));
+    .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}), ...(p.rueckfrage ? { rueckfrage: p.rueckfrage } : {}) }));
   return {
     id: fall.id,
     status: fall.status,

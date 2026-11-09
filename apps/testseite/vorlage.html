@@ -171,7 +171,7 @@ details[open] summary { margin-bottom: 12px; }
       if (!seiten.length) throw { code: "unlesbar" };
       await abschreiben(seiten, maxBilder);
       $("laden-titel").textContent = "Wir prüfen Ihre Abrechnung";
-      $("laden-text").textContent = "Beträge werden zugeordnet und mit 21 Regeln geprüft …";
+      $("laden-text").textContent = `Beträge werden zugeordnet und mit ${P.REGELN_ANZAHL} Regeln geprüft …`;
       const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n");
       const prompt = [
         P.ANWEISUNG,
@@ -387,8 +387,11 @@ details[open] summary { margin-bottom: 12px; }
     return `<section class="karte" id="vz-karte"><h2>Prüfbedarf: Wir brauchen noch eine Unterlage</h2>
       <p class="leise">Diese Beträge zählen wir erst als Ersparnis, wenn sie belegt sind.</p>
       <ul class="punkte">${punkte.map(zeile).join("")}</ul>
+      ${punkte.filter((p) => p.rueckfrage?.typ === "janein").map((p) => `<div class="reihe" style="gap:8px"><span style="font-size:15px;flex:1 1 220px">${esc(p.rueckfrage.frage)}</span>
+        <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="ja">Ja</button>
+        <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="nein">Nein</button></div>`).join("")}
       ${r.s2.unterlagen.map((u) => `<p style="font-size:15px"><b>Bitte hochladen:</b> ${esc(u.titel)}. ${esc(u.grund)}</p>`).join("")}
-      <div class="ablage"><input type="file" id="vz-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Vorjahresabrechnung oder Kontoauszüge auswählen"><strong>Unterlage auswählen</strong><span class="leise">PDF oder Fotos</span></div>
+      ${r.s2.unterlagen.length ? `<div class="ablage"><input type="file" id="vz-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Vorjahresabrechnung oder Kontoauszüge auswählen"><strong>Unterlage auswählen</strong><span class="leise">PDF oder Fotos</span></div>` : ""}
       <p class="leise" id="vz-status" aria-live="polite">${esc(z.vzStatus)}</p></section>`;
   }
 
@@ -519,6 +522,10 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
       z.fehlerZugang = /^\d{4}-\d{2}-\d{2}$/.test(wert) ? "" : "Bitte ein Datum wählen.";
       if (!z.fehlerZugang) { z.antworten["meta.zugangAm"] = wert; z.brief = null; }
       zeige();
+    } else if (a === "janein") {
+      z.antworten[k.dataset.feld] = k.dataset.wert === "ja";
+      z.brief = null;
+      const y = window.scrollY; zeige(); window.scrollTo({ top: y });
     } else if (a === "plz") {
       const wert = $("plz").value.replace(/\s/g, "");
       z.fehlerPlz = /^\d{5}$/.test(wert) ? "" : "Bitte eine fünfstellige Postleitzahl eingeben.";

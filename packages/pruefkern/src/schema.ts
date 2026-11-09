@@ -192,6 +192,13 @@ export const Abrechnung = z.object({
       ),
     })
     .optional(),
+  /** Ausstattung der Wohnung, soweit bekannt (Rückfragen an den Kunden). */
+  ausstattung: z
+    .object({
+      /** Eigener Kaltwasserzähler in der Wohnung. */
+      wasserzaehler: z.boolean().optional(),
+    })
+    .optional(),
   /** Angaben aus dem Mietvertrag, soweit bekannt (Rückfragen an den Kunden). */
   mietvertrag: z
     .object({

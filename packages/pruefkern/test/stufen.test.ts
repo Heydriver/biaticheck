@@ -269,7 +269,7 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
 });
 
 describe("Fehlerquote und persönliches Anschreiben", () => {
-  it("G-001: 4 von 21 Prüfregeln auffällig (Prüfbedarf zählt nicht), Fehlerpotenzial mittel", () => {
+  it("G-001: 4 Prüfregeln auffällig (Prüfbedarf zählt nicht), Fehlerpotenzial mittel", () => {
     const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
     expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 4, regelnGesamt: ALLE_REGELN.length, quote: Math.round((4 / ALLE_REGELN.length) * 100), stufe: "mittel" });
   });

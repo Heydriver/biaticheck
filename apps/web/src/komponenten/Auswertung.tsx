@@ -154,7 +154,7 @@ function Pruefbedarf({
     <section className={KARTE} aria-labelledby="pruefbedarf-titel">
       <div className="grid gap-1">
         <h2 id="pruefbedarf-titel" className="text-lg font-bold">
-          Prüfbedarf: Wir brauchen noch eine Unterlage
+          {unterlagen.length ? "Prüfbedarf: Wir brauchen noch eine Unterlage" : "Prüfbedarf: Eine kurze Frage"}
         </h2>
         <p className="text-[15px] text-gedaempft">Diese Beträge zählen wir erst als Ersparnis, wenn sie belegt sind.</p>
       </div>
@@ -174,6 +174,9 @@ function Pruefbedarf({
           <strong>Bitte bereitlegen:</strong> {u.titel}. {u.grund}
         </p>
       ))}
+      {punkte.some((p) => p.rueckfrage) && (
+        <Rueckfragen fragen={punkte.flatMap((p) => (p.rueckfrage ? [p.rueckfrage] : []))} beantworte={beantworte} ohneUeberschrift />
+      )}
       {unterlagen.some((u) => u.arten.includes("kontoauszug")) && <VerlaufFormular beantworte={beantworte} />}
     </section>
   );
@@ -319,7 +322,9 @@ function Loesung({ s1, s2, aktionen }: { s1: Stufe1; s2: Stufe2; aktionen: Aktio
   const e = s2.empfehlung;
   // Eingangsdatum wird oben abgefragt – nicht doppelt aufführen
   const offen = s2.auffaelligkeiten.filter((p) => p.status === "nicht_pruefbar" && p.regelId !== "F-02" && p.regelId !== "F-03");
-  const weitereFragen = [...s2.rueckfragen, ...s1.rueckfragen.filter((r) => r.feld !== "meta.zugangAm")];
+  // Fragen zum Prüfbedarf stehen schon in dessen Karte
+  const imPruefbedarf = new Set(s2.auffaelligkeiten.flatMap((p) => (p.status === "pruefbedarf" && p.rueckfrage ? [p.rueckfrage.feld] : [])));
+  const weitereFragen = [...s2.rueckfragen, ...s1.rueckfragen.filter((r) => r.feld !== "meta.zugangAm")].filter((r) => !imPruefbedarf.has(r.feld));
 
   const knoepfe =
     e.aktion === "keine" || e.aktion === "unterlagen"

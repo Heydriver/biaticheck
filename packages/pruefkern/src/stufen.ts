@@ -196,6 +196,8 @@ export interface Auffaelligkeit {
   kurz: { titel: string; satz: string };
   /** Bei Prüfbedarf: Unterlagen, mit denen der Punkt sicher geprüft werden kann (eine genügt). */
   unterlagen?: Unterlage[];
+  /** Bei Prüfbedarf: Frage an den Kunden, die den Punkt klärt. */
+  rueckfrage?: { feld: string; frage: string; typ: Antworttyp };
 }
 
 /** Eine angeforderte Unterlage mit den Punkten, die sie klärt. */
@@ -251,6 +253,9 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
         brief: briefpunkt(e, a),
         kurz: kurzfassung(e, a),
         ...(e.unterlagen?.length ? { unterlagen: e.unterlagen } : {}),
+        ...(e.status === "pruefbedarf" && e.rueckfrage && antworttyp(e.rueckfrage.feld)
+          ? { rueckfrage: { feld: e.rueckfrage.feld, frage: e.rueckfrage.frage, typ: antworttyp(e.rueckfrage.feld)! } }
+          : {}),
       };
     });
 
@@ -427,6 +432,14 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return k(`Reparaturen in „${name}“?`, "Reparaturen dürfen nicht auf Mieter umgelegt werden.");
     case "I-08":
       return k("CO₂-Kosten falsch verteilt", "Einen Teil davon muss der Vermieter selbst tragen.");
+    case "I-09":
+      return s === "pruefbedarf"
+        ? k("Wasser nach Fläche verteilt", "Hat Ihre Wohnung einen eigenen Wasserzähler? Dann muss nach Verbrauch abgerechnet werden.")
+        : k("Wasser nicht nach Verbrauch abgerechnet", "Mit eigenem Wasserzähler muss nach Verbrauch abgerechnet werden.");
+    case "I-10":
+      return s === "abweichung" ? k("Rauchwarnmelder: Miete umgelegt", "Mietkosten für Rauchwarnmelder dürfen nicht umgelegt werden.") : k("Rauchwarnmelder: Miete enthalten?", "Nur die Wartung ist erlaubt, die Miete der Geräte nicht.");
+    case "I-11":
+      return k("Hauswart: Reparaturen enthalten?", "Reparatur- und Verwaltungsarbeiten müssen herausgerechnet werden.");
     case "P-01":
       if (s === "nicht_pruefbar") return k("Vorjahresabrechnung fehlt", "Mit ihr erkennen wir ungewöhnliche Preissprünge.");
       return e.titel.startsWith("Neue") ? k(`Neu: ${name}`, "Diese Kosten gab es im Vorjahr nicht.") : k(`Stark gestiegen: ${name}`, "Deutlich teurer als im Vorjahr.");
@@ -493,6 +506,15 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
       break;
     case "I-07":
       if (name) return `${name}: Bitte legen Sie den Wartungsvertrag vor und weisen Sie aus, ob darin Reparaturkosten enthalten sind.`;
+      break;
+    case "I-09":
+      return "Wasser und Abwasser werden nicht nach Verbrauch verteilt, obwohl meine Wohnung einen Wasserzähler hat. Bitte rechnen Sie nach dem erfassten Verbrauch ab.";
+    case "I-10":
+      if (e.status === "abweichung" && name) return `${name}${betrag}: Mietkosten für Rauchwarnmelder sind nicht als Betriebskosten umlagefähig.`;
+      if (name) return `${name}: Bitte legen Sie die Rechnung vor und weisen Sie Miete und Wartung getrennt aus; der Mietanteil ist nicht umlagefähig.`;
+      break;
+    case "I-11":
+      if (name) return `${name}: Bitte legen Sie den Hauswartvertrag mit Leistungsverzeichnis vor und rechnen Sie Anteile für Reparaturen, Verwaltung und Bereitschaft heraus.`;
       break;
     case "I-08":
       return "Die Aufteilung der CO₂-Kosten entspricht nicht dem Stufenmodell nach dem CO2KostAufG. Bitte korrigieren Sie die Aufteilung.";
@@ -608,6 +630,9 @@ function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
     case "I-05": return name ? `Vertrag und Rechnungen zu „${name}“` : "Vertrag und Rechnungen zum Kabel- oder Satellitenanschluss";
     case "I-07": return name ? `Wartungsvertrag und Rechnungen zu „${name}“` : undefined;
     case "I-08": return "Aufteilung der CO₂-Kosten";
+    case "I-09": return "Zählerstände und Verbrauchsaufstellung für Wasser";
+    case "I-10": return name ? `Rechnung zu „${name}“ mit Miete und Wartung getrennt` : undefined;
+    case "I-11": return name ? `Hauswartvertrag und Leistungsverzeichnis zu „${name}“` : undefined;
     case "P-01": return name && e.status !== "nicht_pruefbar" ? `Rechnungen zu „${name}“` : undefined;
     case "P-03": return "Rechnungen für Energie und Warmwasserbereitung";
   }

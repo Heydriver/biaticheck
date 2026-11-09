@@ -339,6 +339,127 @@ export const I08_CO2Aufteilung: Regel = {
   },
 };
 
+/** Monate im Zeitraum (gerundet). */
+const monateIm = (von: string, bis: string) => Math.max(1, Math.round(tageInklusive(von, bis) / (365.25 / 12)));
+
+/**
+ * Kaltwasser und Abwasser nach Verbrauch: Hat die Wohnung einen eigenen Zähler, muss nach Verbrauch
+ * abgerechnet werden. Ohne Angabe zum Zähler: Prüfbedarf mit Rückfrage – kein Betrag.
+ */
+export const I09_WasserNachVerbrauch: Regel = {
+  id: "I-09",
+  version: "1.0.0",
+  titel: "Wasser nach Verbrauch abgerechnet",
+  bereich: "inhaltlich",
+  grundlage: "§ 556a Abs. 1 Satz 2 BGB",
+  stand: "entwurf",
+  pruefe(a) {
+    const wasser = a.kostenpositionen.filter(
+      (p) => (p.kategorie === "wasser" || p.kategorie === "entwaesserung") && !/z[äa]hler/i.test(p.bezeichnung) && p.umlageschluessel,
+    );
+    if (wasser.length === 0) return [];
+    const nachFlaeche = wasser.filter((p) => p.umlageschluessel!.typ !== "verbrauch" && p.umlageschluessel!.typ !== "direkt");
+    if (nachFlaeche.length === 0) {
+      return [{ status: "ok", titel: "Wasser nach Verbrauch abgerechnet", erklaerung: "Wasser und Abwasser werden nach Ihrem Verbrauch verteilt." }];
+    }
+    const namen = nachFlaeche.map((p) => `„${p.bezeichnung}“`).join(", ");
+    const summe = runde(nachFlaeche.reduce((x, p) => x + p.anteilMieter, 0));
+    const zaehler = a.ausstattung?.wasserzaehler;
+    if (zaehler === false) {
+      return [{ status: "ok", titel: "Wasser nach Fläche zulässig", erklaerung: "Ohne eigenen Wasserzähler darf Wasser nach Fläche oder Personen verteilt werden." }];
+    }
+    if (zaehler === true) {
+      return [
+        {
+          status: "auffaelligkeit",
+          titel: "Wasser nicht nach Verbrauch abgerechnet",
+          erklaerung: `${namen} (${euro(summe)}) werden nicht nach Verbrauch verteilt, obwohl Ihre Wohnung einen Wasserzähler hat. Dann muss nach dem erfassten Verbrauch abgerechnet werden.`,
+          naechsterSchritt: "Fordern Sie eine Abrechnung nach Verbrauch und geben Sie Ihre Zählerstände zu Beginn und Ende des Abrechnungszeitraums an.",
+          beleg: { positionen: nachFlaeche.map((p) => p.id), summe },
+        },
+      ];
+    }
+    return [
+      {
+        status: "pruefbedarf",
+        titel: "Wasser nach Fläche verteilt",
+        erklaerung: `${namen} (${euro(summe)}) werden nicht nach Verbrauch verteilt. Das ist nur zulässig, wenn Ihre Wohnung keinen eigenen Wasserzähler hat.`,
+        naechsterSchritt: "Sehen Sie nach, ob in Ihrer Wohnung ein Wasserzähler eingebaut ist (meist im Bad oder in der Küche unter der Spüle), und beantworten Sie die Frage.",
+        beleg: { positionen: nachFlaeche.map((p) => p.id), summe },
+        rueckfrage: { feld: "ausstattung.wasserzaehler", frage: "Hat Ihre Wohnung einen eigenen Wasserzähler (meist im Bad oder unter der Spüle)?" },
+      },
+    ];
+  },
+};
+
+/** Rauchwarnmelder: Wartung ist umlagefähig, Miete oder Leasing nicht (BGH, Urteil vom 11.05.2022, VIII ZR 379/20). */
+export const I10_Rauchwarnmelder: Regel = {
+  id: "I-10",
+  version: "1.0.0",
+  titel: "Rauchwarnmelder ohne Mietkosten",
+  bereich: "inhaltlich",
+  grundlage: "BGH VIII ZR 379/20; § 2 Nr. 17 BetrKV",
+  stand: "entwurf",
+  pruefe(a) {
+    return a.kostenpositionen
+      .filter((p) => /rauch(warn)?melder|rwm\b/i.test(p.bezeichnung))
+      .map((p): Befund => {
+        const miete = /miet|leasing/i.test(p.bezeichnung);
+        const wartung = /wart|pr[üu]f|service/i.test(p.bezeichnung);
+        if (miete && !wartung)
+          return {
+            status: "abweichung",
+            titel: `Mietkosten Rauchwarnmelder: ${p.bezeichnung}`,
+            erklaerung: `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) sind Mietkosten für Rauchwarnmelder. Diese dürfen nicht als Betriebskosten umgelegt werden, nur die Wartung.`,
+            naechsterSchritt: `Fordern Sie die Streichung dieser Position (${euro(p.anteilMieter)}).`,
+            betragZugunstenMieter: p.anteilMieter,
+            positionId: p.id,
+          };
+        return {
+          status: "auffaelligkeit",
+          titel: `Miete in Rauchwarnmeldern? ${p.bezeichnung}`,
+          erklaerung: `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) kann neben der Wartung auch Miete für die Geräte enthalten. Die Miete darf nicht umgelegt werden.`,
+          naechsterSchritt: "Verlangen Sie die Rechnung des Dienstleisters und lassen Sie Miete und Wartung getrennt ausweisen. Der Mietanteil ist abzuziehen.",
+          positionId: p.id,
+        };
+      });
+  },
+};
+
+/** Hauswart: Reparatur-, Verwaltungs- und Bereitschaftsanteile sind nicht umlagefähig und müssen herausgerechnet werden. */
+const HAUSWART_DURCHSCHNITT = 0.37; // € je m² und Monat, DMB-Betriebskostenspiegel 2024
+export const I11_Hauswart: Regel = {
+  id: "I-11",
+  version: "1.0.0",
+  titel: "Hauswart ohne Reparatur- und Verwaltungsanteil",
+  bereich: "inhaltlich",
+  grundlage: "§ 2 Nr. 14 BetrKV; § 1 Abs. 2 BetrKV",
+  stand: "entwurf",
+  pruefe(a) {
+    const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
+    const flaeche = a.flaechen?.wohnflaecheMieter;
+    return a.kostenpositionen
+      .filter((p) => p.kategorie === "hauswart")
+      .map((p): Befund => {
+        const hinweis = /reparatur|instand|verwalt|notdienst|bereitschaft/i.test(p.bezeichnung);
+        const jeQm = flaeche && zeitraum ? runde(p.anteilMieter / flaeche / monateIm(zeitraum.von, zeitraum.bis)) : undefined;
+        const teuer = jeQm !== undefined && jeQm > HAUSWART_DURCHSCHNITT * 1.3;
+        if (!hinweis && !teuer)
+          return { status: "ok", titel: `Hauswart im üblichen Rahmen: ${p.bezeichnung}`, erklaerung: "Die Hauswartkosten liegen im üblichen Rahmen.", positionId: p.id };
+        return {
+          status: "auffaelligkeit",
+          titel: `Reparatur- oder Verwaltungsanteil im Hauswart? ${p.bezeichnung}`,
+          erklaerung: hinweis
+            ? `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) deutet auf Tätigkeiten hin, die nicht umlagefähig sind (Reparaturen, Verwaltung oder Bereitschaft).`
+            : `„${p.bezeichnung}“ kostet ${zahlDE(jeQm!)} € je m² im Monat – deutlich mehr als üblich (etwa ${zahlDE(HAUSWART_DURCHSCHNITT)} €). Häufig sind Reparaturen oder Verwaltungsarbeiten enthalten, die herausgerechnet werden müssen.`,
+          naechsterSchritt: "Verlangen Sie den Hauswartvertrag und das Leistungsverzeichnis. Anteile für Reparaturen, Verwaltung oder Bereitschaft müssen abgezogen werden.",
+          positionId: p.id,
+          beleg: { jeQm, hinweis },
+        };
+      });
+  },
+};
+
 export const INHALTLICHE_REGELN = [
   I01_NichtUmlagefaehig,
   I02_SonstigeKosten,
@@ -348,4 +469,7 @@ export const INHALTLICHE_REGELN = [
   I06_AufzugErdgeschoss,
   I07_WartungMitReparatur,
   I08_CO2Aufteilung,
+  I09_WasserNachVerbrauch,
+  I10_Rauchwarnmelder,
+  I11_Hauswart,
 ];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ordneKategorieZu, plusMonate, pruefeAbrechnung, type Regelergebnis } from "../src/index";
+import { ordneKategorieZu, plusMonate, pruefeAbrechnung, wendeAntwortAn, type AbrechnungEingabe, type Regelergebnis } from "../src/index";
 import { co2Vermieterquote } from "../src/regeln/inhaltlich";
 import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle";
 
@@ -210,5 +210,47 @@ describe("Hilfsfunktionen", () => {
     ["Diverses", "unbekannt"],
   ])("ordnet „%s“ der Kategorie %s zu", (bezeichnung, kategorie) => {
     expect(ordneKategorieZu(bezeichnung)).toBe(kategorie);
+  });
+});
+
+describe("Neue Regeln: Wasser, Rauchwarnmelder, Hauswart", () => {
+  const mit = (aendern: (a: AbrechnungEingabe) => void) => {
+    const a = korrekteAbrechnung();
+    aendern(a);
+    return pruefeAbrechnung(a, { heute: HEUTE });
+  };
+
+  it("I-09: Wasser nach Personen ohne Angabe zum Zähler → Prüfbedarf mit Rückfrage, ohne Betrag", () => {
+    const b = mit((a) => delete a.ausstattung);
+    const e = nur(b.ergebnisse, "I-09")[0]!;
+    expect(e.status).toBe("pruefbedarf");
+    expect(e.betragZugunstenMieter).toBeUndefined();
+    expect(e.rueckfrage?.feld).toBe("ausstattung.wasserzaehler");
+    expect(b.zusammenfassung.einsparpotenzial + b.zusammenfassung.klaerungspotenzial).toBe(0);
+  });
+
+  it("I-09: mit Wasserzähler → Auffälligkeit; ohne Zähler → zulässig", () => {
+    expect(nur(mit((a) => (a.ausstattung = { wasserzaehler: true })).ergebnisse, "I-09")[0]!.status).toBe("auffaelligkeit");
+    expect(nur(mit(() => {}).ergebnisse, "I-09")[0]!.status).toBe("ok");
+    const a = wendeAntwortAn({ ...korrekteAbrechnung(), ausstattung: undefined }, "ausstattung.wasserzaehler", true);
+    expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "I-09")[0]!.status).toBe("auffaelligkeit");
+  });
+
+  it("I-10: Miete für Rauchwarnmelder ist ein Fehler mit Betrag, gemischte Position eine Auffälligkeit", () => {
+    const b = mit((a) => a.kostenpositionen.push({ id: "r1", bezeichnung: "Miete Rauchwarnmelder", kategorie: "sonstige", anteilMieter: 24.5 }));
+    expect(nur(b.ergebnisse, "I-10")[0]).toMatchObject({ status: "abweichung", betragZugunstenMieter: 24.5 });
+    const c = mit((a) => a.kostenpositionen.push({ id: "r1", bezeichnung: "Rauchwarnmelder Miete und Wartung", kategorie: "sonstige", anteilMieter: 30 }));
+    expect(nur(c.ergebnisse, "I-10")[0]).toMatchObject({ status: "auffaelligkeit" });
+    expect(nur(c.ergebnisse, "I-10")[0]!.betragZugunstenMieter).toBeUndefined();
+  });
+
+  it("I-11: Hauswart mit Reparaturhinweis oder deutlich über dem Durchschnitt → Auffälligkeit ohne Betrag", () => {
+    const hinweis = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hausmeister inkl. Kleinreparaturen", kategorie: "hauswart", anteilMieter: 150 }));
+    expect(nur(hinweis.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("auffaelligkeit");
+    // 72 m², 12 Monate: 600 € → 0,69 €/m²/Monat, deutlich über 0,37 €
+    const teuer = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hauswart", kategorie: "hauswart", anteilMieter: 600 }));
+    expect(nur(teuer.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("auffaelligkeit");
+    const normal = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hauswart", kategorie: "hauswart", anteilMieter: 250 }));
+    expect(nur(normal.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("ok");
   });
 });

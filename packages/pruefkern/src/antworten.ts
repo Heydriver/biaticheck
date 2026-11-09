@@ -22,6 +22,7 @@ export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
   "flaechen.wohnflaecheMieter": "zahl",
   "mietvertrag.vereinbarteSonstigeKosten": "liste",
   "mietvertrag.aufzugAusgenommen": "janein",
+  "ausstattung.wasserzaehler": "janein",
   // Antwort ist ein weiteres Dokument (Upload) – wird über das Auslesen übernommen.
   heizkosten: "dokument",
   vorjahr: "dokument",
