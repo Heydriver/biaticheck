@@ -5,9 +5,26 @@ import type { Abrechnung } from "./schema";
  * - ok:              geprüft, nichts zu beanstanden
  * - abweichung:      rechnerischer oder klarer formeller/inhaltlicher Fehler
  * - auffaelligkeit:  ungewöhnlich, sollte geklärt werden (Belegeinsicht, Rückfrage)
+ * - pruefbedarf:     möglicher Fehler, aber nicht sicher genug – erst weitere Unterlagen prüfen;
+ *                    der Betrag zählt NICHT zum Einspar- oder Klärungspotenzial
  * - nicht_pruefbar:  mit den vorliegenden Unterlagen nicht prüfbar
  */
-export type Status = "ok" | "abweichung" | "auffaelligkeit" | "nicht_pruefbar";
+export type Status = "ok" | "abweichung" | "auffaelligkeit" | "pruefbedarf" | "nicht_pruefbar";
+
+/** Unterlagen, die das Tool für eine sichere Prüfung nachfordern kann. */
+export type Unterlage = "vorjahresabrechnung" | "kontoauszug" | "mietvertrag" | "heizkostenabrechnung" | "zaehlerstaende" | "rechnungen";
+
+export const UNTERLAGEN: Readonly<Record<Unterlage, string>> = {
+  vorjahresabrechnung: "Abrechnung des Vorjahres",
+  kontoauszug: "Kontoauszüge oder Mietkonto",
+  mietvertrag: "Mietvertrag",
+  heizkostenabrechnung: "Heizkostenabrechnung des Messdienstes",
+  zaehlerstaende: "Zählerstände",
+  rechnungen: "Rechnungen und Verträge (über die Belegeinsicht)",
+};
+
+/** Fehler oder Auffälligkeit – Punkte, die beanstandet werden und ins Schreiben gehören. */
+export const istBeanstandet = (s: Status) => s === "abweichung" || s === "auffaelligkeit";
 
 export type Regelbereich = "formell" | "rechnerisch" | "inhaltlich" | "plausibilitaet";
 
@@ -35,6 +52,8 @@ export interface Befund {
   /** Daten und Zwischenergebnisse, die zum Befund geführt haben (für Prüfbereich und Nachvollziehbarkeit). */
   beleg?: Record<string, unknown>;
   rueckfrage?: Rueckfrage;
+  /** Bei Prüfbedarf: welche Unterlagen die Prüfung sicher machen (eine davon genügt). */
+  unterlagen?: Unterlage[];
 }
 
 export interface Regel {

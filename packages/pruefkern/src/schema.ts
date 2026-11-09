@@ -167,6 +167,12 @@ export const Abrechnung = z.object({
       heizkosten: betrag.optional(),
       /** Monatliche Vorauszahlungen laut Schreiben/Mietvertrag (können vom Abrechnungsjahr abweichen). */
       monatlich: z.object({ betriebskosten: betrag.optional(), heizkosten: betrag.optional() }).optional(),
+      /**
+       * Monatliche Vorauszahlungen mit Änderungsdatum, belegt durch Vorjahresabrechnung oder Kontoauszüge.
+       * Jeder Eintrag gilt ab seinem Datum bis zum nächsten Eintrag.
+       */
+      verlauf: z.array(z.object({ ab: datum, betriebskosten: betrag.optional(), heizkosten: betrag.optional() })).optional(),
+      verlaufQuelle: z.enum(["vorjahresabrechnung", "kontoauszug", "kunde"]).optional(),
     })
     .optional(),
   /** Werte, die die Abrechnung selbst als Ergebnis ausweist. */

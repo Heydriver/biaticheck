@@ -1,7 +1,7 @@
 import { antworttyp, type Antworttyp } from "./antworten";
 import { datumDE, euro, plusMonate, runde, tageInklusive, vergleiche, zahlDE } from "./hilfen";
 import { ALLE_REGELN, type Pruefbericht } from "./pruefung";
-import type { Regelergebnis, Status } from "./regel";
+import { istBeanstandet, UNTERLAGEN, type Regelergebnis, type Status, type Unterlage } from "./regel";
 import { Abrechnung, NICHT_UMLAGEFAEHIG, type AbrechnungEingabe, type Kostenkategorie } from "./schema";
 import { vergleicheKosten, type KostenvergleichErgebnis, type Referenzwerte } from "./vergleich";
 
@@ -43,6 +43,8 @@ export const LOESUNGSVORSCHLAEGE: Readonly<Record<string, string>> = {
     "Prüfen Sie, ob Ihr Mietvertrag Erdgeschosswohnungen von den Aufzugskosten ausnimmt. Erreichen Sie über den Aufzug weder Keller noch Tiefgarage, sprechen Sie die Hausverwaltung darauf an.",
   "P-01:nicht_pruefbar":
     "Legen Sie die Abrechnung des Vorjahres bereit. Mit ihr erkennen wir ungewöhnliche Kostensteigerungen einzelner Positionen.",
+  "R-05:pruefbedarf":
+    "Laden Sie die Abrechnung des Vorjahres oder Ihre Kontoauszüge für den Abrechnungszeitraum hoch. Dann prüfen wir, ob wirklich Zahlungen fehlen.",
   "P-02:nicht_pruefbar": "Tragen Sie die Wohnfläche laut Mietvertrag ein, damit wir Ihre Kosten mit üblichen Werten vergleichen können.",
 };
 
@@ -86,6 +88,8 @@ export interface Stufe1 {
     regelnAuffaellig: number;
     regelnGesamt: number;
     stufe: Fehlerstufe;
+    /** Mögliche Fehler, die erst nach weiteren Unterlagen sicher sind (nicht im Potenzial enthalten). */
+    pruefbedarf: { anzahl: number; betrag: number };
   };
   widerspruchsfrist: {
     status: Friststatus;
@@ -163,6 +167,7 @@ export function erstelleStufe1(
       regelnAuffaellig,
       regelnGesamt: ALLE_REGELN.length,
       stufe: fehlerstufe(quote, z.einsparpotenzial),
+      pruefbedarf: { anzahl: z.anzahl.pruefbedarf, betrag: z.pruefbedarfBetrag },
     },
     widerspruchsfrist: { ...widerspruch, abrechnungsfrist },
     kosten: { betriebskosten, heizkosten, vorauszahlungen: a.vorauszahlungen, saldo: a.ausgewiesen.saldo },
@@ -189,6 +194,16 @@ export interface Auffaelligkeit {
   brief: string;
   /** Kurzfassung für den Kunden: kurzer Titel und ein Satz, ohne Fachsprache. */
   kurz: { titel: string; satz: string };
+  /** Bei Prüfbedarf: Unterlagen, mit denen der Punkt sicher geprüft werden kann (eine genügt). */
+  unterlagen?: Unterlage[];
+}
+
+/** Eine angeforderte Unterlage mit den Punkten, die sie klärt. */
+export interface Unterlagenanforderung {
+  /** Alternativen – eine davon genügt. */
+  arten: Unterlage[];
+  titel: string;
+  grund: string;
 }
 
 /** Die eine Empfehlung, die der Kunde zuerst sieht. */
@@ -196,7 +211,7 @@ export interface Empfehlung {
   titel: string;
   text: string;
   /** Hauptknopf: Schreiben an die Hausverwaltung, Expertenberatung oder nichts zu tun. */
-  aktion: "schreiben" | "beratung" | "keine";
+  aktion: "schreiben" | "beratung" | "unterlagen" | "keine";
 }
 
 export interface Stufe2 {
@@ -209,9 +224,11 @@ export interface Stufe2 {
   /** Konkretes Ergebnis: korrigierte Nachzahlung, nächste Schritte mit Terminen, Belege, Steuerhinweis. */
   fahrplan: Fahrplan;
   anschreiben: { betreff: string; text: string };
+  /** Unterlagen, die das Tool nachfordert, bevor es mögliche Fehler als sicher ausweist. */
+  unterlagen: Unterlagenanforderung[];
 }
 
-const REIHENFOLGE: Record<Exclude<Status, "ok">, number> = { abweichung: 0, auffaelligkeit: 1, nicht_pruefbar: 2 };
+const REIHENFOLGE: Record<Exclude<Status, "ok">, number> = { abweichung: 0, auffaelligkeit: 1, pruefbedarf: 2, nicht_pruefbar: 3 };
 
 const GRUNDLAGEN = new Map(ALLE_REGELN.map((r) => [r.id, r.grundlage]));
 
@@ -233,6 +250,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
         grundlage: GRUNDLAGEN.get(e.regelId) ?? "",
         brief: briefpunkt(e, a),
         kurz: kurzfassung(e, a),
+        ...(e.unterlagen?.length ? { unterlagen: e.unterlagen } : {}),
       };
     });
 
@@ -243,6 +261,7 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
       .map((r) => ({ feld: r.feld, frage: r.frage, typ: antworttyp(r.feld)! })),
     zusammenfassung: erstelleZusammenfassung(stufe1, auffaelligkeiten),
     empfehlung: erstelleEmpfehlung(stufe1, auffaelligkeiten),
+    unterlagen: sammleUnterlagen(auffaelligkeiten),
     fahrplan: erstelleFahrplan(stufe1, auffaelligkeiten, bericht, a),
     anschreiben: erstelleAnschreiben(a, auffaelligkeiten.filter((p) => gehoertInsAnschreiben(p, bericht)), stufe1),
   };
@@ -271,6 +290,7 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
   const teile = [
     n.abweichung ? `${n.abweichung} Fehler` : "",
     n.auffaelligkeit ? `${n.auffaelligkeit} ${n.auffaelligkeit === 1 ? "Auffälligkeit" : "Auffälligkeiten"}` : "",
+    n.pruefbedarf ? `${n.pruefbedarf} ${n.pruefbedarf === 1 ? "Punkt" : "Punkte"} mit Prüfbedarf` : "",
     n.nicht_pruefbar ? `${n.nicht_pruefbar} ${n.nicht_pruefbar === 1 ? "offenen Punkt" : "offene Punkte"}` : "",
   ].filter(Boolean);
   saetze.push(
@@ -293,7 +313,7 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
     }
   }
 
-  const wichtigster = punkte.find((p) => p.status !== "nicht_pruefbar");
+  const wichtigster = punkte.find((p) => istBeanstandet(p.status));
   if (wichtigster) saetze.push(`Der wichtigste Punkt ist „${wichtigster.titel}“. ${wichtigster.loesung}`);
 
   const f = s1.widerspruchsfrist;
@@ -307,7 +327,7 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
 export function erstelleEmpfehlung(s1: Stufe1, punkte: Auffaelligkeit[]): Empfehlung {
   const f = s1.widerspruchsfrist;
   const saldo = s1.kosten.saldo ?? 0;
-  const beanstandet = punkte.filter((p) => p.status !== "nicht_pruefbar");
+  const beanstandet = punkte.filter((p) => istBeanstandet(p.status));
   const frist = f.status === "offen" && f.bis ? ` Senden Sie es bis spätestens ${datumDE(f.bis)}.` : "";
 
   if (f.status === "abgelaufen")
@@ -321,6 +341,13 @@ export function erstelleEmpfehlung(s1: Stufe1, punkte: Auffaelligkeit[]): Empfeh
       titel: "Sie müssen die Nachzahlung nicht bezahlen",
       text: `Die Abrechnung kam zu spät. Damit entfällt die Nachzahlung von ${euro(saldo)}. Teilen Sie das Ihrer Hausverwaltung mit dem vorbereiteten Schreiben mit.`,
       aktion: "schreiben",
+    };
+  const pruefbedarf = punkte.filter((p) => p.status === "pruefbedarf");
+  if (!beanstandet.length && pruefbedarf.length)
+    return {
+      titel: "Wir brauchen noch eine Unterlage",
+      text: "Ein möglicher Fehler lässt sich erst mit weiteren Unterlagen sicher prüfen. Laden Sie sie hoch, dann wissen Sie, ob sich ein Schreiben lohnt.",
+      aktion: "unterlagen",
     };
   if (beanstandet.length)
     return {
@@ -372,6 +399,10 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return k("Unterschiedliche Flächen", "Für Ihre Wohnung werden verschiedene Größen angesetzt.");
     case "R-05": {
       const art = b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten";
+      if (s === "pruefbedarf")
+        return k(`Vorauszahlungen ${art}: Prüfbedarf`, `Möglich sind bis zu ${euro(zahl(b.differenz) ?? 0)}. Dafür brauchen wir Ihre Vorjahresabrechnung oder Kontoauszüge.`);
+      if (s === "abweichung" && zahl(b.summe) !== undefined)
+        return k(`Vorauszahlungen ${art} zu niedrig angerechnet`, `Gezahlt haben Sie ${euro(zahl(b.summe)!)}, angerechnet wurden nur ${euro(zahl(b.jahr) ?? 0)}.`);
       const jahr = zahl(b.jahr), erwartet = zahl(b.erwartet);
       return k(
         (zahl(b.differenz) ?? 0) > 0 ? `Vorauszahlungen ${art} zu niedrig angerechnet` : `Vorauszahlungen ${art} abweichend angerechnet`,
@@ -440,6 +471,8 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
         return `Unterschiedliche Flächen: In der Heizkostenabrechnung werden ${zahlDE(zahl(b.heizflaeche)!)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(zahl(b.wohnflaeche)!)} m². Bitte erläutern Sie die Abweichung.`;
       return "Für meine Wohnung werden unterschiedliche Flächen angesetzt. Bitte erläutern Sie die Abweichung.";
     case "R-05":
+      if (e.status === "abweichung" && zahl(b.summe) !== undefined && zahl(b.jahr) !== undefined)
+        return `Vorauszahlungen für ${b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten"}: Gezahlt habe ich im Abrechnungszeitraum ${euro(zahl(b.summe)!)}, angerechnet wurden nur ${euro(zahl(b.jahr)!)}. Bitte rechnen Sie die fehlenden ${euro(zahl(b.differenz) ?? 0)} an; Zahlungsnachweise liegen bei.`;
       if (zahl(b.jahr) !== undefined)
         return `Angerechnete Vorauszahlungen für ${b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten"}: ${euro(zahl(b.jahr)!)}. Bitte gleichen Sie diesen Betrag mit meinen tatsächlichen Zahlungen im Abrechnungszeitraum ab.`;
       break;
@@ -589,9 +622,11 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
   const saldo = s1.kosten.saldo;
   const { sicher, zuKlaeren } = s1.fehlerpotenzial;
   const entfaellt = punkte.some((p) => (p.regelId === "F-02" || p.regelId === "F-05") && p.status === "abweichung");
-  const beanstandet = punkte.filter((p) => p.status !== "nicht_pruefbar");
+  const beanstandet = punkte.filter((p) => istBeanstandet(p.status));
   const f = s1.widerspruchsfrist;
   const schritte: Schritt[] = [];
+  const nachreichen = sammleUnterlagen(punkte);
+  for (const u of nachreichen) schritte.push({ titel: `${u.titel} hochladen`, text: u.grund });
 
   const zahlung = saldo !== undefined && saldo > 0 ? { laut: saldo, hoechstens: entfaellt ? 0 : runde(Math.max(0, saldo - sicher)), entfaellt } : undefined;
 
@@ -602,8 +637,13 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
       titel: `Höchstens ${euro(zahlung.hoechstens)} statt ${euro(zahlung.laut)} zahlen`,
       text: `Die ${euro(sicher)} aus eindeutigen Fehlern ziehen Sie ab.${zuKlaeren > 0 ? " Den Rest erst zahlen, wenn die offenen Punkte geklärt sind." : ""}`,
     });
-  } else if (zahlung && zuKlaeren > 0) {
+  } else if (zahlung && zuKlaeren >= 30) {
     schritte.push({ titel: "Nachzahlung noch nicht bezahlen", text: "Warten Sie mit der Zahlung, bis die Hausverwaltung die Punkte geklärt und Ihnen die Belege gezeigt hat." });
+  } else if (zahlung && zuKlaeren > 0) {
+    schritte.push({
+      titel: "Nachzahlung unter Vorbehalt zahlen",
+      text: `Die offenen Punkte betreffen nur bis zu ${euro(zuKlaeren)}. Zahlen Sie mit dem Vermerk „unter Vorbehalt“, dann können Sie zu viel Gezahltes zurückfordern.`,
+    });
   }
 
   if (beanstandet.length || entfaellt) {
@@ -630,4 +670,26 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
   if (steuer) schritte.push({ titel: "Steuern sparen", text: `${euro(haushaltsnah + handwerker)} aus Ihrer Abrechnung sind steuerlich begünstigt. Das senkt Ihre Steuer um bis zu ${euro(steuer.ersparnisBis)}.` });
 
   return { zahlung, schritte, belege, steuer, mietvertragOffen };
+}
+
+// ---------- Unterlagen nachfordern ----------
+
+const GRUND: Partial<Record<string, string>> = {
+  "R-05": "Damit prüfen wir, ob bei Ihren Vorauszahlungen wirklich Geld fehlt. Ohne diese Unterlage zählen wir den Betrag nicht als Ersparnis.",
+};
+
+/** Fasst die Unterlagen aller Punkte mit Prüfbedarf zusammen (gleiche Alternativen nur einmal). */
+export function sammleUnterlagen(punkte: Auffaelligkeit[]): Unterlagenanforderung[] {
+  const liste = new Map<string, Unterlagenanforderung>();
+  for (const p of punkte) {
+    if (p.status !== "pruefbedarf" || !p.unterlagen?.length) continue;
+    const schluessel = [...p.unterlagen].sort().join("|");
+    if (liste.has(schluessel)) continue;
+    liste.set(schluessel, {
+      arten: p.unterlagen,
+      titel: p.unterlagen.map((u) => UNTERLAGEN[u]).join(" oder "),
+      grund: GRUND[p.regelId] ?? "Damit können wir diesen Punkt sicher prüfen.",
+    });
+  }
+  return [...liste.values()];
 }

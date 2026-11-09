@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { TEST_EXPERTE } from "./vorbereitung";
 
 const PDF = Buffer.from("%PDF-1.7\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF");
-const ERGEBNIS = /Bis zu 1\.236,44\s€ könnten falsch abgerechnet sein/;
+const ERGEBNIS = /Bis zu 13,57\s€ könnten falsch abgerechnet sein/;
 
 async function hochladen(page: Page) {
   await page.goto("/");
@@ -24,7 +24,12 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await hochladen(page);
 
   await expect(page.getByRole("note")).toContainText("Demo-Modus");
-  await expect(page.getByText("Wir haben 5 Punkte gefunden, die Sie Geld kosten können.")).toBeVisible();
+  await expect(page.getByText("Wir haben 4 Punkte gefunden, die Sie Geld kosten können.")).toBeVisible();
+  // Prüfbedarf: die 1.222,87 € zählen erst, wenn sie belegt sind
+  await expect(page.getByText(/Ein weiterer Punkt mit bis zu 1\.222,87\s€ prüfen wir, sobald Sie eine Unterlage nachreichen/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten: Prüfbedarf" })).toBeVisible();
+  await expect(page.getByText(/Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto/)).toBeVisible();
   await expect(page.getByText("Ihre Nachzahlung").locator("..")).toContainText("1.214,88 €");
   await expect(page.getByText("Ihre Nebenkosten").locator("..")).toContainText("45 % über Durchschnitt");
 
@@ -33,6 +38,13 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await expect(page.getByRole("alert").filter({ hasText: "vor dem Datum der Abrechnung" })).toBeVisible();
   await zugangsdatum(page, "2025-11-28");
   await expect(page.getByText("Einspruch möglich").locator("..")).toContainText("bis 28.11.2026");
+
+  // Kontoauszug: 110 € im Monat gezahlt → 1.320 € statt angerechneter 1.176,41 € → sicherer Fehler 143,59 €
+  await page.getByLabel("gültig ab, Zeile 1").fill("2024-01-01");
+  await page.getByLabel("Heizkosten je Monat, Zeile 1").fill("110");
+  await page.getByRole("button", { name: "Prüfen", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /143,59\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeHidden();
 
   // Modell B: Fehler sind kostenlos sichtbar, Schritte und Schreiben erst nach dem Erledigen-Paket (nicht einmal im Quelltext)
   await expect(page.getByRole("heading", { name: "Das haben wir gefunden" })).toBeVisible();
@@ -77,7 +89,8 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
 test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => {
   test.skip(test.info().project.name.endsWith("handy"), "Prüfbereich ist für den Desktop gedacht");
   await hochladen(page);
-  await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
+  // Unter 30 € sicherer bzw. zu klärender Ersparnis ist das Erledigen-Paket kostenlos – kein Bezahlschritt
+  await expect(page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Lieber vom Experten erledigen lassen" }).click();
   await page.locator("#beratung-name").fill("Max Prüfling");
   await page.locator("#beratung-email").fill("max@example.org");

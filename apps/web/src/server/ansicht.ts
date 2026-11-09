@@ -1,4 +1,4 @@
-import { erstelleStufe1, erstelleStufe2, type Referenzwerte, type Stufe1, type Stufe2 } from "@biaticheck/pruefkern";
+import { erstelleStufe1, erstelleStufe2, istBeanstandet, type Referenzwerte, type Stufe1, type Stufe2, type Unterlagenanforderung } from "@biaticheck/pruefkern";
 import type { faelle, Fallstatus } from "./db/schema";
 
 /**
@@ -31,6 +31,9 @@ export interface FallAnsicht {
   stufe1?: Stufe1;
   /** Gefundene Fehler und Auffälligkeiten in Kurzfassung (kostenlos). */
   fehler?: FehlerKurz[];
+  /** Mögliche Fehler, die erst mit weiteren Unterlagen sicher sind (kostenlos, ohne Betrag im Potenzial). */
+  pruefbedarf?: FehlerKurz[];
+  unterlagen?: Unterlagenanforderung[];
   stufe2?: Stufe2;
 }
 
@@ -44,7 +47,10 @@ export function erstelleFallAnsicht(
   const stufe2 = stufe1 ? erstelleStufe2(fall.bericht!, fall.daten!, stufe1) : undefined;
   const lohnt = stufe1 ? stufe1.fehlerpotenzial.sicher + stufe1.fehlerpotenzial.zuKlaeren >= MINDESTERSPARNIS : false;
   const fehler = stufe2?.auffaelligkeiten
-    .filter((p) => p.status !== "nicht_pruefbar")
+    .filter((p) => istBeanstandet(p.status))
+    .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}) }));
+  const pruefbedarf = stufe2?.auffaelligkeiten
+    .filter((p) => p.status === "pruefbedarf")
     .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}) }));
   return {
     id: fall.id,
@@ -56,6 +62,8 @@ export function erstelleFallAnsicht(
     preis: lohnt && !bezahlt ? PREIS : undefined,
     stufe1,
     fehler,
+    pruefbedarf,
+    unterlagen: stufe2?.unterlagen,
     stufe2: bezahlt || !lohnt ? stufe2 : undefined,
   };
 }

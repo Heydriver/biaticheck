@@ -10,7 +10,7 @@ import { Abrechnung, type AbrechnungEingabe } from "./schema";
  * Rückfrage, die eine Regel stellen kann, hier registriert ist.
  */
 
-export type Antworttyp = "datum" | "plz" | "betrag" | "zahl" | "janein" | "liste" | "dokument";
+export type Antworttyp = "datum" | "plz" | "betrag" | "zahl" | "janein" | "liste" | "verlauf" | "dokument";
 
 export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
   "meta.zugangAm": "datum",
@@ -18,6 +18,7 @@ export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
   vorauszahlungen: "betrag",
   "vorauszahlungenDetail.monatlich.betriebskosten": "betrag",
   "vorauszahlungenDetail.monatlich.heizkosten": "betrag",
+  "vorauszahlungenDetail.verlauf": "verlauf",
   "flaechen.wohnflaecheMieter": "zahl",
   "mietvertrag.vereinbarteSonstigeKosten": "liste",
   "mietvertrag.aufzugAusgenommen": "janein",
@@ -33,6 +34,16 @@ const WERT_SCHEMA: Record<Exclude<Antworttyp, "dokument">, z.ZodType> = {
   zahl: z.number().finite().positive().max(1_000_000),
   janein: z.boolean(),
   liste: z.array(z.string().trim().min(1).max(200)).max(50),
+  verlauf: z
+    .array(
+      z.object({
+        ab: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        betriebskosten: z.number().finite().min(0).max(100_000).optional(),
+        heizkosten: z.number().finite().min(0).max(100_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(36),
 };
 
 export function antworttyp(feld: string): Antworttyp | undefined {

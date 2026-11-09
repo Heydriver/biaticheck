@@ -52,7 +52,7 @@ describe("Verarbeitung eines Falls", () => {
 
     const fall = await lade(id);
     expect(fall.status).toBe("fertig");
-    expect(fall.bericht?.zusammenfassung.klaerungspotenzial).toBe(1236.44);
+    expect(fall.bericht?.zusammenfassung.klaerungspotenzial).toBe(13.57);
     expect(fall.auslesung?.konsistenz.konsistent).toBe(true);
     expect(fall.auslesung?.nutzung.eingabeTokens).toBe(20000);
     expect(await aktionen(id)).toEqual(["ausgelesen_und_geprueft"]);

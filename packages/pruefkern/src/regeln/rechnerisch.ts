@@ -229,18 +229,42 @@ export const R04_Flaechen: Regel = {
   },
 };
 
+/** Erste Tage aller Monate im Zeitraum (ISO). */
+function monatsanfaenge(von: string, bis: string): string[] {
+  const liste: string[] = [];
+  let [j, m] = [Number(von.slice(0, 4)), Number(von.slice(5, 7))];
+  const ende = bis.slice(0, 7);
+  for (let i = 0; i < 240; i++) {
+    const iso = `${j}-${String(m).padStart(2, "0")}-01`;
+    if (iso.slice(0, 7) > ende) break;
+    liste.push(iso);
+    m++;
+    if (m > 12) [j, m] = [j + 1, 1];
+  }
+  return liste;
+}
+
+/**
+ * Prüft die angerechneten Vorauszahlungen.
+ * - Ohne Beleg (nur ein Monatsbetrag): Eine Differenz ist häufig eine Anpassung im Lauf des Jahres.
+ *   Deshalb nur „Prüfbedarf“ mit Anforderung von Vorjahresabrechnung oder Kontoauszügen – kein Einsparpotenzial.
+ * - Mit belegtem Verlauf: Summe Monat für Monat; eine verbleibende Differenz zugunsten des Mieters ist ein Fehler.
+ */
 export const R05_Vorauszahlungen: Regel = {
   id: "R-05",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Angerechnete Vorauszahlungen plausibel",
   bereich: "rechnerisch",
-  grundlage: "§ 556 Abs. 2 BGB; Abgleich mit vereinbarten Vorauszahlungen",
+  grundlage: "§ 556 Abs. 2 BGB; Abgleich mit den tatsächlich geleisteten Vorauszahlungen",
   stand: "entwurf",
   pruefe(a, { einstellungen }) {
     const d = a.vorauszahlungenDetail;
     const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
-    if (!d?.monatlich || !zeitraum) return [];
-    const monate = Math.round(tageInklusive(zeitraum.von, zeitraum.bis) / (365.25 / 12));
+    if (!d || !zeitraum || (!d.monatlich && !d.verlauf?.length)) return [];
+    const monate = monatsanfaenge(zeitraum.von, zeitraum.bis);
+    const toleranz = Math.max(einstellungen.toleranzEuro, 1);
+    const verlauf = [...(d.verlauf ?? [])].sort((x, y) => x.ab.localeCompare(y.ab));
+    const quelle = d.verlaufQuelle === "kontoauszug" ? "Ihren Kontoauszügen" : d.verlaufQuelle === "vorjahresabrechnung" ? "der Vorjahresabrechnung" : "Ihren Angaben";
 
     const arten = [
       ["betriebskosten", "Betriebskosten"],
@@ -249,30 +273,62 @@ export const R05_Vorauszahlungen: Regel = {
     const befunde: Befund[] = [];
     for (const [art, name] of arten) {
       const jahr = d[art];
-      const monatlich = d.monatlich[art];
-      if (jahr === undefined || monatlich === undefined) continue;
-      const erwartet = runde(monatlich * monate);
+      if (jahr === undefined) continue;
+
+      const belegt = verlauf.some((v) => v[art] !== undefined);
+      if (belegt) {
+        // Monatsbetrag je Monat: letzter Eintrag, der zu Monatsbeginn gilt; davor der bisherige Monatsbetrag
+        let fehlt = false;
+        const summe = runde(
+          monate.reduce((s, monat) => {
+            const gilt = [...verlauf].reverse().find((v) => v.ab <= monat && v[art] !== undefined)?.[art] ?? d.monatlich?.[art] ?? verlauf.find((v) => v[art] !== undefined)?.[art];
+            if (gilt === undefined) fehlt = true;
+            return s + (gilt ?? 0);
+          }, 0),
+        );
+        if (fehlt) continue;
+        const differenz = runde(summe - jahr);
+        if (differenz > toleranz) {
+          befunde.push({
+            status: "abweichung",
+            titel: `Vorauszahlungen ${name} zu niedrig angerechnet`,
+            erklaerung: `Laut ${quelle} haben Sie im Abrechnungszeitraum ${euro(summe)} gezahlt, angerechnet wurden nur ${euro(jahr)}. Es fehlen ${euro(differenz)}.`,
+            naechsterSchritt: `Fordern Sie die Anrechnung der fehlenden ${euro(differenz)} und legen Sie Ihre Zahlungsnachweise bei.`,
+            betragZugunstenMieter: differenz,
+            beleg: { art, jahr, summe, differenz, verlauf, quelle: d.verlaufQuelle },
+          });
+        } else {
+          befunde.push({
+            status: "ok",
+            titel: `Vorauszahlungen ${name} korrekt angerechnet`,
+            erklaerung: `Laut ${quelle} entsprechen die angerechneten ${euro(jahr)} Ihren Zahlungen (${euro(summe)}).`,
+            beleg: { art, jahr, summe, differenz, verlauf, quelle: d.verlaufQuelle },
+          });
+        }
+        continue;
+      }
+
+      const monatlich = d.monatlich?.[art];
+      if (monatlich === undefined) continue;
+      const erwartet = runde(monatlich * monate.length);
       const differenz = runde(erwartet - jahr);
-      if (Math.abs(differenz) <= Math.max(einstellungen.toleranzEuro, 1)) {
+      if (Math.abs(differenz) <= toleranz || differenz < 0) {
         befunde.push({
           status: "ok",
           titel: `Vorauszahlungen ${name} plausibel`,
-          erklaerung: `Angerechnet sind ${euro(jahr)} – das entspricht ${monate} × ${euro(monatlich)}.`,
-          beleg: { art, jahr, monatlich, monate },
+          erklaerung: `Angerechnet sind ${euro(jahr)} – das entspricht ${monate.length} × ${euro(monatlich)}${differenz < -toleranz ? " oder mehr" : ""}.`,
+          beleg: { art, jahr, monatlich, monate: monate.length },
         });
         continue;
       }
       befunde.push({
-        status: "auffaelligkeit",
+        status: "pruefbedarf",
         titel: `Vorauszahlungen ${name} prüfen`,
-        erklaerung: `Angerechnet sind ${euro(jahr)} (Ø ${euro(jahr / monate)} pro Monat). Bei den angegebenen ${euro(monatlich)} pro Monat wären es ${euro(erwartet)} – eine Differenz von ${euro(Math.abs(differenz))}. Möglicherweise wurde die Vorauszahlung im Lauf des Jahres geändert, oder nicht alle Zahlungen wurden berücksichtigt.`,
-        naechsterSchritt: "Gleichen Sie die angerechneten Vorauszahlungen mit Ihren Kontoauszügen bzw. Ihrem Mietkonto für den Abrechnungszeitraum ab. Fehlende Zahlungen schriftlich beim Vermieter reklamieren.",
-        betragZugunstenMieter: differenz > 0 ? differenz : undefined,
-        beleg: { art, jahr, monatlich, monate, erwartet, differenz },
-        rueckfrage: {
-          feld: `vorauszahlungenDetail.monatlich.${art}`,
-          frage: `Wie viel haben Sie im Abrechnungszeitraum monatlich an Vorauszahlung für ${name} gezahlt? (Kontoauszug oder Mietkonto)`,
-        },
+        erklaerung: `Angerechnet sind ${euro(jahr)}. Mit ${euro(monatlich)} im Monat wären es ${euro(erwartet)} – bis zu ${euro(differenz)} mehr. Häufig wurde die Vorauszahlung aber im Lauf des Jahres angepasst. Ob wirklich Geld fehlt, zeigen die Vorjahresabrechnung oder Ihre Kontoauszüge.`,
+        naechsterSchritt: "Laden Sie die Abrechnung des Vorjahres oder Ihre Kontoauszüge für den Abrechnungszeitraum hoch.",
+        betragZugunstenMieter: differenz,
+        beleg: { art, jahr, monatlich, monate: monate.length, erwartet, differenz },
+        unterlagen: ["vorjahresabrechnung", "kontoauszug"],
       });
     }
     return befunde;

@@ -19,7 +19,7 @@ describe("G-001 – Großvermieter München 2024", () => {
     ["R-02", ["ok"]],
     ["R-03", ["ok"]],
     ["R-04", ["auffaelligkeit"]],
-    ["R-05", ["ok", "auffaelligkeit"]],
+    ["R-05", ["ok", "pruefbedarf"]],
     ["I-01", ["ok"]],
     ["I-02", ["nicht_pruefbar", "nicht_pruefbar"]],
     ["I-03", []],
@@ -35,16 +35,19 @@ describe("G-001 – Großvermieter München 2024", () => {
     expect(status(id)).toEqual(erwartet);
   });
 
-  it("findet keinen sicheren Fehler, aber bis zu 1.236,44 € Klärungsbedarf", () => {
+  it("findet keinen sicheren Fehler: 13,57 € Klärungsbedarf, 1.222,87 € erst nach weiteren Unterlagen", () => {
     expect(bericht.zusammenfassung.einsparpotenzial).toBe(0);
-    // 1.222,87 € Heizkostenvorauszahlungen + 13,57 € SAT-Anteil nach 30.06.2024
-    expect(bericht.zusammenfassung.klaerungspotenzial).toBe(1236.44);
+    // SAT-Anteil nach 30.06.2024
+    expect(bericht.zusammenfassung.klaerungspotenzial).toBe(13.57);
+    // Heizkostenvorauszahlungen: vermutlich im Jahr angepasst – Prüfbedarf, nicht im Potenzial
+    expect(bericht.zusammenfassung.pruefbedarfBetrag).toBe(1222.87);
+    const r05 = bericht.ergebnisse.find((e) => e.regelId === "R-05" && e.status === "pruefbedarf")!;
+    expect(r05.unterlagen).toEqual(["vorjahresabrechnung", "kontoauszug"]);
   });
 
   it("fragt gezielt beim Kunden nach", () => {
     expect(bericht.zusammenfassung.rueckfragen.map((r) => r.feld)).toEqual([
       "meta.zugangAm",
-      "vorauszahlungenDetail.monatlich.heizkosten",
       "mietvertrag.vereinbarteSonstigeKosten",
       "mietvertrag.aufzugAusgenommen",
       "vorjahr",

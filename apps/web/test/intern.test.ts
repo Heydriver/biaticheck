@@ -83,7 +83,7 @@ describe("Daten korrigieren", () => {
   it("manuelles Erfassen macht einen nicht erkannten Fall wieder prüfbar", async () => {
     const id = await fall({ status: "kein_nebenkostendokument" });
     const bericht = await speichereDaten(db, id, G001, anna, "2026-10-29");
-    expect(bericht.zusammenfassung.klaerungspotenzial).toBe(1236.44);
+    expect(bericht.zusammenfassung.klaerungspotenzial).toBe(13.57);
     expect((await lade(id))?.status).toBe("expertenpruefung");
     const p = await db.select().from(protokoll).where(eq(protokoll.fallId, id));
     expect(p[0]).toMatchObject({ akteur: "experte:anna@biati.de", aktion: "daten_korrigiert" });

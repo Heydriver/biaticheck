@@ -11,11 +11,12 @@ type Position = Daten["kostenpositionen"][number];
 type Dok = { id: string; art: string; mimeType: string };
 
 const SCHLUESSEL = ["wohnflaeche", "personen", "einheiten", "verbrauch", "miteigentumsanteil", "direkt", "sonstig"] as const;
-const STATUS_TEXT = { ok: "OK", abweichung: "Fehler", auffaelligkeit: "Auffällig", nicht_pruefbar: "Offen" } as const;
+const STATUS_TEXT = { ok: "OK", abweichung: "Fehler", auffaelligkeit: "Auffällig", pruefbedarf: "Prüfbedarf", nicht_pruefbar: "Offen" } as const;
 const STATUS_KLASSE = {
   ok: "bg-marke-100 text-marke-900",
   abweichung: "bg-red-100 text-red-800",
   auffaelligkeit: "bg-amber-100 text-amber-900",
+  pruefbedarf: "bg-sky-100 text-sky-900",
   nicht_pruefbar: "bg-stone-200 text-stone-700",
 } as const;
 

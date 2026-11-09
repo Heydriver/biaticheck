@@ -1,0 +1,565 @@
+<title>BiatiCheck Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+__TOKENS__
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg-alt); color: var(--text); font-family: var(--schrift); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+p { margin: 0; }
+button, input, textarea { font: inherit; }
+:focus-visible { outline: 3px solid var(--gruen); outline-offset: 3px; border-radius: 6px; }
+.seite { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 16px; }
+.kopf { display: flex; align-items: center; gap: 10px; color: var(--gruen); font-weight: 600; font-size: 18px; padding: 4px 0 8px; }
+.kopf svg { width: 28px; height: 31px; }
+.karte { background: var(--bg); border: 1px solid var(--linie); border-radius: 20px; padding: clamp(20px, 4vw, 32px); display: grid; gap: 16px; min-width: 0; }
+.karte h1 { font-size: clamp(24px, 5vw, 32px); line-height: 1.2; font-weight: 700; }
+.karte h2 { font-size: 19px; font-weight: 700; }
+.leise { color: var(--gedaempft); font-size: 14px; }
+.dunkel { background: var(--dunkelkarte); color: var(--dunkelkarte-text); border-color: transparent; }
+.dunkel .leise { color: inherit; opacity: .75; }
+.knopf { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border-radius: 10px; font-weight: 600; cursor: pointer; text-decoration: none; border: 1px solid transparent; }
+.knopf:disabled { opacity: .55; cursor: not-allowed; }
+.haupt { background: var(--gruen); color: #fff; }
+.haupt:hover:not(:disabled) { background: var(--gruen-tief); }
+.neben { background: var(--bg); color: var(--text); border-color: var(--linie); }
+.textknopf { background: none; border: 0; padding: 0; color: var(--gruen); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.reihe { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ablage { position: relative; border: 2px dashed color-mix(in srgb, var(--gruen) 45%, var(--linie)); border-radius: 16px; padding: 28px 16px; text-align: center; display: grid; gap: 6px; justify-items: center; }
+.ablage.aktiv { background: var(--mint); }
+.ablage input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.ablage strong { font-size: 17px; }
+.dateien { font-size: 14px; color: var(--gruen-tief); font-weight: 600; }
+.einwilligung { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--gedaempft); }
+.einwilligung input { width: 20px; height: 20px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--gruen); }
+.meldung { font-size: 14px; color: var(--fehler-fg); }
+.hinweis { font-size: 14px; background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 10px 12px; }
+.laden { display: grid; gap: 10px; }
+.balken { height: 6px; border-radius: 3px; background: var(--offen-bg); overflow: hidden; }
+.balken div { height: 100%; width: 30%; background: var(--gruen); border-radius: 3px; animation: lauf 1.4s ease-in-out infinite; }
+@keyframes lauf { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .balken div { animation: none; width: 100%; opacity: .5; } }
+.fakten { display: grid; grid-template-columns: 1fr; margin: 0; border-top: 1px solid var(--linie); }
+@media (min-width: 600px) { .fakten { grid-template-columns: 1fr 1fr; } .fakten > div:nth-child(-n+2) { border-bottom: 1px solid var(--linie) !important; } }
+.fakten > div { padding: 14px 0; border-bottom: 1px solid var(--linie); display: grid; gap: 2px; align-content: start; }
+@media (min-width: 600px) { .fakten > div { padding: 16px 16px 16px 0; border-bottom: 0; } .fakten { border-bottom: 1px solid var(--linie); } }
+.fakten dt { font-size: 14px; color: var(--gedaempft); }
+.fakten dd { margin: 0; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fakten small { font-size: 13px; color: var(--gedaempft); }
+.dringend { color: var(--warn-fg); }
+.datum { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.datum input { border: 1px solid var(--linie); background: var(--bg); color: var(--text); border-radius: 8px; padding: 8px 10px; min-height: 42px; }
+.datum .knopf { min-height: 42px; padding: 0 16px; }
+.punkte { list-style: none; margin: 0; padding: 0; }
+.punkte li { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; padding: 14px 0; border-top: 1px solid var(--linie); }
+.punkte li:first-child { border-top: 0; padding-top: 0; }
+.punkte b { display: block; font-weight: 600; }
+.punkte span { color: var(--gedaempft); font-size: 15px; }
+.punkte .betrag { color: var(--text); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+details summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 12px; }
+.tabelle { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tabelle td { padding: 6px 0; border-top: 1px solid var(--linie); }
+.tabelle td:last-child { text-align: right; padding-left: 12px; white-space: nowrap; }
+.feld { display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.feld input, .feld textarea { font-weight: 400; border: 1px solid var(--linie); background: var(--bg); color: var(--text); border-radius: 8px; padding: 10px 12px; width: 100%; }
+.feld textarea { font-size: 14px; line-height: 1.55; }
+.zwei { display: grid; gap: 12px; }
+@media (min-width: 600px) { .zwei { grid-template-columns: 1fr 1fr; } }
+[hidden] { display: none !important; }
+.schritte { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.schritte > li { display: flex; gap: 12px; align-items: flex-start; }
+.schritte .nr { flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--gruen); color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 700; margin-top: 1px; }
+.schritte b { font-weight: 600; }
+.schritte p { opacity: .85; font-size: 15px; }
+.schritte .bis { font-weight: 600; color: #f2c66d; white-space: nowrap; }
+.belege { margin: 6px 0 0; padding-left: 18px; font-size: 14px; opacity: .85; }
+.neu { background: color-mix(in srgb, var(--gruen) 30%, transparent); border-radius: 10px; padding: 10px 12px; font-weight: 600; }
+</style>
+
+<main class="seite">
+  <div class="kopf"><svg viewBox="0 0 150 166" aria-hidden="true">__LOGO__/></svg>BiatiCheck</div>
+
+  <section class="karte" id="start">
+    <h1>Nebenkostenabrechnung kostenlos prüfen</h1>
+    <p class="leise">Laden Sie Ihre Abrechnung hoch. Nach ein bis drei Minuten sehen Sie, ob Sie zu viel zahlen.</p>
+    <div class="ablage" id="ablage">
+      <input type="file" id="datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Abrechnung auswählen (PDF oder Foto)">
+      <strong>PDF oder Fotos auswählen</strong>
+      <span class="leise">oder hierher ziehen</span>
+      <span class="dateien" id="dateien"></span>
+    </div>
+    <label class="einwilligung"><input type="checkbox" id="einwilligung"><span>Die Datei wird zum Auslesen an Claude (Anthropic) übermittelt. Übernommen werden nur Beträge, Daten und die Postleitzahl, keine Namen.</span></label>
+    <p class="meldung" id="meldung" role="alert"></p>
+    <div class="reihe">
+      <button class="knopf haupt" id="pruefen" type="button">Abrechnung prüfen</button>
+      <button class="textknopf" id="beispiel" type="button">Beispiel ansehen</button>
+    </div>
+  </section>
+
+  <section class="karte" id="laden" hidden aria-live="polite">
+    <div class="laden">
+      <h2 id="laden-titel">Wir lesen Ihre Abrechnung</h2>
+      <p class="leise" id="laden-text">Seiten werden vorbereitet …</p>
+      <p class="leise">Das dauert je nach Umfang ein bis drei Minuten.</p>
+      <div class="balken"><div></div></div>
+      <div><button class="textknopf" id="abbrechen" type="button">Abbrechen</button></div>
+    </div>
+  </section>
+
+  <div id="ergebnis" class="seite" style="padding:0" aria-live="polite"></div>
+</main>
+
+<script>__PRUEFKERN__</script>
+<script>
+(() => {
+  const P = window.Pruefkern;
+  const MUSTER = __MUSTER__;
+  const HEUTE = new Date().toISOString().slice(0, 10);
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const euro = (n) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
+  const zahl = (n) => new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  const datumDE = (iso) => iso.split("-").reverse().join(".");
+
+  // ---------- Claude in der Seite ----------
+  let sample = null;
+  const sampleBereit = (window.claude?.use ? window.claude.use("sample") : Promise.resolve(null)).then((s) => (sample = s)).catch(() => null);
+
+  // ---------- Zustand ----------
+  let dateien = [];
+  let z = null; // { roh, beispiel, antworten, bezahlt, panel, brief, beratung, fehlerZugang, fehlerBeratung }
+
+  // ---------- Hochladen ----------
+  const ablage = $("ablage");
+  ["dragenter", "dragover"].forEach((t) => ablage.addEventListener(t, () => ablage.classList.add("aktiv")));
+  ["dragleave", "drop"].forEach((t) => ablage.addEventListener(t, () => ablage.classList.remove("aktiv")));
+  $("datei").addEventListener("change", (e) => {
+    dateien = [...e.target.files];
+    $("dateien").textContent = dateien.map((d) => d.name).join(", ");
+    $("meldung").textContent = "";
+  });
+
+  let ctl = null;
+  $("abbrechen").addEventListener("click", () => ctl?.abort());
+  $("beispiel").addEventListener("click", () => { z = neuerZustand(MUSTER, true); zeige(); });
+  $("pruefen").addEventListener("click", pruefen);
+
+  function neuerZustand(roh, beispiel, kontakt = {}) {
+    return { roh, beispiel, kontakt, antworten: {}, mietvertrag: null, mvStatus: "", vorauszahlungen: null, vzStatus: "", vzErgebnis: "", bezahlt: false, panel: null, brief: null, beratung: false, fehlerZugang: "", fehlerBeratung: "" };
+  }
+
+  async function pruefen() {
+    const m = $("meldung");
+    if (!dateien.length) return (m.textContent = "Bitte wählen Sie zuerst Ihre Abrechnung aus.");
+    if (!$("einwilligung").checked) return (m.textContent = "Bitte bestätigen Sie den Hinweis zur Übermittlung.");
+    await sampleBereit;
+    if (!sample) return (m.textContent = "Das Auslesen funktioniert nur, wenn diese Seite in Claude geöffnet ist und Sie angemeldet sind. Ohne Anmeldung können Sie das Beispiel ansehen.");
+    m.textContent = "";
+    $("pruefen").disabled = true;
+    $("laden").hidden = false;
+    $("laden-titel").textContent = "Wir lesen Ihre Abrechnung";
+    $("ergebnis").innerHTML = "";
+    $("laden-text").textContent = "Seiten werden vorbereitet …";
+    ctl = new AbortController();
+    try {
+      const limits = await sample.limits().catch(() => ({}));
+      const maxBilder = limits.images?.maxCount ?? 0;
+      const seiten = await bereiteVor(dateien);
+      if (!seiten.length) throw { code: "unlesbar" };
+      await abschreiben(seiten, maxBilder);
+      $("laden-titel").textContent = "Wir prüfen Ihre Abrechnung";
+      $("laden-text").textContent = "Beträge werden zugeordnet und mit 21 Regeln geprüft …";
+      const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n");
+      const prompt = [
+        P.ANWEISUNG,
+        "Antworte ausschließlich mit einem JSON-Objekt der Form {\"abrechnung\": ..., \"kontakt\": ...}.",
+        "\"abrechnung\" entspricht genau diesem JSON-Schema. Alle Felder müssen vorhanden sein; fehlende Angaben sind null:",
+        P.SCHEMA,
+        "\"kontakt\" enthält die Angaben, die der Mieter für sein Schreiben an die Hausverwaltung braucht. Ausnahme von der Regel oben: Hier Namen und Anschriften übernehmen, aber niemals Bankdaten. Felder (Text oder null): mieterName (Vor- und Nachname des Mieters), mieterAnschrift (Straße mit Hausnummer, Zeilenumbruch, PLZ und Ort der Wohnung), vermieterName (Name der Hausverwaltung oder des Vermieters, der die Abrechnung erstellt hat), vermieterAnschrift (Straße, Zeilenumbruch, PLZ und Ort), vermieterEmail, mieternummer (Mieter-, Kunden- oder Vertragsnummer bei der Hausverwaltung).",
+        `Inhalt der Abrechnung, Seite für Seite:\n${text.slice(0, 150000)}`,
+        "Lies die Nebenkostenabrechnung vollständig aus.",
+      ].join("\n\n");
+      const antwort = await sample.json(prompt, { modelTier: "complex", signal: ctl.signal });
+      const kontakt = {};
+      for (const [k, v] of Object.entries(antwort?.kontakt ?? {})) if (typeof v === "string" && v.trim()) kontakt[k] = v.trim();
+      z = neuerZustand(antwort?.abrechnung ?? antwort, false, kontakt);
+      zeige();
+    } catch (e) {
+      $("ergebnis").innerHTML = "";
+      const texte = {
+        cancelled: "",
+        unlesbar: "Die Datei enthält keinen lesbaren Text. Bitte laden Sie ein Foto oder einen Scan der Seiten hoch.",
+        not_granted: "Ohne Ihre Zustimmung kann die Seite die Abrechnung nicht lesen lassen.",
+        sampling_disabled: "Claude ist für Ihr Konto hier nicht verfügbar.",
+        rate_limited: "Gerade sind zu viele Anfragen unterwegs. Bitte versuchen Sie es in ein paar Minuten erneut.",
+        image_rejected: "Eine Datei konnte nicht verarbeitet werden. Bitte versuchen Sie es mit einer anderen Datei.",
+        invalid_json: "Die Abrechnung konnte nicht vollständig gelesen werden. Bitte versuchen Sie es noch einmal.",
+        prompt_too_large: "Die Datei ist zu umfangreich. Bitte laden Sie nur die Seiten der Abrechnung hoch.",
+        pdf: "Die PDF-Datei konnte nicht geöffnet werden.",
+      };
+      m.textContent = e?.code in texte ? texte[e.code] : "Das Lesen hat nicht geklappt. Bitte versuchen Sie es noch einmal.";
+      if (!(e?.code in texte)) console.error(e);
+    } finally {
+      $("laden").hidden = true;
+      $("pruefen").disabled = false;
+    }
+  }
+
+  // Jede Seite als Bild (für Scans) und, wenn vorhanden, als Text
+  const MAX_SEITEN = 30;
+  async function bereiteVor(liste) {
+    const seiten = []; // { bild: Blob, text: string }
+    for (const d of liste) {
+      if (d.type === "application/pdf" || /\.pdf$/i.test(d.name)) {
+        let pdfjs;
+        try {
+          pdfjs = await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs");
+          pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+        } catch { throw { code: "pdf" }; }
+        let doc;
+        try { doc = await pdfjs.getDocument({ data: new Uint8Array(await d.arrayBuffer()) }).promise; } catch { throw { code: "pdf" }; }
+        for (let i = 1; i <= doc.numPages && seiten.length < MAX_SEITEN; i++) {
+          const seite = await doc.getPage(i);
+          const inhalt = await seite.getTextContent();
+          const text = inhalt.items.map((t) => t.str + (t.hasEOL ? "\n" : " ")).join("").trim();
+          const v1 = seite.getViewport({ scale: 1 });
+          const vp = seite.getViewport({ scale: Math.min(2.5, 1400 / v1.width) });
+          const c = document.createElement("canvas");
+          c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+          const ctx = c.getContext("2d");
+          ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+          await seite.render({ canvasContext: ctx, viewport: vp }).promise;
+          seiten.push({ bild: await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9)), text });
+        }
+      } else if (seiten.length < MAX_SEITEN) {
+        seiten.push({ bild: d, text: "" });
+      }
+    }
+    return seiten;
+  }
+
+  const ABSCHREIBEN = "Die Bilder zeigen aufeinanderfolgende Seiten einer deutschen Nebenkostenabrechnung. Schreibe den Inhalt jeder Seite vollständig und genau ab, insbesondere alle Zahlen, Beträge, Daten, Flächen, Verteilerschlüssel und Einheiten. Tabellen zeilenweise, Spalten mit \" | \" getrennt. Beginne jede Seite mit der Zeile \"--- Seite N ---\" (N wie unten angegeben). Übernimm auch Namen, Anschriften, E-Mail-Adressen und Mieter- oder Kundennummern, aber keine Kontonummern und keine IBAN. Keine Kommentare, nur der abgeschriebene Inhalt.";
+
+  // Seiten ohne Textebene (Scans, Fotos) in Gruppen abschreiben lassen
+  async function abschreiben(seiten, maxBilder, art = "Nebenkostenabrechnung", fortschritt = (t) => ($("laden-text").textContent = t)) {
+    const fehlend = seiten.map((s, i) => ({ ...s, nr: i + 1 })).filter((s) => s.text.length < 80);
+    if (!fehlend.length) return;
+    if (!maxBilder) throw { code: "unlesbar" };
+    const gruppen = [];
+    for (let i = 0; i < fehlend.length; i += maxBilder) gruppen.push(fehlend.slice(i, i + maxBilder));
+    let fertig = 0;
+    const melde = () => fortschritt(`Seiten werden gelesen: ${fertig} von ${fehlend.length}`);
+    melde();
+    // höchstens zwei Gruppen gleichzeitig
+    const lauf = async (g) => {
+      const { text } = await sample(`${ABSCHREIBEN.replace("Nebenkostenabrechnung", art)}\n\nSeitennummern der Bilder in Reihenfolge: ${g.map((s) => s.nr).join(", ")}.`, { images: g.map((s) => s.bild), signal: ctl.signal });
+      const teile = text.split(/^---\s*Seite\s*(\d+)\s*---\s*$/m);
+      if (teile.length > 1) for (let i = 1; i < teile.length; i += 2) { const s = seiten[Number(teile[i]) - 1]; if (s) s.text = teile[i + 1].trim(); }
+      else seiten[g[0].nr - 1].text = text.trim();
+      fertig += g.length; melde();
+    };
+    for (let i = 0; i < gruppen.length; i += 2) await Promise.all(gruppen.slice(i, i + 2).map(lauf));
+  }
+
+  // ---------- Ergebnis ----------
+  function auswertung() {
+    return P.werteAus(z.roh, HEUTE, z.antworten, z.mietvertrag ?? undefined, z.vorauszahlungen ?? undefined);
+  }
+
+  function zeige() {
+    $("start").hidden = true;
+    let r = auswertung();
+    if (r.fehler === "antwort") {
+      z.fehlerZugang = r.meldung;
+      delete z.antworten[r.feld];
+      r = auswertung();
+    }
+    const ziel = $("ergebnis");
+    if (r.fehler) {
+      ziel.innerHTML = `<section class="karte"><h1>${r.fehler === "keine_abrechnung" ? "Das ist keine Nebenkostenabrechnung" : "Die Abrechnung konnte nicht gelesen werden"}</h1>
+        <p class="leise">${r.fehler === "keine_abrechnung" ? "Bitte laden Sie die Betriebs- oder Nebenkostenabrechnung Ihres Vermieters hoch." : "Bitte versuchen Sie es noch einmal oder mit einem deutlicheren Foto."}</p>
+        <div><button class="knopf neben" type="button" data-aktion="neu">Andere Datei prüfen</button></div></section>`;
+      return;
+    }
+    const f = r.s1.fehlerpotenzial;
+    const lohnt = f.sicher + f.zuKlaeren >= MINDESTERSPARNIS;
+    const frei = z.bezahlt || !lohnt;
+    ziel.innerHTML = ergebnisKarte(r) + fehlerListe(r) + pruefbedarfKarte(r) + (frei ? loesung(r, lohnt) : angebot(r)) + gelesen(r) +
+      `<p class="leise">${z.beispiel ? "Beispiel mit einer anonymisierten Musterabrechnung. " : ""}<button class="textknopf" type="button" data-aktion="neu">Andere Abrechnung prüfen</button></p>`;
+  }
+
+  function ergebnisKarte(r) {
+    const s1 = r.s1, f = s1.fehlerpotenzial, k = s1.kosten, w = s1.widerspruchsfrist;
+    const anzahl = f.anzahl.abweichung + f.anzahl.auffaelligkeit;
+    const summe = f.sicher + f.zuKlaeren;
+    const titel = f.sicher > 0 ? `${euro(f.sicher)} müssen Sie nicht bezahlen.`
+      : summe > 0 ? `Bis zu ${euro(summe)} könnten falsch abgerechnet sein.`
+      : anzahl ? "Ihre Abrechnung hat Auffälligkeiten." : "Ihre Abrechnung sieht korrekt aus.";
+    const unter = anzahl ? `Wir haben ${anzahl === 1 ? "einen Punkt" : `${anzahl} Punkte`} gefunden, die Sie Geld kosten können.` : "Wir haben keine Fehler gefunden.";
+    const frist = w.status === "offen"
+      ? `<dd class="${w.tageVerbleibend <= 30 ? "dringend" : ""}">bis ${datumDE(w.bis)}</dd><small>noch ${w.tageVerbleibend} ${w.tageVerbleibend === 1 ? "Tag" : "Tage"}</small>`
+      : w.status === "abgelaufen" ? `<dd class="dringend">abgelaufen</dd><small>am ${datumDE(w.bis)}</small>`
+      : `<dd style="font-size:15px;font-weight:500">Wann kam die Abrechnung an?</dd>
+         <div class="datum"><input type="date" id="zugang" aria-label="Eingangsdatum der Abrechnung" max="${HEUTE}"><button class="knopf neben" type="button" data-aktion="zugang">OK</button></div>
+         ${z.fehlerZugang ? `<small class="meldung" role="alert">${esc(z.fehlerZugang)}</small>` : ""}`;
+    const STUFE = { hoch: "hoch", mittel: "mittel", gering: "gering", keins: "keins" };
+    const fehler = `<div><dt>Fehlerpotenzial</dt><dd class="${f.stufe === "hoch" ? "dringend" : ""}">${STUFE[f.stufe]}</dd></div>`;
+    const plzFrage = `<div class="datum"><input id="plz" inputmode="numeric" maxlength="5" placeholder="z. B. 80331" aria-label="Postleitzahl der Wohnung" style="width:9em"><button class="knopf neben" type="button" data-aktion="plz">OK</button></div>${z.fehlerPlz ? `<small class="meldung" role="alert">${esc(z.fehlerPlz)}</small>` : ""}`;
+    let vergleich = "";
+    if (s1.vergleich.ok && s1.vergleich.vergleich.gesamt.abweichungProzent !== undefined) {
+      const v = s1.vergleich.vergleich, g = v.gesamt, a = g.abweichungProzent;
+      vergleich = `<div><dt>${r.plz ? `Vergleich für PLZ ${esc(r.plz)}` : "Ihre Nebenkosten"}</dt><dd>${a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
+        <small>${zahl(g.ihr)} € statt ${zahl(g.durchschnitt)} € je m² im Monat</small>
+        <small>${v.fallzahl ? `Durchschnitt aus ${v.fallzahl} Abrechnungen im ${esc(v.region)}` : `Durchschnitt Deutschland${v.regionalFolgt ? `, Wert für das ${esc(v.regionalFolgt)} folgt ab 10 Abrechnungen` : ""}`}</small>
+        ${r.plz ? "" : `<small>Postleitzahl für den regionalen Vergleich:</small>${plzFrage}`}</div>`;
+    } else {
+      vergleich = `<div><dt>Vergleich mit Ihrer Region</dt><dd style="font-size:15px;font-weight:500">${r.plz ? "Wohnfläche fehlt für den Vergleich" : "Postleitzahl Ihrer Wohnung?"}</dd>${r.plz ? "" : plzFrage}</div>`;
+    }
+    const saldo = k.saldo;
+    return `<section class="karte">
+      <p class="leise">${z.beispiel ? "Beispiel · " : ""}Ihre Abrechnung ${s1.abrechnungsjahr ?? ""}</p>
+      <h1>${titel}</h1>
+      <p>${unter}</p>
+      ${f.pruefbedarf.anzahl ? `<p class="leise" style="font-size:15px">${f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`} mit bis zu ${euro(f.pruefbedarf.betrag)} prüfen wir, sobald Sie eine Unterlage nachreichen.</p>` : ""}
+      ${!r.konsistenz.konsistent ? `<p class="hinweis">Einige Zahlen konnten wir nicht sicher lesen. Bitte prüfen Sie unten die ausgelesenen Beträge.</p>` : ""}
+      <dl class="fakten">
+        ${fehler}
+        ${saldo !== undefined ? `<div><dt>${saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}</dt><dd>${euro(Math.abs(saldo))}</dd></div>` : ""}
+        <div><dt>Einspruch möglich</dt>${frist}</div>
+        ${vergleich}
+      </dl>
+    </section>`;
+  }
+
+  // Modell B: Prüfen und Fehler kostenlos; das Erledigen-Paket kostet nur ab 30 € möglicher Ersparnis
+  const MINDESTERSPARNIS = 30;
+  const PREIS = 9.9;
+
+  function fehlerListe(r) {
+    const beanstandet = r.s2.auffaelligkeiten.filter((p) => p.status === "abweichung" || p.status === "auffaelligkeit");
+    if (!beanstandet.length) return "";
+    const zeile = (p) => `<li><div><b>${esc(p.kurz.titel)}</b><span>${esc(p.kurz.satz)}</span></div>${p.betrag ? `<span class="betrag">${euro(p.betrag)}</span>` : ""}</li>`;
+    return `<section class="karte"><h2>Das haben wir gefunden</h2><ul class="punkte">${beanstandet.map(zeile).join("")}</ul></section>`;
+  }
+
+  function angebot(r) {
+    const f = r.s1.fehlerpotenzial;
+    return `<section class="karte dunkel" id="angebot"><p class="leise">Erledigen-Paket</p><h1>Wir erledigen den Rest für Sie</h1>
+      <ul class="belege" style="font-size:15px;opacity:1;display:grid;gap:4px">
+        <li>Genauer Betrag, den Sie wirklich zahlen müssen</li>
+        <li>Ihre nächsten Schritte mit Terminen</li>
+        <li>Fertiges Schreiben mit Ihren Daten, direkt an die Hausverwaltung</li>
+        <li>Prüfung mit Ihrem Mietvertrag</li>
+        <li>Erinnerung, wenn die Hausverwaltung nicht antwortet</li>
+      </ul>
+      <div class="reihe"><button class="knopf haupt" type="button" data-aktion="freischalten">Für ${euro(PREIS)} erledigen</button></div>
+      <p class="leise">Sie zahlen nur, weil wir bis zu ${euro(f.sicher + f.zuKlaeren)} mögliche Ersparnis gefunden haben. Im Test wird nichts berechnet.</p></section>`;
+  }
+
+  function loesung(r, lohnt = true) {
+    const s2 = r.s2, e = s2.empfehlung, fp = s2.fahrplan;
+    const beanstandet = s2.auffaelligkeiten.filter((p) => p.status === "abweichung" || p.status === "auffaelligkeit");
+    const knopf = (aktion, text, haupt) => `<button class="knopf ${haupt ? "haupt" : "neben"}" type="button" data-aktion="${aktion}">${text}</button>`;
+    const knoepfe = e.aktion === "beratung" ? knopf("beratung", "Experten beauftragen", true) + knopf("schreiben", "Schreiben selbst senden")
+      : e.aktion === "schreiben" ? knopf("schreiben", "Schreiben öffnen", true) + knopf("beratung", "Lieber vom Experten erledigen lassen") : "";
+    const zeile = (p) => `<li><div><b>${esc(p.kurz.titel)}</b><span>${esc(p.kurz.satz)}</span></div>${p.betrag ? `<span class="betrag">${euro(p.betrag)}</span>` : ""}</li>`;
+    const titel = fp.zahlung?.entfaellt ? "Sie müssen die Nachzahlung nicht bezahlen."
+      : fp.zahlung && fp.zahlung.hoechstens < fp.zahlung.laut ? `Sie zahlen höchstens ${euro(fp.zahlung.hoechstens)} statt ${euro(fp.zahlung.laut)}.`
+      : e.titel;
+    const schritt = (x, i) => `<li><span class="nr">${i + 1}</span><div><b>${esc(x.titel)}${x.bis ? ` <span class="bis">bis ${datumDE(x.bis)}</span>` : ""}</b><p>${esc(x.text)}</p>
+      ${x.titel === "Belege einsehen" ? `<ul class="belege">${fp.belege.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}</div></li>`;
+    return `<section class="karte dunkel" id="empfehlung"><p class="leise">${lohnt ? "Ihr Ergebnis" : "Ihr Ergebnis · für Sie kostenlos"}</p><h1>${esc(titel)}</h1>
+      ${z.mvDelta ? `<p class="neu">${esc(z.mvDelta)}</p>` : ""}
+      <h2 style="margin-top:4px">Ihre nächsten Schritte</h2>
+      <ol class="schritte">${fp.schritte.map(schritt).join("")}</ol>
+      ${knoepfe ? `<div class="reihe">${knoepfe}</div>` : ""}</section>
+      ${panel(s2)}
+      ${z.mietvertrag ? "" : mietvertragKarte(fp.mietvertragOffen)}`;
+  }
+
+  function pruefbedarfKarte(r) {
+    const punkte = r.s2.auffaelligkeiten.filter((p) => p.status === "pruefbedarf");
+    if (!punkte.length) return z.vzErgebnis ? `<section class="karte"><h2>Unterlage geprüft</h2><p>${esc(z.vzErgebnis)}</p></section>` : "";
+    const zeile = (p) => `<li><div><b>${esc(p.kurz.titel)}</b><span>${esc(p.kurz.satz)}</span></div>${p.betrag ? `<span class="betrag" style="color:var(--gedaempft);font-weight:600">bis ${euro(p.betrag)}</span>` : ""}</li>`;
+    return `<section class="karte" id="vz-karte"><h2>Prüfbedarf: Wir brauchen noch eine Unterlage</h2>
+      <p class="leise">Diese Beträge zählen wir erst als Ersparnis, wenn sie belegt sind.</p>
+      <ul class="punkte">${punkte.map(zeile).join("")}</ul>
+      ${r.s2.unterlagen.map((u) => `<p style="font-size:15px"><b>Bitte hochladen:</b> ${esc(u.titel)}. ${esc(u.grund)}</p>`).join("")}
+      <div class="ablage"><input type="file" id="vz-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Vorjahresabrechnung oder Kontoauszüge auswählen"><strong>Unterlage auswählen</strong><span class="leise">PDF oder Fotos</span></div>
+      <p class="leise" id="vz-status" aria-live="polite">${esc(z.vzStatus)}</p></section>`;
+  }
+
+  async function unterlagePruefen(liste) {
+    const status = (t) => { z.vzStatus = t; const el = $("vz-status"); if (el) el.textContent = t; };
+    await sampleBereit;
+    if (!sample) return status("Das Lesen funktioniert nur, wenn diese Seite in Claude geöffnet ist und Sie angemeldet sind.");
+    $("vz-datei").disabled = true;
+    ctl = new AbortController();
+    const vorher = auswertung();
+    const zr = vorher.zeitraum;
+    try {
+      status("Seiten werden vorbereitet …");
+      const limits = await sample.limits().catch(() => ({}));
+      const seiten = await bereiteVor(liste);
+      await abschreiben(seiten, limits.images?.maxCount ?? 0, "Vorjahresabrechnung oder Kontoauszüge", status);
+      status("Vorauszahlungen werden ermittelt …");
+      const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n").slice(0, 150000);
+      const antwort = await sample.json(`Das folgende Dokument ist eine Nebenkostenabrechnung des Vorjahres, Kontoauszüge oder ein Mietkonto eines Mieters. Ermittle die monatlichen Vorauszahlungen (Abschläge) für Betriebskosten und für Heizkosten, die im Zeitraum ${zr ? `${zr.von} bis ${zr.bis}` : "des Abrechnungsjahres"} galten, jeweils mit dem Datum, ab dem der Betrag galt. In einer Vorjahresabrechnung steht das meist als neue monatliche Vorauszahlung ab einem Datum. Übernimm nur Beträge, die ausdrücklich als Vorauszahlung oder Abschlag für Betriebs- oder Heizkosten erkennbar sind. Teile eine Gesamtmiete nicht selbst auf. Zahlen genau übernehmen, nicht runden.
+Antworte nur mit JSON: {"dokument": "vorjahresabrechnung" | "kontoauszug" | "mietkonto" | "anderes", "verlauf": [{"ab": "YYYY-MM-DD", "betriebskosten": number | null, "heizkosten": number | null}], "hinweis": string}
+
+${text}`, { modelTier: "complex", signal: ctl.signal });
+      const verlauf = (Array.isArray(antwort?.verlauf) ? antwort.verlauf : [])
+        .filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v?.ab ?? ""))
+        .map((v) => ({ ab: v.ab, ...(typeof v.betriebskosten === "number" ? { betriebskosten: v.betriebskosten } : {}), ...(typeof v.heizkosten === "number" ? { heizkosten: v.heizkosten } : {}) }))
+        .filter((v) => v.betriebskosten !== undefined || v.heizkosten !== undefined);
+      if (!verlauf.length) { status("In dieser Unterlage finden wir keine Angaben zu Ihren monatlichen Vorauszahlungen. Bitte laden Sie die Vorjahresabrechnung oder Ihre Kontoauszüge hoch."); $("vz-datei").disabled = false; return; }
+      z.vorauszahlungen = { verlauf, quelle: antwort.dokument === "vorjahresabrechnung" ? "vorjahresabrechnung" : "kontoauszug" };
+      z.brief = null; z.vzStatus = "";
+      const nachher = auswertung();
+      const bestaetigt = nachher.s2.auffaelligkeiten.filter((p) => p.regelId === "R-05" && p.status === "abweichung");
+      z.vzErgebnis = bestaetigt.length
+        ? `Bestätigt: Bei Ihren Vorauszahlungen fehlen ${euro(bestaetigt.reduce((x, p) => x + (p.betrag ?? 0), 0))}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.`
+        : "Alles in Ordnung: Ihre Vorauszahlungen wurden richtig angerechnet. Der Punkt ist erledigt.";
+      const y = window.scrollY; zeige(); window.scrollTo({ top: y });
+    } catch (e) {
+      status(e?.code === "cancelled" ? "" : "Die Unterlage konnte nicht gelesen werden. Bitte versuchen Sie es noch einmal.");
+      const d = $("vz-datei"); if (d) d.disabled = false;
+    }
+  }
+
+  function mietvertragKarte(offen) {
+    return `<section class="karte" id="mv-karte"><h2>Mietvertrag hochladen (optional)</h2>
+      <p class="leise">${offen ? `Damit prüfen wir ${offen === 1 ? "einen weiteren Punkt" : `${offen} weitere Punkte`}, zum Beispiel ob alle Kostenarten vereinbart sind.` : "Damit prüfen wir, ob alle Kostenarten vereinbart sind."}</p>
+      <div class="ablage"><input type="file" id="mv-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Mietvertrag auswählen (PDF oder Fotos)"><strong>Mietvertrag auswählen</strong><span class="leise">PDF oder Fotos</span></div>
+      <p class="leise" id="mv-status" aria-live="polite">${esc(z.mvStatus)}</p></section>`;
+  }
+
+  async function mietvertragPruefen(liste) {
+    const status = (t) => { z.mvStatus = t; const el = $("mv-status"); if (el) el.textContent = t; };
+    await sampleBereit;
+    if (!sample) return status("Das Lesen funktioniert nur, wenn diese Seite in Claude geöffnet ist und Sie angemeldet sind.");
+    $("mv-datei").disabled = true;
+    ctl = new AbortController();
+    try {
+      status("Seiten werden vorbereitet …");
+      const limits = await sample.limits().catch(() => ({}));
+      const seiten = await bereiteVor(liste);
+      await abschreiben(seiten, limits.images?.maxCount ?? 0, "Mietvertrag", status);
+      status("Mietvertrag wird ausgewertet …");
+      const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n").slice(0, 150000);
+      const mv = await sample.json(`Lies aus diesem deutschen Wohnraum-Mietvertrag die Vereinbarungen zu den Betriebskosten aus. Antworte nur mit JSON:
+{"istMietvertrag": boolean, "pauschaleVereinbart": boolean | null (true, wenn statt Vorauszahlungen mit Abrechnung eine Betriebskostenpauschale vereinbart ist), "vereinbarteSonstigeKosten": string[] | null (alle ausdrücklich vereinbarten sonstigen Betriebskosten nach § 2 Nr. 17 BetrKV mit ihrer Bezeichnung; leere Liste, wenn keine vereinbart sind; null, wenn die Betriebskostenvereinbarung nicht enthalten ist), "aufzugAusgenommen": boolean | null (true, wenn Erdgeschosswohnungen ausdrücklich von den Aufzugskosten ausgenommen sind)}
+
+${text}`, { modelTier: "complex", signal: ctl.signal });
+      if (mv?.istMietvertrag === false) { status("Das sieht nicht nach einem Mietvertrag aus. Bitte laden Sie den Mietvertrag hoch."); $("mv-datei").disabled = false; return; }
+      const daten = {};
+      if (typeof mv?.pauschaleVereinbart === "boolean") daten.pauschaleVereinbart = mv.pauschaleVereinbart;
+      if (Array.isArray(mv?.vereinbarteSonstigeKosten)) daten.vereinbarteSonstigeKosten = mv.vereinbarteSonstigeKosten.map(String);
+      if (typeof mv?.aufzugAusgenommen === "boolean") daten.aufzugAusgenommen = mv.aufzugAusgenommen;
+      const vorher = auswertung().s1.fehlerpotenzial;
+      z.mietvertrag = daten; z.brief = null; z.mvStatus = "";
+      const nachher = auswertung().s1.fehlerpotenzial;
+      const neu = (nachher.anzahl.abweichung + nachher.anzahl.auffaelligkeit) - (vorher.anzahl.abweichung + vorher.anzahl.auffaelligkeit);
+      const mehr = Math.round((nachher.sicher - vorher.sicher) * 100) / 100;
+      z.mvDelta = neu > 0 ? `Ihr Mietvertrag ergibt ${neu === 1 ? "einen weiteren Fehler" : `${neu} weitere Fehler`}${mehr > 0 ? ` und ${euro(mehr)} mehr, die Sie nicht zahlen müssen` : ""}.` : "Ihr Mietvertrag ist geprüft. Er ergibt keine weiteren Fehler.";
+      const y = window.scrollY; zeige(); window.scrollTo({ top: y });
+    } catch (e) {
+      status(e?.code === "cancelled" ? "" : "Der Mietvertrag konnte nicht gelesen werden. Bitte versuchen Sie es noch einmal.");
+      const d = $("mv-datei"); if (d) d.disabled = false;
+    }
+  }
+
+  function panel(s2) {
+    if (z.panel === "schreiben") {
+      const pers = P.personalisiereAnschreiben(s2.anschreiben, z.kontakt);
+      const brief = z.brief ?? pers.text, betreff = pers.betreff;
+      const k = z.kontakt;
+      const feld = (id, titel, wert, mehrzeilig, typ = "text") => `<label class="feld" for="k-${id}">${titel}${mehrzeilig ? `<textarea id="k-${id}" data-kontakt="${id}" rows="2">${esc(wert ?? "")}</textarea>` : `<input id="k-${id}" data-kontakt="${id}" type="${typ}" value="${esc(wert ?? "")}">`}</label>`;
+      const gefunden = ["mieterName", "vermieterName", "vermieterEmail"].some((x) => k[x]);
+      return `<section class="karte" id="panel"><h2>Ihr Schreiben an die Hausverwaltung</h2>
+        <p class="leise">${gefunden ? "Diese Angaben haben wir aus Ihrer Abrechnung übernommen. Bitte kurz prüfen." : "Bitte ergänzen Sie Ihre Angaben."}</p>
+        <div class="zwei">${feld("mieterName", "Ihr Name", k.mieterName)}${feld("mieternummer", "Mieternummer", k.mieternummer)}</div>
+        ${feld("mieterAnschrift", "Ihre Anschrift", k.mieterAnschrift, true)}
+        <div class="zwei">${feld("vermieterName", "Hausverwaltung", k.vermieterName)}${feld("vermieterEmail", "E-Mail der Hausverwaltung", k.vermieterEmail, false, "email")}</div>
+        ${feld("vermieterAnschrift", "Anschrift der Hausverwaltung", k.vermieterAnschrift, true)}
+        <label class="feld" for="anschreiben"><span class="leise" style="font-weight:400">Betreff: ${esc(betreff)}</span><textarea id="anschreiben" rows="14">${esc(brief)}</textarea></label>
+        <div class="reihe"><a class="knopf haupt" id="mailto" href="mailto:${pers.an ?? ""}?subject=${encodeURIComponent(betreff)}&body=${encodeURIComponent(brief)}">${pers.an ? "E-Mail an die Hausverwaltung" : "Per E-Mail senden"}</a><button class="knopf neben" type="button" data-aktion="kopieren">Text kopieren</button></div></section>`;
+    }
+    if (z.panel === "beratung") {
+      if (z.beratung) return `<section class="karte" id="panel" role="status"><h2>Danke, wir melden uns.</h2><p class="leise">Im Test wird nichts gesendet.</p></section>`;
+      return `<form class="karte" id="panel" novalidate><h2>Unsere Experten übernehmen das für Sie</h2>
+        <div class="zwei"><label class="feld" for="b-name">Name<input id="b-name" autocomplete="name"></label><label class="feld" for="b-kontakt">E-Mail oder Telefon<input id="b-kontakt" autocomplete="email"></label></div>
+        <label class="einwilligung" for="b-einwilligung"><input type="checkbox" id="b-einwilligung"><span>Biati Solutions darf mich zu meiner Abrechnung kontaktieren.</span></label>
+        ${z.fehlerBeratung ? `<p class="meldung" role="alert">${esc(z.fehlerBeratung)}</p>` : ""}
+        <div><button class="knopf haupt" type="submit">Rückruf anfordern</button></div></form>`;
+    }
+    return "";
+  }
+
+  // Zum Nachprüfen im Test: was ausgelesen wurde
+  function gelesen(r) {
+    const zeilen = r.positionen.map((p) => `<tr><td>${esc(p.name)}</td><td>${euro(p.betrag)}</td></tr>`).join("") +
+      (r.heizkosten !== null ? `<tr><td>Heiz- und Warmwasserkosten</td><td>${euro(r.heizkosten)}</td></tr>` : "");
+    return `<details class="karte"><summary>Ausgelesene Beträge ansehen</summary><table class="tabelle"><tbody>${zeilen}</tbody></table></details>`;
+  }
+
+  // ---------- Bedienung ----------
+  const ergebnis = $("ergebnis");
+  ergebnis.addEventListener("click", async (ev) => {
+    const k = ev.target.closest("[data-aktion]");
+    if (!k) return;
+    const a = k.dataset.aktion;
+    if (a === "neu") {
+      z = null; ergebnis.innerHTML = ""; $("start").hidden = false; window.scrollTo({ top: 0 });
+    } else if (a === "zugang") {
+      const wert = $("zugang").value;
+      z.fehlerZugang = /^\d{4}-\d{2}-\d{2}$/.test(wert) ? "" : "Bitte ein Datum wählen.";
+      if (!z.fehlerZugang) { z.antworten["meta.zugangAm"] = wert; z.brief = null; }
+      zeige();
+    } else if (a === "plz") {
+      const wert = $("plz").value.replace(/\s/g, "");
+      z.fehlerPlz = /^\d{5}$/.test(wert) ? "" : "Bitte eine fünfstellige Postleitzahl eingeben.";
+      if (!z.fehlerPlz) z.antworten["meta.plz"] = wert;
+      zeige();
+    } else if (a === "freischalten") {
+      z.bezahlt = true; zeige(); $("empfehlung")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (a === "schreiben" || a === "beratung") {
+      z.panel = a; zeige(); $("panel")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } else if (a === "kopieren") {
+      const r = auswertung();
+      try { await navigator.clipboard.writeText(`Betreff: ${P.personalisiereAnschreiben(r.s2.anschreiben, z.kontakt).betreff}\n\n${$("anschreiben").value}`); k.textContent = "Kopiert"; }
+      catch { $("anschreiben").select(); }
+    }
+  });
+  ergebnis.addEventListener("input", (ev) => {
+    if (ev.target.id !== "anschreiben") return;
+    z.brief = ev.target.value;
+    const pers = P.personalisiereAnschreiben(auswertung().s2.anschreiben, z.kontakt);
+    $("mailto").href = `mailto:${pers.an ?? ""}?subject=${encodeURIComponent(pers.betreff)}&body=${encodeURIComponent(z.brief)}`;
+  });
+  // Angaben für das Schreiben: nach dem Ändern Text neu zusammensetzen
+  ergebnis.addEventListener("change", (ev) => {
+    if (ev.target.id === "mv-datei" && ev.target.files.length) return mietvertragPruefen([...ev.target.files]);
+    if (ev.target.id === "vz-datei" && ev.target.files.length) return unterlagePruefen([...ev.target.files]);
+    const feld = ev.target.dataset?.kontakt;
+    if (!feld) return;
+    z.kontakt[feld] = ev.target.value.trim();
+    z.brief = null;
+    const y = window.scrollY; zeige(); window.scrollTo({ top: y });
+  });
+  ergebnis.addEventListener("submit", (ev) => {
+    if (ev.target.id !== "panel") return;
+    ev.preventDefault();
+    const name = $("b-name").value.trim(), kontakt = $("b-kontakt").value.trim();
+    z.fehlerBeratung = name.length < 2 ? "Bitte Ihren Namen angeben."
+      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kontakt) && kontakt.replace(/\D/g, "").length < 6 ? "Bitte E-Mail-Adresse oder Telefonnummer angeben."
+      : !$("b-einwilligung").checked ? "Bitte bestätigen Sie, dass wir Sie kontaktieren dürfen." : "";
+    if (!z.fehlerBeratung) z.beratung = true;
+    zeige();
+    if (!z.beratung) { $("b-name").value = name; $("b-kontakt").value = kontakt; }
+  });
+})();
+</script>

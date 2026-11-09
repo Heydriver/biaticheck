@@ -36,6 +36,9 @@ export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stu
       )}
       <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>{null}</Ergebnis>
       {ansicht.fehler && ansicht.fehler.length > 0 && <Gefunden fehler={ansicht.fehler} />}
+      {ansicht.pruefbedarf && ansicht.pruefbedarf.length > 0 && (
+        <Pruefbedarf punkte={ansicht.pruefbedarf} unterlagen={ansicht.unterlagen ?? []} beantworte={aktionen.beantworte} />
+      )}
       {ansicht.stufe2 ? (
         <Loesung s1={ansicht.stufe1} s2={ansicht.stufe2} aktionen={aktionen} />
       ) : (
@@ -68,6 +71,11 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
         {titel}
       </h1>
       <p>{anzahl ? `Wir haben ${anzahl === 1 ? "einen Punkt" : `${anzahl} Punkte`} gefunden, die Sie Geld kosten können.` : "Wir haben keine Fehler gefunden."}</p>
+      {f.pruefbedarf.anzahl > 0 && (
+        <p className="text-[15px] text-gedaempft">
+          {f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`} mit bis zu {euro(f.pruefbedarf.betrag)} prüfen wir, sobald Sie eine Unterlage nachreichen.
+        </p>
+      )}
       <dl className="grid border-t border-linie sm:grid-cols-3 sm:border-b">
         {saldo !== undefined && (
           <Fakt titel={saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}>
@@ -129,6 +137,107 @@ function Vergleich({ s1 }: { s1: Stufe1 }) {
         {zahl(g.ihr)} € statt {zahl(g.durchschnitt)} € je m² im Monat
       </dd>
     </Fakt>
+  );
+}
+
+/** Prüfbedarf: möglicher Fehler, der erst mit einer weiteren Unterlage sicher ist. */
+function Pruefbedarf({
+  punkte,
+  unterlagen,
+  beantworte,
+}: {
+  punkte: NonNullable<FallAnsicht["pruefbedarf"]>;
+  unterlagen: NonNullable<FallAnsicht["unterlagen"]>;
+  beantworte: Aktionen["beantworte"];
+}) {
+  return (
+    <section className={KARTE} aria-labelledby="pruefbedarf-titel">
+      <div className="grid gap-1">
+        <h2 id="pruefbedarf-titel" className="text-lg font-bold">
+          Prüfbedarf: Wir brauchen noch eine Unterlage
+        </h2>
+        <p className="text-[15px] text-gedaempft">Diese Beträge zählen wir erst als Ersparnis, wenn sie belegt sind.</p>
+      </div>
+      <ul className="grid">
+        {punkte.map((p, i) => (
+          <li key={i} className="flex items-baseline justify-between gap-3 border-t border-linie py-3.5 first:border-0 first:pt-0">
+            <div className="min-w-0">
+              <h3 className="font-semibold">{p.titel}</h3>
+              <p className="text-[15px] text-gedaempft">{p.satz}</p>
+            </div>
+            {p.betrag !== undefined && <span className="whitespace-nowrap text-gedaempft tabular-nums">bis {euro(p.betrag)}</span>}
+          </li>
+        ))}
+      </ul>
+      {unterlagen.map((u) => (
+        <p key={u.titel} className="text-[15px]">
+          <strong>Bitte bereitlegen:</strong> {u.titel}. {u.grund}
+        </p>
+      ))}
+      {unterlagen.some((u) => u.arten.includes("kontoauszug")) && <VerlaufFormular beantworte={beantworte} />}
+    </section>
+  );
+}
+
+/** Monatliche Vorauszahlungen aus Kontoauszug oder Vorjahresabrechnung eintragen (bis das Hochladen automatisch ausgewertet wird). */
+function VerlaufFormular({ beantworte }: { beantworte: Aktionen["beantworte"] }) {
+  const [zeilen, setZeilen] = useState([{ ab: "", heizkosten: "", betriebskosten: "" }]);
+  const [fehler, setFehler] = useState<string>();
+  const [sendet, setSendet] = useState(false);
+  const betrag = (t: string) => (t.trim() ? Number(t.replace(/\./g, "").replace(",", ".")) : undefined);
+  const feld = "w-full rounded-lg border border-linie bg-grund px-3 py-2 font-normal text-text";
+  return (
+    <form
+      noValidate
+      className="grid gap-3 rounded-2xl bg-grund-alt p-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const wert = zeilen
+          .filter((z) => z.ab)
+          .map((z) => ({ ab: z.ab, ...(betrag(z.heizkosten) !== undefined ? { heizkosten: betrag(z.heizkosten) } : {}), ...(betrag(z.betriebskosten) !== undefined ? { betriebskosten: betrag(z.betriebskosten) } : {}) }));
+        if (!wert.length || wert.some((w) => Object.values(w).some((v) => typeof v === "number" && !Number.isFinite(v)))) return setFehler("Bitte Datum und Betrag eintragen.");
+        setSendet(true);
+        setFehler(undefined);
+        try {
+          await beantworte("vorauszahlungenDetail.verlauf", wert);
+        } catch (err) {
+          setFehler(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+        } finally {
+          setSendet(false);
+        }
+      }}
+    >
+      <p className="text-sm font-semibold">Oder tragen Sie Ihre monatlichen Vorauszahlungen laut Kontoauszug ein:</p>
+      {zeilen.map((z, i) => (
+        <div key={i} className="grid gap-2 sm:grid-cols-3">
+          <label className="grid gap-1 text-sm">
+            gültig ab
+            <input type="date" aria-label={`gültig ab, Zeile ${i + 1}`} className={feld} value={z.ab} onChange={(e) => setZeilen((l) => l.map((x, k) => (k === i ? { ...x, ab: e.target.value } : x)))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Heizkosten je Monat
+            <input inputMode="decimal" aria-label={`Heizkosten je Monat, Zeile ${i + 1}`} className={feld} value={z.heizkosten} onChange={(e) => setZeilen((l) => l.map((x, k) => (k === i ? { ...x, heizkosten: e.target.value } : x)))} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            Betriebskosten je Monat
+            <input inputMode="decimal" aria-label={`Betriebskosten je Monat, Zeile ${i + 1}`} className={feld} value={z.betriebskosten} onChange={(e) => setZeilen((l) => l.map((x, k) => (k === i ? { ...x, betriebskosten: e.target.value } : x)))} />
+          </label>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-3">
+        <button type="button" className={KNOPF_NEBEN} onClick={() => setZeilen((l) => [...l, { ab: "", heizkosten: "", betriebskosten: "" }])}>
+          Änderung im Jahr hinzufügen
+        </button>
+        <button type="submit" disabled={sendet} className={KNOPF_HAUPT}>
+          {sendet ? "Wird geprüft …" : "Prüfen"}
+        </button>
+      </div>
+      {fehler && (
+        <p role="alert" className="text-sm text-fehler-text">
+          {fehler}
+        </p>
+      )}
+    </form>
   );
 }
 
@@ -213,7 +322,7 @@ function Loesung({ s1, s2, aktionen }: { s1: Stufe1; s2: Stufe2; aktionen: Aktio
   const weitereFragen = [...s2.rueckfragen, ...s1.rueckfragen.filter((r) => r.feld !== "meta.zugangAm")];
 
   const knoepfe =
-    e.aktion === "keine"
+    e.aktion === "keine" || e.aktion === "unterlagen"
       ? null
       : (e.aktion === "beratung"
           ? [

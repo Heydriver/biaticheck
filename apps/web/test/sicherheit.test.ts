@@ -136,9 +136,11 @@ describe("Statusentscheidung", () => {
 });
 
 describe("Kundenansicht", () => {
-  const bericht = pruefeAbrechnung(G001, { heute: "2026-10-29" });
+  // Verspätet zugestellt: Nachzahlung entfällt → sichere Ersparnis über 30 €, das Erledigen-Paket kostet also
+  const daten = { ...G001, meta: { ...G001.meta, zugangAm: "2026-01-15" } };
+  const bericht = pruefeAbrechnung(daten, { heute: "2026-10-29" });
   const fall = (status: (typeof faelle.$inferSelect)["status"], bezahltAm: Date | null = null) =>
-    ({ id: "x", status, bericht, daten: G001, erstelltAm: new Date(), zugangHash: "geheim", auslesung: null, bezahltAm }) as unknown as typeof faelle.$inferSelect;
+    ({ id: "x", status, bericht, daten, erstelltAm: new Date(), zugangHash: "geheim", auslesung: null, bezahltAm }) as unknown as typeof faelle.$inferSelect;
   const ansicht = (f: typeof faelle.$inferSelect) => erstelleFallAnsicht(f, { zahlungModus: "test", heute: "2026-11-06" });
 
   it("zeigt vor der Freigabe durch Experten kein Ergebnis", () => {
@@ -149,7 +151,8 @@ describe("Kundenansicht", () => {
 
   it("ohne Freischaltung: Stufe 1 ja, aber keinerlei Inhalte aus Stufe 2 im Browser", () => {
     const a = ansicht(fall("fertig"));
-    expect(a.stufe1?.fehlerpotenzial.zuKlaeren).toBe(1236.44);
+    expect(a.stufe1?.fehlerpotenzial.sicher).toBe(1214.88);
+    expect(a.preis).toBe(9.9);
     expect(a.stufe2).toBeUndefined();
     const json = JSON.stringify(a);
     expect(json).not.toContain("geheim");
@@ -160,6 +163,16 @@ describe("Kundenansicht", () => {
       expect(json).not.toContain(e.erklaerung);
       if (e.naechsterSchritt) expect(json).not.toContain(e.naechsterSchritt);
     }
+  });
+
+  it("unter 30 € möglicher Ersparnis ist das Erledigen-Paket kostenlos; Prüfbedarf zählt nicht mit", () => {
+    const b = pruefeAbrechnung(G001, { heute: "2026-10-29" });
+    const a = erstelleFallAnsicht({ ...fall("fertig"), bericht: b, daten: G001 } as typeof faelle.$inferSelect, { zahlungModus: "test", heute: "2026-11-06" });
+    expect(a.stufe1?.fehlerpotenzial).toMatchObject({ zuKlaeren: 13.57, pruefbedarf: { anzahl: 1, betrag: 1222.87 } });
+    expect(a.preis).toBeUndefined();
+    expect(a.stufe2).toBeDefined();
+    expect(a.pruefbedarf).toHaveLength(1);
+    expect(a.unterlagen?.[0]?.arten).toEqual(["vorjahresabrechnung", "kontoauszug"]);
   });
 
   it("nach der Freischaltung: Stufe 2 mit Lösungsvorschlägen und Anschreiben", () => {

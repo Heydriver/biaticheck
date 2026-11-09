@@ -1,0 +1,47 @@
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f7f6f2;
+  --flaeche: rgba(255, 255, 255, 0.82);
+  --text: #0e3b2e;
+  --gedaempft: #557268;
+  --linie: rgba(14, 59, 46, 0.09);
+  --gruen: #1fa37e;
+  --gruen-tief: #178a69;
+  --blau: #2e7bb8;
+  --sand: #e6e2d8;
+  --mint: #e8f5f0;
+  --nebel-1: #cdeadf;
+  --nebel-2: #d5e5f2;
+  --warn-bg: #fcefd6;
+  --warn-fg: #8a5a12;
+  --offen-bg: #e9ece9;
+  --offen-fg: #4b5f58;
+  --ok-bg: #dff3ea;
+  --ok-fg: #0f6b51;
+  --fehler-bg: #fde4e4;
+  --fehler-fg: #9b2226;
+  --schatten: 0 40px 80px -36px rgba(14, 59, 46, 0.35), 0 10px 24px -14px rgba(14, 59, 46, 0.18);
+  --band: #1fa37e;
+  --band-text: #ffffff;
+  --dunkelkarte: #0e3b2e;
+  --dunkelkarte-text: #e8f0ec;
+  --schrift: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0e0c; --bg-alt: #0e1210; --flaeche: rgba(20, 26, 23, 0.86); --text: #e8f0ec; --gedaempft: #99b2a7;
+    --linie: rgba(255, 255, 255, 0.10); --gruen: #22c08f; --gruen-tief: #1fa37e; --blau: #3e96d4; --sand: #2a302c; --mint: #12241d;
+    --nebel-1: #0f3a2c; --nebel-2: #102a3d; --warn-bg: #3a2c12; --warn-fg: #f2c66d; --offen-bg: #222a26; --offen-fg: #b8c9c1;
+    --ok-bg: #133428; --ok-fg: #7fe0bd; --fehler-bg: #3b1618; --fehler-fg: #ffb3b3;
+    --schatten: 0 40px 80px -36px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
+    --band: #178a69; --band-text: #ffffff; --dunkelkarte: #141a17; --dunkelkarte-text: #e8f0ec; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0e0c; --bg-alt: #0e1210; --flaeche: rgba(20, 26, 23, 0.86); --text: #e8f0ec; --gedaempft: #99b2a7;
+  --linie: rgba(255, 255, 255, 0.10); --gruen: #22c08f; --gruen-tief: #1fa37e; --blau: #3e96d4; --sand: #2a302c; --mint: #12241d;
+  --nebel-1: #0f3a2c; --nebel-2: #102a3d; --warn-bg: #3a2c12; --warn-fg: #f2c66d; --offen-bg: #222a26; --offen-fg: #b8c9c1;
+  --ok-bg: #133428; --ok-fg: #7fe0bd; --fehler-bg: #3b1618; --fehler-fg: #ffb3b3;
+  --schatten: 0 40px 80px -36px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
+  --band: #178a69; --band-text: #ffffff; --dunkelkarte: #141a17; --dunkelkarte-text: #e8f0ec; color-scheme: dark;
+}

@@ -32,7 +32,7 @@ describe("Stufe 1.1 – Fehlerpotenzial und Widerspruchsfrist (G-001)", () => {
   const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
 
   it("zeigt sicheres und zu klärendes Einsparpotenzial", () => {
-    expect(s1.fehlerpotenzial).toMatchObject({ sicher: 0, zuKlaeren: 1236.44 });
+    expect(s1.fehlerpotenzial).toMatchObject({ sicher: 0, zuKlaeren: 13.57, pruefbedarf: { anzahl: 1, betrag: 1222.87 } });
   });
 
   it("berechnet die Widerspruchsfrist mit verbleibenden Tagen", () => {
@@ -128,7 +128,8 @@ describe("Anschreiben für die Musterabrechnung G-001", () => {
   const brief = s2.anschreiben.text;
 
   it("formuliert jeden Punkt sachlich mit konkreten Zahlen", () => {
-    expect(brief).toContain(`Angerechnete Vorauszahlungen für Heizkosten: ${euro(1176.41)}. Bitte gleichen Sie diesen Betrag mit meinen tatsächlichen Zahlungen im Abrechnungszeitraum ab.`);
+    // Prüfbedarf gehört nicht ins Schreiben, solange er nicht belegt ist
+    expect(brief).not.toContain("Vorauszahlungen für Heizkosten");
     expect(brief).toContain("Satellitenanlage: Bitte belegen Sie, dass nur Kosten bis zum 30.06.2024 enthalten sind.");
     expect(brief).toContain("Unterschiedliche Flächen: In der Heizkostenabrechnung werden 82,19 m² angesetzt, in der Betriebskostenabrechnung 84,28 m².");
     expect(brief).toContain("Aufzugskosten Prüf./Wart.: Bitte legen Sie den Wartungsvertrag vor");
@@ -222,14 +223,17 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
     const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
     expect(s2.empfehlung).toEqual({
       titel: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung",
-      text: "Darin fordern wir die Klärung von 5 Punkten, die Sie Geld kosten können. Senden Sie es bis spätestens 28.11.2026.",
+      text: "Darin fordern wir die Klärung von 4 Punkten, die Sie Geld kosten können. Senden Sie es bis spätestens 28.11.2026.",
       aktion: "schreiben",
     });
     const r05 = s2.auffaelligkeiten.find((p) => p.regelId === "R-05")!;
     expect(r05.kurz).toEqual({
-      titel: "Vorauszahlungen Heizkosten zu niedrig angerechnet",
-      satz: `Angerechnet sind ${euro(1176.41)}, nach Ihren Monatsbeträgen wären es ${euro(2399.28)}.`,
+      titel: "Vorauszahlungen Heizkosten: Prüfbedarf",
+      satz: `Möglich sind bis zu ${euro(1222.87)}. Dafür brauchen wir Ihre Vorjahresabrechnung oder Kontoauszüge.`,
     });
+    expect(s2.unterlagen).toEqual([
+      { arten: ["vorjahresabrechnung", "kontoauszug"], titel: "Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto", grund: expect.stringContaining("wirklich Geld fehlt") },
+    ]);
   });
 
   it("verspätete Abrechnung: Nachzahlung entfällt", () => {
@@ -265,9 +269,9 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
 });
 
 describe("Fehlerquote und persönliches Anschreiben", () => {
-  it("G-001: 5 von 21 Prüfregeln auffällig, Fehlerpotenzial hoch", () => {
+  it("G-001: 4 von 21 Prüfregeln auffällig (Prüfbedarf zählt nicht), Fehlerpotenzial mittel", () => {
     const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
-    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 5, regelnGesamt: ALLE_REGELN.length, quote: Math.round((5 / ALLE_REGELN.length) * 100), stufe: "hoch" });
+    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 4, regelnGesamt: ALLE_REGELN.length, quote: Math.round((4 / ALLE_REGELN.length) * 100), stufe: "mittel" });
   });
 
   it("Stufen nach Quote, sicherer Fehler immer hoch", () => {
@@ -308,8 +312,16 @@ describe("Fahrplan: konkrete Ergebnisse", () => {
     const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
     const f = s2.fahrplan;
     expect(f.zahlung).toEqual({ laut: 1214.88, hoechstens: 1214.88, entfaellt: false });
-    expect(f.schritte.map((s) => s.titel)).toEqual(["Nachzahlung noch nicht bezahlen", "Schreiben an die Hausverwaltung senden", "Belege einsehen", "Antwort abwarten", "Mietvertrag hochladen", "Steuern sparen"]);
-    expect(f.schritte[1]!.bis).toBe("2026-11-28");
+    expect(f.schritte.map((s) => s.titel)).toEqual([
+      "Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto hochladen",
+      "Nachzahlung unter Vorbehalt zahlen",
+      "Schreiben an die Hausverwaltung senden",
+      "Belege einsehen",
+      "Antwort abwarten",
+      "Mietvertrag hochladen",
+      "Steuern sparen",
+    ]);
+    expect(f.schritte[2]!.bis).toBe("2026-11-28");
     expect(f.belege).toContain("Rechnungen für Energie und Warmwasserbereitung");
     expect(f.mietvertragOffen).toBe(3);
     expect(f.steuer!.ersparnisBis).toBeGreaterThan(0);
@@ -320,13 +332,48 @@ describe("Fahrplan: konkrete Ergebnisse", () => {
     const { s2 } = stufen(mitVertrag);
     expect(s2.fahrplan.mietvertragOffen).toBe(0);
     expect(s2.fahrplan.schritte.map((s) => s.titel)).not.toContain("Mietvertrag hochladen");
-    expect(s2.fahrplan.schritte[0]!.titel).toMatch(/^Höchstens .* statt .* zahlen$/);
+    expect(s2.fahrplan.schritte.map((x) => x.titel)).toContainEqual(expect.stringMatching(/^Höchstens .* statt .* zahlen$/));
     expect(s2.fahrplan.zahlung!.hoechstens).toBeLessThan(1214.88);
   });
 
   it("verspätete Abrechnung: Nachzahlung entfällt", () => {
     const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
     expect(s2.fahrplan.zahlung).toMatchObject({ hoechstens: 0, entfaellt: true });
-    expect(s2.fahrplan.schritte[0]!.titel).toBe("Nachzahlung nicht bezahlen");
+    expect(s2.fahrplan.schritte.map((x) => x.titel)).toContain("Nachzahlung nicht bezahlen");
+  });
+});
+
+describe("Prüfbedarf statt vorschnellem Fehler: Vorauszahlungen (R-05)", () => {
+  const mitZugang = () => wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28");
+  const r05 = (a: AbrechnungEingabe) => pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse.filter((e) => e.regelId === "R-05" && e.bereich === "rechnerisch");
+
+  it("Kontoauszüge belegen höhere Zahlungen: sicherer Fehler mit Betrag", () => {
+    const a = mitZugang();
+    a.vorauszahlungenDetail = { ...a.vorauszahlungenDetail!, verlaufQuelle: "kontoauszug", verlauf: [{ ab: "2024-01-01", heizkosten: 110 }] };
+    const heiz = r05(a).find((e) => e.beleg?.art === "heizkosten")!;
+    expect(heiz.status).toBe("abweichung");
+    expect(heiz.betragZugunstenMieter).toBe(143.59); // 12 × 110 € = 1.320 € gezahlt, 1.176,41 € angerechnet
+    const { s1, s2 } = stufen(a);
+    expect(s1.fehlerpotenzial.sicher).toBe(143.59);
+    expect(s1.fehlerpotenzial.pruefbedarf.anzahl).toBe(0);
+    expect(s2.anschreiben.text).toContain(`Gezahlt habe ich im Abrechnungszeitraum ${euro(1320)}, angerechnet wurden nur ${euro(1176.41)}`);
+    expect(s2.unterlagen).toEqual([]);
+  });
+
+  it("Verlauf mit Anpassung im Jahr ergibt die angerechnete Summe: korrekt", () => {
+    const a = mitZugang();
+    // 4 × 50,00 € + 8 × 122,05 € = 1.176,40 € (innerhalb der Toleranz)
+    a.vorauszahlungenDetail = { ...a.vorauszahlungenDetail!, verlaufQuelle: "vorjahresabrechnung", verlauf: [{ ab: "2024-01-01", heizkosten: 50 }, { ab: "2024-05-01", heizkosten: 122.05 }] };
+    expect(r05(a).find((e) => e.beleg?.art === "heizkosten")!.status).toBe("ok");
+  });
+
+  it("Verlauf als Kundenantwort wird angenommen und geprüft", () => {
+    const a = wendeAntwortAn(mitZugang(), "vorauszahlungenDetail.verlauf", [{ ab: "2024-01-01", heizkosten: 98.03 }]);
+    expect(r05(a).find((e) => e.beleg?.art === "heizkosten")!.status).toBe("ok");
+  });
+
+  it("Modell-B-Grenze und Schlagzeile zählen Prüfbedarf nicht mit", () => {
+    const { s1 } = stufen(mitZugang());
+    expect(s1.fehlerpotenzial.sicher + s1.fehlerpotenzial.zuKlaeren).toBeLessThan(30);
   });
 });

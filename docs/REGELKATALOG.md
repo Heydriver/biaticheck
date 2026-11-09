@@ -14,7 +14,7 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | R-02 | Gesamtsumme der Positionen | Rechnerisch | Abweichung | – |
 | R-03 | Saldo = Kosten − Vorauszahlungen | Rechnerisch | Abweichung | Rückfrage Vorauszahlungen |
 | R-04 | Einheitliche Wohn-, Gesamt- und Heizflächen | § 556a BGB | Auffälligkeit | – |
-| R-05 | Angerechnete Vorauszahlungen passen zur Monatsrate | § 556 Abs. 2 BGB | Auffälligkeit mit Betrag | Rückfrage Zahlungen |
+| R-05 | Angerechnete Vorauszahlungen passen zu den tatsächlichen Zahlungen | § 556 Abs. 2 BGB | ohne Beleg: **Prüfbedarf** (Betrag zählt nicht zum Potenzial); mit belegtem Verlauf: Fehler mit Betrag | Vorjahresabrechnung oder Kontoauszüge |
 | I-01 | Keine nicht umlagefähigen Kosten (Verwaltung, Instandhaltung, Rücklage, Bank) | § 1 Abs. 2 BetrKV | Abweichung mit Betrag | – |
 | I-02 | Sonstige Betriebskosten im Mietvertrag vereinbart | § 2 Nr. 17 BetrKV | Abweichung mit Betrag | Rückfrage Mietvertrag |
 | I-03 | Jede Position einer Kostenart zuordenbar | § 2 BetrKV | Auffälligkeit | – |
@@ -43,3 +43,14 @@ Hinweis F-03: Gerechnet wird vorsichtig „Zugang + 12 Monate“ (taggenau). Ob 
 - Grundsteuer: Plausibilität nach Grundsteuerreform 2025
 - Zwischenablesung bei Mieterwechsel (Heizkosten)
 - Rauchwarnmelder: Wartung umlagefähig, Miete/Kauf nicht
+
+## Ergebnisstufen und Prüfbedarf
+
+| Stufe | Bedeutung | zählt zum Potenzial |
+|---|---|---|
+| Fehler (`abweichung`) | eindeutig | ja, sicher |
+| Auffällig (`auffaelligkeit`) | wahrscheinlich, Belegeinsicht nötig | ja, „zu klären“ |
+| Prüfbedarf (`pruefbedarf`) | möglicher Fehler, aber erst mit weiteren Unterlagen sicher | **nein** – der Kunde wird um die Unterlage gebeten (`unterlagen`), danach wird neu geprüft |
+| Nicht prüfbar (`nicht_pruefbar`) | Angaben fehlen | nein |
+
+Leitlinie: Ein Betrag erscheint erst dann als mögliche Ersparnis, wenn das Tool sich sicher genug ist. Sonst lieber eine Unterlage nachfordern als ein Schreiben mit einer falschen Forderung empfehlen.

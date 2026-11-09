@@ -13,7 +13,7 @@ import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.2.0";
+export const REGELWERK_VERSION = "0.3.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,
@@ -36,6 +36,8 @@ export interface Pruefbericht {
     einsparpotenzial: number;
     /** Beträge aus Auffälligkeiten, die sich nach Klärung als Ersparnis erweisen können. */
     klaerungspotenzial: number;
+    /** Mögliche Beträge aus Prüfbedarf – erst nach weiteren Unterlagen belastbar, nicht im Potenzial enthalten. */
+    pruefbedarfBetrag: number;
     rueckfragen: Rueckfrage[];
   };
 }
@@ -72,10 +74,11 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     }
   }
 
-  const anzahl: Record<Status, number> = { ok: 0, abweichung: 0, auffaelligkeit: 0, nicht_pruefbar: 0 };
+  const anzahl: Record<Status, number> = { ok: 0, abweichung: 0, auffaelligkeit: 0, pruefbedarf: 0, nicht_pruefbar: 0 };
   let einzeln = 0;
   let gesamt = 0;
   let klaerung = 0;
+  let pruefbedarf = 0;
   const rueckfragen = new Map<string, Rueckfrage>();
 
   for (const e of ergebnisse) {
@@ -86,6 +89,9 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     }
     if (e.status === "auffaelligkeit" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
       klaerung += e.betragZugunstenMieter;
+    }
+    if (e.status === "pruefbedarf" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
+      pruefbedarf += e.betragZugunstenMieter;
     }
     if (e.rueckfrage && !rueckfragen.has(e.rueckfrage.feld)) rueckfragen.set(e.rueckfrage.feld, e.rueckfrage);
   }
@@ -98,6 +104,7 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
       anzahl,
       einsparpotenzial: runde(Math.max(einzeln, gesamt)),
       klaerungspotenzial: runde(klaerung),
+      pruefbedarfBetrag: runde(pruefbedarf),
       rueckfragen: [...rueckfragen.values()],
     },
   };
