@@ -177,12 +177,8 @@ function Pruefbedarf({
       </div>
       <ul className="grid">
         {punkte.map((p, i) => (
-          <li key={i} className="flex items-baseline justify-between gap-3 border-t border-linie py-3.5 first:border-0 first:pt-0">
-            <div className="min-w-0">
-              <h3 className="font-semibold">{p.titel}</h3>
-              <p className="text-[15px] text-gedaempft">{p.satz}</p>
-            </div>
-            {p.betrag !== undefined && <span className="whitespace-nowrap text-gedaempft tabular-nums">bis {euro(p.betrag)}</span>}
+          <li key={i} className="border-t border-linie py-4 first:border-0 first:pt-0">
+            <Befundzeile punkt={p} betragPraefix="bis " />
           </li>
         ))}
       </ul>
@@ -330,16 +326,49 @@ function Gefunden({ fehler }: { fehler: NonNullable<FallAnsicht["fehler"]> }) {
       </h2>
       <ul className="grid">
         {fehler.map((p, i) => (
-          <li key={i} className="flex items-baseline justify-between gap-3 border-t border-linie py-3.5 first:border-0 first:pt-0">
-            <div className="min-w-0">
-              <h3 className="font-semibold">{p.titel}</h3>
-              <p className="text-[15px] text-gedaempft">{p.satz}</p>
-            </div>
-            {p.betrag !== undefined && <span className="font-bold whitespace-nowrap tabular-nums">{euro(p.betrag)}</span>}
+          <li key={i} className="border-t border-linie py-4 first:border-0 first:pt-0">
+            <Befundzeile punkt={p} />
           </li>
         ))}
       </ul>
     </section>
+  );
+}
+
+/** Ein Befund mit Kurzsatz, konkreten Zahlen, Fundstelle und Rechtsgrundlage – zum Nachvollziehen. */
+function Befundzeile({ punkt, betragPraefix = "" }: { punkt: NonNullable<FallAnsicht["fehler"]>[number]; betragPraefix?: string }) {
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold">{punkt.titel}</h3>
+          <p className="text-[15px] text-gedaempft">{punkt.satz}</p>
+        </div>
+        {punkt.betrag !== undefined && (
+          <span className="font-bold whitespace-nowrap tabular-nums">
+            {betragPraefix}
+            {euro(punkt.betrag)}
+          </span>
+        )}
+      </div>
+      {punkt.fakten.length > 0 && (
+        <dl className="grid gap-1 rounded-xl bg-grund-alt px-3.5 py-2.5 text-sm">
+          {punkt.fakten.map((f, k) => (
+            <div key={k} className="flex flex-wrap justify-between gap-x-4">
+              <dt className="text-gedaempft">{f.label}</dt>
+              <dd className={`ml-auto text-right tabular-nums ${f.betont ? "font-bold" : ""}`}>{f.wert}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {(punkt.fundstelle || punkt.grundlage) && (
+        <p className="text-xs text-gedaempft">
+          {punkt.fundstelle ? `In Ihrer Abrechnung: ${punkt.fundstelle}` : ""}
+          {punkt.fundstelle && punkt.grundlage ? " · " : ""}
+          {punkt.grundlage ? `Grundlage: ${punkt.grundlage}` : ""}
+        </p>
+      )}
+    </div>
   );
 }
 

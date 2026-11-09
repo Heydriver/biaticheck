@@ -1,4 +1,4 @@
-import { erstelleStufe1, erstelleStufe2, istBeanstandet, type Referenzwerte, type Stufe1, type Stufe2, type Unterlagenanforderung } from "@biaticheck/pruefkern";
+import { erstelleStufe1, erstelleStufe2, istBeanstandet, type Auffaelligkeit, type Fakt, type Referenzwerte, type Stufe1, type Stufe2, type Unterlagenanforderung } from "@biaticheck/pruefkern";
 import type { faelle, Fallstatus } from "./db/schema";
 
 /**
@@ -18,7 +18,21 @@ export interface FehlerKurz {
   betrag?: number;
   /** Bei Prüfbedarf: Frage an den Kunden, die den Punkt klärt. */
   rueckfrage?: { feld: string; frage: string; typ: Stufe1["rueckfragen"][number]["typ"] };
+  /** Nachvollziehbare Zahlen und Fundstelle. */
+  fakten: Fakt[];
+  fundstelle?: string;
+  grundlage?: string;
 }
+
+const kurz = (p: Auffaelligkeit): FehlerKurz => ({
+  titel: p.kurz.titel,
+  satz: p.kurz.satz,
+  ...(p.betrag !== undefined ? { betrag: p.betrag } : {}),
+  ...(p.rueckfrage ? { rueckfrage: p.rueckfrage } : {}),
+  fakten: p.fakten,
+  ...(p.fundstelle ? { fundstelle: p.fundstelle } : {}),
+  ...(p.grundlage ? { grundlage: p.grundlage.replace(/\s*\(Schwellenwert[^)]*\)/, "") } : {}),
+});
 
 export interface FallAnsicht {
   id: string;
@@ -50,10 +64,10 @@ export function erstelleFallAnsicht(
   const lohnt = stufe1 ? stufe1.fehlerpotenzial.sicher + stufe1.fehlerpotenzial.zuKlaeren >= MINDESTERSPARNIS : false;
   const fehler = stufe2?.auffaelligkeiten
     .filter((p) => istBeanstandet(p.status))
-    .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}) }));
+    .map(kurz);
   const pruefbedarf = stufe2?.auffaelligkeiten
     .filter((p) => p.status === "pruefbedarf")
-    .map((p) => ({ titel: p.kurz.titel, satz: p.kurz.satz, ...(p.betrag !== undefined ? { betrag: p.betrag } : {}), ...(p.rueckfrage ? { rueckfrage: p.rueckfrage } : {}) }));
+    .map(kurz);
   return {
     id: fall.id,
     status: fall.status,

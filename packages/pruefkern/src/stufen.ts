@@ -2,7 +2,7 @@ import { antworttyp, type Antworttyp } from "./antworten";
 import { datumDE, euro, plusMonate, runde, tageInklusive, vergleiche, zahlDE } from "./hilfen";
 import { ALLE_REGELN, type Pruefbericht } from "./pruefung";
 import { istBeanstandet, UNTERLAGEN, type Regelergebnis, type Status, type Unterlage } from "./regel";
-import { Abrechnung, NICHT_UMLAGEFAEHIG, type AbrechnungEingabe, type Kostenkategorie } from "./schema";
+import { Abrechnung, KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG, type AbrechnungEingabe, type Kostenkategorie } from "./schema";
 import { vergleicheKosten, type KostenvergleichErgebnis, type Referenzwerte } from "./vergleich";
 
 /**
@@ -198,6 +198,18 @@ export interface Auffaelligkeit {
   unterlagen?: Unterlage[];
   /** Bei Prüfbedarf: Frage an den Kunden, die den Punkt klärt. */
   rueckfrage?: { feld: string; frage: string; typ: Antworttyp };
+  /** Nachvollziehbare Zahlen: was in der Abrechnung steht, was richtig wäre, Differenz. */
+  fakten: Fakt[];
+  /** Wo der Kunde den Punkt in seiner Abrechnung findet, z. B. „Seite 5“. */
+  fundstelle?: string;
+}
+
+/** Eine Zeile mit konkreten Zahlen zu einem Befund. */
+export interface Fakt {
+  label: string;
+  wert: string;
+  /** Ergebniszeile (Differenz, Betrag zu Ihren Gunsten) hervorheben. */
+  betont?: boolean;
 }
 
 /** Eine angeforderte Unterlage mit den Punkten, die sie klärt. */
@@ -252,6 +264,8 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
         grundlage: GRUNDLAGEN.get(e.regelId) ?? "",
         brief: briefpunkt(e, a),
         kurz: kurzfassung(e, a),
+        fakten: fakten(e, a),
+        ...fundstelleVon(e, a),
         ...(e.unterlagen?.length ? { unterlagen: e.unterlagen } : {}),
         ...(e.status === "pruefbedarf" && e.rueckfrage && antworttyp(e.rueckfrage.feld)
           ? { rueckfrage: { feld: e.rueckfrage.feld, frage: e.rueckfrage.frage, typ: antworttyp(e.rueckfrage.feld)! } }
@@ -736,4 +750,200 @@ export function schliesstAn(vorjahr: { von: string; bis: string }, aktuell: { vo
   if ([ende, beginn, vjBeginn].some(Number.isNaN) || vjBeginn >= ende) return false;
   const luecke = (beginn - ende) / tag;
   return luecke >= 1 && luecke <= 31;
+}
+
+// ---------- Nachvollziehbare Zahlen je Befund ----------
+
+const SCHLUESSEL: Record<string, string> = {
+  wohnflaeche: "Wohnfläche",
+  personen: "Personen",
+  einheiten: "Wohneinheiten",
+  verbrauch: "Verbrauch",
+  miteigentumsanteil: "Miteigentumsanteil",
+  direkt: "direkt zugeordnet",
+};
+
+function fundstelleVon(e: Regelergebnis, a: Abrechnung): { fundstelle?: string } {
+  const p = e.positionId ? a.kostenpositionen.find((x) => x.id === e.positionId) : undefined;
+  return p?.fundstelle?.seite ? { fundstelle: `Seite ${p.fundstelle.seite}` } : {};
+}
+
+/**
+ * Konkrete Zahlen zu einem Befund – damit der Kunde nachvollziehen kann, woraus das Ergebnis folgt.
+ * Nur Werte, die aus der Abrechnung oder der Regel stammen; nichts wird geschätzt, was nicht als Schätzung benannt ist.
+ */
+export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
+  const b = e.beleg ?? {};
+  const p = e.positionId ? a.kostenpositionen.find((x) => x.id === e.positionId) : undefined;
+  const f: Fakt[] = [];
+  const add = (label: string, wert: string | undefined, betont = false) => {
+    if (wert !== undefined && wert !== "") f.push(betont ? { label, wert, betont } : { label, wert });
+  };
+  const eur = (v: unknown) => (zahl(v) !== undefined ? euro(zahl(v)!) : undefined);
+  const datum = (v: unknown) => (typeof v === "string" ? datumDE(v) : undefined);
+  const position = () => {
+    if (!p) return;
+    add("Position", p.bezeichnung);
+    if (p.gesamtkosten !== undefined) add("Kosten für das ganze Haus", euro(p.gesamtkosten));
+    if (p.umlageschluessel) {
+      const s = p.umlageschluessel;
+      add("Verteilt nach", s.anteilEinheit !== undefined && s.anteilGesamt !== undefined ? `${SCHLUESSEL[s.typ] ?? s.typ}: ${zahlDE(s.anteilEinheit)} von ${zahlDE(s.anteilGesamt)}` : SCHLUESSEL[s.typ] ?? s.typ);
+    }
+    add("Ihr Anteil", euro(p.anteilMieter));
+  };
+
+  switch (e.regelId) {
+    case "F-01":
+      add("Abrechnungszeitraum", b.von && b.bis ? `${datum(b.von)} bis ${datum(b.bis)}` : undefined);
+      add("Erlaubt", "höchstens 12 Monate");
+      break;
+    case "F-02": {
+      const z = (b.zeitraum ?? a.meta.abrechnungszeitraum) as { von: string; bis: string } | undefined;
+      add("Abrechnungszeitraum", z ? `${datumDE(z.von)} bis ${datumDE(z.bis)}` : undefined);
+      add("Abrechnung musste zugehen bis", datum(b.fristEnde));
+      add("Bei Ihnen eingegangen", datum(b.stichtag));
+      if (e.status !== "ok" && zahl(b.saldo) !== undefined) add(e.status === "abweichung" ? "Nachzahlung entfällt" : "Nachzahlung, die entfallen könnte", eur(b.saldo), true);
+      break;
+    }
+    case "F-03":
+      add("Erhalten am", datum(b.zugang));
+      add("Einwände möglich bis", datum(b.fristEnde), true);
+      break;
+    case "F-04":
+      position();
+      if (Array.isArray(b.fehlend)) add("Es fehlt", (b.fehlend as string[]).join(", "), true);
+      break;
+    case "R-01": {
+      position();
+      add("Richtig wäre", eur(b.erwartet));
+      add("Berechnet wurden", eur(b.berechnet));
+      if ((zahl(b.differenz) ?? 0) > 0) add("Zu viel berechnet", eur(b.differenz), true);
+      break;
+    }
+    case "R-02":
+      add("Ausgewiesene Gesamtsumme", eur(b.ausgewiesen));
+      add("Summe der Einzelposten", eur(b.berechnet));
+      add("Differenz", eur(Math.abs(zahl(b.differenz) ?? 0)), true);
+      break;
+    case "R-03":
+      add("Ihre Kosten", eur(b.kosten));
+      add("Ihre Vorauszahlungen", eur(b.vorauszahlungen));
+      add("Richtig wäre", eur(b.erwartet));
+      add("Ausgewiesen", eur(b.ausgewiesen));
+      if (zahl(b.differenz) !== undefined) add("Differenz", eur(Math.abs(zahl(b.differenz)!)), true);
+      break;
+    case "R-04": {
+      const h = zahl(b.heizflaeche), w = zahl(b.wohnflaeche);
+      if (h !== undefined && w !== undefined) {
+        add("Fläche in der Heizkostenabrechnung", `${zahlDE(h)} m²`);
+        add("Fläche in der Betriebskostenabrechnung", `${zahlDE(w)} m²`);
+        add("Unterschied", `${zahlDE(Math.abs(w - h))} m² (${zahlDE((Math.abs(w - h) / w) * 100, 1)} %)`, true);
+      } else if (Array.isArray(b.wohnflaechen)) add("Verwendete Wohnflächen", (b.wohnflaechen as number[]).map((x) => `${zahlDE(x)} m²`).join(", "), true);
+      else if (Array.isArray(b.gesamtflaechen)) add("Verwendete Gesamtflächen", (b.gesamtflaechen as number[]).map((x) => `${zahlDE(x)} m²`).join(", "), true);
+      break;
+    }
+    case "R-05": {
+      add("Angerechnete Vorauszahlungen", eur(b.jahr));
+      if (zahl(b.summe) !== undefined) {
+        add(b.quelle === "kontoauszug" ? "Gezahlt laut Kontoauszügen" : b.quelle === "vorjahresabrechnung" ? "Gezahlt laut Vorjahresabrechnung" : "Gezahlt laut Ihren Angaben", eur(b.summe));
+        if ((zahl(b.differenz) ?? 0) > 0) add("Fehlt", eur(b.differenz), true);
+      } else if (zahl(b.monatlich) !== undefined) {
+        add("Laut Abrechnung pro Monat", eur(b.monatlich));
+        add(`${zahl(b.monate)} Monate × ${eur(b.monatlich)}`, eur(b.erwartet));
+        if ((zahl(b.differenz) ?? 0) > 0) add(e.status === "pruefbedarf" ? "Mögliche Differenz (noch nicht belegt)" : "Differenz", eur(b.differenz), true);
+      }
+      break;
+    }
+    case "I-01":
+      position();
+      add("Warum nicht erlaubt", p ? KOSTENART_TEXT[p.kategorie] ?? "nicht umlagefähig" : undefined);
+      if (e.betragZugunstenMieter) add("Zu Ihren Gunsten", euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-02":
+      position();
+      add("Im Mietvertrag vereinbart", Array.isArray(b.vereinbart) ? ((b.vereinbart as string[]).join(", ") || "keine sonstigen Kosten") : "noch nicht bekannt");
+      if (e.status === "abweichung" && e.betragZugunstenMieter) add("Zu Ihren Gunsten", euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-04":
+      add("Ihre Heizkosten", eur(b.anteilMieter));
+      if (zahl(b.kuerzung) !== undefined) add("Kürzung um 15 %", eur(b.kuerzung), true);
+      if (zahl(b.verbrauchsanteilProzent) !== undefined) add("Anteil nach Verbrauch", `${zahlDE(zahl(b.verbrauchsanteilProzent)!, 0)} % (üblich 50–70 %)`, true);
+      break;
+    case "I-05":
+      position();
+      if (zahl(b.tageDanach) !== undefined) add("Davon nach dem 30.06.2024", `${zahl(b.tageDanach)} von ${zahl(b.tageGesamt)} Tagen`);
+      if (e.betragZugunstenMieter)
+        add(
+          e.status === "abweichung" ? "Zu Ihren Gunsten" : `Zeitanteilig zu Ihren Gunsten (${eur(b.anteilMieter)} × ${zahl(b.tageDanach)}/${zahl(b.tageGesamt)} Tage)`,
+          e.status === "abweichung" ? euro(e.betragZugunstenMieter) : `bis zu ${euro(e.betragZugunstenMieter)}`,
+          true,
+        );
+      break;
+    case "I-06":
+      add("Ihre Wohnung", a.meta.geschoss === 0 ? "Erdgeschoss" : a.meta.geschoss !== undefined ? `${a.meta.geschoss}. Geschoss` : undefined);
+      add("Ihre Aufzugskosten", eur(b.summe), true);
+      break;
+    case "I-07":
+      position();
+      if (b.steuerlich35a === "handwerker") add("Kennzeichnung in der Abrechnung", "Handwerkerleistung (§ 35a EStG) – deutet auf Reparaturen hin");
+      break;
+    case "I-08":
+      add("CO₂-Ausstoß des Hauses", zahl(b.kgProQm) !== undefined ? `${zahlDE(zahl(b.kgProQm)!)} kg je m² und Jahr` : undefined);
+      add("Anteil, den der Vermieter tragen muss", zahl(b.vermieterquote) !== undefined ? `${Math.round(zahl(b.vermieterquote)! * 100)} %` : undefined);
+      add("Vom Vermieter zu tragen (Haus)", eur(b.erwartet));
+      add("Tatsächlich berücksichtigt", eur(b.abgerechnet));
+      if (e.betragZugunstenMieter) add("Zu Ihren Gunsten", euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-09": {
+      const ids = (b.positionen as string[] | undefined) ?? [];
+      const pos = a.kostenpositionen.filter((x) => ids.includes(x.id));
+      add("Positionen", pos.map((x) => x.bezeichnung).join(", "));
+      add("Verteilt nach", [...new Set(pos.map((x) => SCHLUESSEL[x.umlageschluessel?.typ ?? ""] ?? "unbekannt"))].join(", "));
+      add("Ihr Anteil", eur(b.summe), true);
+      break;
+    }
+    case "I-10":
+      position();
+      if (e.betragZugunstenMieter) add("Zu Ihren Gunsten", euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-11":
+      position();
+      if (zahl(b.jeQm) !== undefined) {
+        add("Ihre Kosten je m² und Monat", `${zahlDE(zahl(b.jeQm)!)} €`, true);
+        add("Durchschnitt (Mieterbund)", "0,37 €");
+      }
+      break;
+    case "P-01":
+      add("Kostenart", typeof b.kategorie === "string" ? KOSTENKATEGORIEN_KURZ(b.kategorie) : undefined);
+      add("Vorjahr", eur(b.vorher));
+      add("Dieses Jahr", eur(b.aktuell));
+      if (zahl(b.steigerung) !== undefined) add("Anstieg", `${eur(b.steigerung)}${zahl(b.quote) !== undefined ? ` (+${zahlDE(zahl(b.quote)!, 0)} %)` : ""}`, true);
+      break;
+    case "P-02":
+      add("Ihre Kosten je m² und Monat", zahl(b.proQmMonat) !== undefined ? `${zahlDE(zahl(b.proQmMonat)!)} €` : undefined, true);
+      add("Üblich bis", zahl(b.schwelle) !== undefined ? `${zahlDE(zahl(b.schwelle)!)} €` : undefined);
+      break;
+    case "P-03":
+      add("Warmwasserkosten im Haus", eur(b.kostenGesamt));
+      add("Warmwasserverbrauch im Haus", zahl(b.verbrauchGesamtM3) !== undefined ? `${zahlDE(zahl(b.verbrauchGesamtM3)!)} m³` : undefined);
+      add("Kosten je m³", eur(b.proM3), true);
+      add("Üblich bis etwa", eur(b.schwelle));
+      if (zahl(b.kwhProM3) !== undefined) add("Wärme je m³ Warmwasser", `${zahlDE(zahl(b.kwhProM3)!, 0)} kWh`);
+      break;
+    default:
+      position();
+  }
+  return f;
+}
+
+const KOSTENART_TEXT: Partial<Record<string, string>> = {
+  verwaltung: "Verwaltungskosten trägt der Vermieter",
+  instandhaltung: "Reparaturen und Instandhaltung trägt der Vermieter",
+  ruecklage: "Rücklagen für Reparaturen trägt der Vermieter",
+  bank_porto: "Bank- und Portogebühren trägt der Vermieter",
+};
+
+function KOSTENKATEGORIEN_KURZ(k: string): string {
+  const name = (KOSTENKATEGORIEN as Record<string, string>)[k];
+  return name ? name.replace(/^§ 2 Nr\. \d+ – /, "") : k;
 }

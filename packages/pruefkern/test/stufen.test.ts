@@ -401,3 +401,42 @@ describe("Vorjahresabrechnung bestätigt den Abrechnungszeitraum", () => {
     expect(schliesstAn({ von: "x", bis: "2023-12-31" }, { von: "2024-01-01", bis: "2024-12-31" })).toBe(false);
   });
 });
+
+describe("Nachvollziehbare Zahlen je Befund", () => {
+  const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
+  const punkt = (id: string) => s2.auffaelligkeiten.find((p) => p.regelId === id)!;
+
+  it("Kabelfernsehen: Position, Hauskosten, Schlüssel, Anteil, Rechenweg und Seite", () => {
+    const p = punkt("I-05");
+    expect(p.fundstelle).toBe("Seite 5");
+    expect(p.fakten).toEqual([
+      { label: "Position", wert: "Satellitenanlage" },
+      { label: "Kosten für das ganze Haus", wert: euro(1134) },
+      { label: "Verteilt nach", wert: "Wohneinheiten: 1 von 42" },
+      { label: "Ihr Anteil", wert: euro(27) },
+      { label: "Davon nach dem 30.06.2024", wert: "184 von 366 Tagen" },
+      { label: `Zeitanteilig zu Ihren Gunsten (${euro(27)} × 184/366 Tage)`, wert: `bis zu ${euro(13.57)}`, betont: true },
+    ]);
+  });
+
+  it("Flächen und Warmwasser mit konkreten Werten", () => {
+    expect(punkt("R-04").fakten).toContainEqual({ label: "Unterschied", wert: "2,09 m² (2,5 %)", betont: true });
+    expect(punkt("P-03").fakten).toContainEqual({ label: "Kosten je m³", wert: euro(31.14), betont: true });
+  });
+
+  it("Prüfbedarf zeigt, dass die Differenz noch nicht belegt ist", () => {
+    expect(punkt("R-05").fakten).toContainEqual({ label: "Mögliche Differenz (noch nicht belegt)", wert: euro(1222.87), betont: true });
+  });
+
+  it("jeder Befund hat mindestens eine Zahl oder Angabe, ohne Emojis oder Formatierungszeichen", () => {
+    for (const fall of [korrekteAbrechnung(), fehlerhafteAbrechnung(), G001]) {
+      for (const p of stufen(fall).s2.auffaelligkeiten) {
+        if (p.regelId === "P-01" && p.status === "nicht_pruefbar") continue;
+        if (p.regelId === "F-02" && p.status === "nicht_pruefbar") continue;
+        if (p.regelId === "F-03" && p.status === "nicht_pruefbar") continue;
+        expect(p.fakten.length, `${p.regelId} ${p.kurz.titel}`).toBeGreaterThan(0);
+        for (const f of p.fakten) expect(`${f.label} ${f.wert}`).not.toMatch(/\p{Extended_Pictographic}|\*\*|undefined|NaN/u);
+      }
+    }
+  });
+});

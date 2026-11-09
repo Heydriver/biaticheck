@@ -50,7 +50,11 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await expect(page.getByRole("heading", { name: "Das haben wir gefunden" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten zu niedrig angerechnet" })).toBeVisible();
   const kostenlos = await page.locator("main").innerText();
-  expect(kostenlos.length).toBeLessThan(1800);
+  expect(kostenlos.length).toBeLessThan(3400);
+  // Nachvollziehbar: konkrete Zahlen, Fundstelle und Grundlage je Punkt
+  await expect(page.getByText("Wohneinheiten: 1 von 42")).toBeVisible();
+  await expect(page.getByText(/In Ihrer Abrechnung: Seite 5 · Grundlage: § 2 Nr\. 15 BetrKV/)).toBeVisible();
+  await expect(page.getByText("2,09 m² (2,5 %)")).toBeVisible();
   expect(await page.content()).not.toContain("Unsere Empfehlung");
   expect(await page.content()).not.toContain("Sehr geehrte Damen und Herren");
 
@@ -66,7 +70,7 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   const text = await page.locator("main").innerText();
   expect(text).not.toMatch(/\p{Extended_Pictographic}/u);
   expect(text).not.toMatch(/\*\*/);
-  expect(text.length).toBeLessThan(2600);
+  expect(text.length).toBeLessThan(4600);
 
   // Weg 1: Schreiben
   await page.getByRole("button", { name: "Schreiben öffnen" }).click();
