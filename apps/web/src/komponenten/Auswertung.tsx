@@ -23,10 +23,19 @@ const KNOPF_NEBEN = `${KNOPF} border border-linie bg-grund text-text`;
 type Aktionen = {
   beantworte: (feld: string, wert: unknown) => Promise<void>;
   freischalten: () => Promise<void>;
+  /** Lädt eine Unterlage zum Prüfbedarf hoch; liefert die Meldung für den Kunden. */
+  unterlageHochladen: (datei: File, art: "vorjahr" | "kontoauszug") => Promise<string>;
   beratungAnfragen: (daten: Record<string, unknown>) => Promise<void>;
 };
 
 export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stufe1: Stufe1 }; aktionen: Aktionen }) {
+  // Meldung nach dem Nachreichen bleibt sichtbar, auch wenn der Prüfbedarf danach erledigt ist
+  const [meldung, setMeldung] = useState<string>();
+  const hochladen: Aktionen["unterlageHochladen"] = async (datei, art) => {
+    const m = await aktionen.unterlageHochladen(datei, art);
+    setMeldung(m);
+    return m;
+  };
   return (
     <div className="grid gap-5">
       {ansicht.demo && (
@@ -37,7 +46,13 @@ export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stu
       <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>{null}</Ergebnis>
       {ansicht.fehler && ansicht.fehler.length > 0 && <Gefunden fehler={ansicht.fehler} />}
       {ansicht.pruefbedarf && ansicht.pruefbedarf.length > 0 && (
-        <Pruefbedarf punkte={ansicht.pruefbedarf} unterlagen={ansicht.unterlagen ?? []} beantworte={aktionen.beantworte} />
+        <Pruefbedarf punkte={ansicht.pruefbedarf} unterlagen={ansicht.unterlagen ?? []} beantworte={aktionen.beantworte} hochladen={hochladen} />
+      )}
+      {meldung && !ansicht.pruefbedarf?.length && (
+        <section className={KARTE} role="status">
+          <h2 className="text-lg font-bold">Unterlage geprüft</h2>
+          <p>{meldung}</p>
+        </section>
       )}
       {ansicht.stufe2 ? (
         <Loesung s1={ansicht.stufe1} s2={ansicht.stufe2} aktionen={aktionen} />
@@ -145,10 +160,12 @@ function Pruefbedarf({
   punkte,
   unterlagen,
   beantworte,
+  hochladen,
 }: {
   punkte: NonNullable<FallAnsicht["pruefbedarf"]>;
   unterlagen: NonNullable<FallAnsicht["unterlagen"]>;
   beantworte: Aktionen["beantworte"];
+  hochladen: Aktionen["unterlageHochladen"];
 }) {
   return (
     <section className={KARTE} aria-labelledby="pruefbedarf-titel">
@@ -177,8 +194,69 @@ function Pruefbedarf({
       {punkte.some((p) => p.rueckfrage) && (
         <Rueckfragen fragen={punkte.flatMap((p) => (p.rueckfrage ? [p.rueckfrage] : []))} beantworte={beantworte} ohneUeberschrift />
       )}
+      {unterlagen.length > 0 && <UnterlageHochladen hochladen={hochladen} />}
       {unterlagen.some((u) => u.arten.includes("kontoauszug")) && <VerlaufFormular beantworte={beantworte} />}
     </section>
+  );
+}
+
+function UnterlageHochladen({ hochladen }: { hochladen: Aktionen["unterlageHochladen"] }) {
+  const [art, setArt] = useState<"vorjahr" | "kontoauszug">("vorjahr");
+  const [zustand, setZustand] = useState<"bereit" | "laedt">("bereit");
+  const [meldung, setMeldung] = useState<string>();
+  const [fehler, setFehler] = useState<string>();
+  return (
+    <div className="grid gap-3">
+      <div className="flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label="Art der Unterlage">
+        {(
+          [
+            ["vorjahr", "Abrechnung des Vorjahres"],
+            ["kontoauszug", "Kontoauszüge oder Mietkonto"],
+          ] as const
+        ).map(([wert, text]) => (
+          <label key={wert} className="flex items-center gap-2">
+            <input type="radio" name="unterlage-art" checked={art === wert} onChange={() => setArt(wert)} className="accent-[var(--gruen)]" />
+            {text}
+          </label>
+        ))}
+      </div>
+      <label className="relative grid cursor-pointer justify-items-center gap-1 rounded-2xl border-2 border-dashed border-gruen/50 px-4 py-6 text-center">
+        <span className="font-semibold">{zustand === "laedt" ? "Wird gelesen und geprüft …" : "Unterlage hochladen (PDF oder Foto)"}</span>
+        <span className="text-sm text-gedaempft">Das dauert etwa eine Minute.</span>
+        <input
+          type="file"
+          accept="application/pdf,image/jpeg,image/png"
+          aria-label="Unterlage hochladen"
+          disabled={zustand === "laedt"}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          onChange={async (e) => {
+            const datei = e.target.files?.[0];
+            if (!datei) return;
+            setZustand("laedt");
+            setFehler(undefined);
+            setMeldung(undefined);
+            try {
+              setMeldung(await hochladen(datei, art));
+            } catch (err) {
+              setFehler(err instanceof Error ? err.message : "Hochladen fehlgeschlagen");
+            } finally {
+              setZustand("bereit");
+              e.target.value = "";
+            }
+          }}
+        />
+      </label>
+      {meldung && (
+        <p role="status" className="rounded-xl bg-mint px-3.5 py-2.5 text-sm">
+          {meldung}
+        </p>
+      )}
+      {fehler && (
+        <p role="alert" className="text-sm text-fehler-text">
+          {fehler}
+        </p>
+      )}
+    </div>
   );
 }
 

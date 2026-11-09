@@ -10,6 +10,7 @@ export { pruefeKonsistenz, type Konsistenz } from "./konsistenz";
 export { Rohdaten } from "./rohdaten";
 export { wandleUm } from "./umwandlung";
 export { vergleiche, type Vergleich } from "./vergleich";
+export { bereinigeVerlauf, leseVorauszahlungen, VorauszahlungenRoh, type Vorauszahlungsverlauf } from "./vorauszahlungen";
 
 export interface Auslesung {
   /** Nicht gesetzt, wenn das Dokument keine Nebenkostenabrechnung ist. */

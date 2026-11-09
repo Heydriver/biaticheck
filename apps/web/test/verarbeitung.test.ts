@@ -8,7 +8,7 @@ import { G001_ROH } from "../../../packages/auslesen/test/G-001.roh";
 import { erstelleDb } from "@/server/db";
 import { antworten, dokumente, faelle, protokoll } from "@/server/db/schema";
 import { lokalerSpeicher, type Dateispeicher } from "@/server/speicher";
-import { beantworteRueckfrage, FallFehler, verarbeiteFall, type Abhaengigkeiten } from "@/server/verarbeitung";
+import { beantworteRueckfrage, FallFehler, verarbeiteFall, verarbeiteUnterlage, type Abhaengigkeiten } from "@/server/verarbeitung";
 
 const TEST_DB = process.env.TEST_DATABASE_URL ?? "postgresql://biaticheck:biaticheck@localhost:5432/biaticheck_test";
 const { db, schliessen } = erstelleDb(TEST_DB);
@@ -158,5 +158,69 @@ describe("Löschen", () => {
     await db.delete(faelle).where(eq(faelle.id, id));
     expect(await db.select().from(dokumente).where(eq(dokumente.fallId, id))).toHaveLength(0);
     expect(await db.select().from(protokoll).where(eq(protokoll.fallId, id))).toHaveLength(0);
+  });
+});
+
+describe("Nachgereichte Unterlage zum Prüfbedarf (Vorauszahlungen)", () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+  async function ausgewerteterFall() {
+    const id = await neuerFall();
+    await verarbeiteFall(id, deps({ client: fakeClient(ok).client }));
+    await beantworteRueckfrage(id, "meta.zugangAm", "2025-11-28", deps());
+    return id;
+  }
+  const r05 = async (id: string) => (await lade(id)).bericht!.ergebnisse.filter((e) => e.regelId === "R-05" && e.beleg?.art === "heizkosten")[0]!;
+
+  it("vorher: Prüfbedarf ohne Betrag im Potenzial", async () => {
+    const id = await ausgewerteterFall();
+    expect((await r05(id)).status).toBe("pruefbedarf");
+    expect((await lade(id)).bericht!.zusammenfassung.klaerungspotenzial).toBe(13.57);
+  });
+
+  it("Kontoauszug belegt höhere Zahlungen: wird ein sicherer Fehler, Datei verschlüsselt abgelegt", async () => {
+    const id = await ausgewerteterFall();
+    const { client, parse } = fakeClient(() => ({
+      stop_reason: "end_turn",
+      parsed_output: { dokument: "kontoauszug", verlauf: [{ ab: "2024-01-01", betriebskosten: null, heizkosten: 110 }], hinweis: "" },
+    }));
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "kontoauszug" }, deps({ client }));
+    expect(parse).toHaveBeenCalledOnce();
+    expect(ergebnis.art).toBe("uebernommen");
+    expect(ergebnis.meldung).toMatch(/^Bestätigt: Bei Ihren Vorauszahlungen fehlen 143,59/);
+    expect(await r05(id)).toMatchObject({ status: "abweichung", betragZugunstenMieter: 143.59 });
+    expect((await lade(id)).bericht!.zusammenfassung.einsparpotenzial).toBe(143.59);
+    const doks = await db.select().from(dokumente).where(eq(dokumente.fallId, id));
+    expect(doks.map((d) => d.art).sort()).toEqual(["abrechnung", "kontoauszug"]);
+    const neu = doks.find((d) => d.art === "kontoauszug")!;
+    expect(await speicher.lade(neu.speicherschluessel)).toEqual(png);
+    expect(await aktionen(id)).toEqual(expect.arrayContaining(["unterlage_nachgereicht", "vorauszahlungen_uebernommen"]));
+    expect((await db.select().from(antworten).where(eq(antworten.fallId, id))).map((a) => a.feld)).toContain("vorauszahlungenDetail.verlauf");
+  });
+
+  it("Vorjahresabrechnung erklärt die Differenz: Punkt erledigt", async () => {
+    const id = await ausgewerteterFall();
+    const { client } = fakeClient(() => ({
+      stop_reason: "end_turn",
+      parsed_output: { dokument: "vorjahresabrechnung", verlauf: [{ ab: "2024-01-01", betriebskosten: null, heizkosten: 98.03 }], hinweis: "" },
+    }));
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client }));
+    expect(ergebnis.meldung).toMatch(/^Alles in Ordnung/);
+    expect((await r05(id)).status).toBe("ok");
+  });
+
+  it("ohne KI-Zugang: Unterlage geht an einen Fachprüfer, Ergebnis unverändert", async () => {
+    const id = await ausgewerteterFall();
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps());
+    expect(ergebnis.art).toBe("experte");
+    expect((await r05(id)).status).toBe("pruefbedarf");
+    expect(await aktionen(id)).toContain("unterlage_an_experte");
+  });
+
+  it("Unterlage ohne Vorauszahlungen: verständliche Meldung, nichts übernommen", async () => {
+    const id = await ausgewerteterFall();
+    const { client } = fakeClient(() => ({ stop_reason: "end_turn", parsed_output: { dokument: "anderes", verlauf: [], hinweis: "" } }));
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client }));
+    expect(ergebnis.art).toBe("nichts_gefunden");
+    expect((await r05(id)).status).toBe("pruefbedarf");
   });
 });

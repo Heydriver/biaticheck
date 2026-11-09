@@ -115,3 +115,13 @@ test("Verspätete Abrechnung: Nachzahlung entfällt", async ({ page }) => {
   await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
   await expect(page.getByRole("heading", { name: "Sie müssen die Nachzahlung nicht bezahlen" })).toBeVisible();
 });
+
+test("Prüfbedarf: Unterlage nachreichen – ohne KI-Zugang geht sie an einen Fachprüfer", async ({ page }) => {
+  await hochladen(page);
+  await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
+  await page.getByRole("radio", { name: "Kontoauszüge oder Mietkonto" }).check();
+  await page.getByLabel("Unterlage hochladen").setInputFiles({ name: "kontoauszug.pdf", mimeType: "application/pdf", buffer: PDF });
+  await expect(page.getByRole("status").filter({ hasText: "Ein Fachprüfer wertet sie aus" })).toBeVisible({ timeout: 15_000 });
+  // Ergebnis bleibt unverändert, bis die Unterlage ausgewertet ist
+  await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
+});

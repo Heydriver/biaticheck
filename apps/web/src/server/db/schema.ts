@@ -49,7 +49,7 @@ export const dokumente = pgTable("dokumente", {
   fallId: uuid("fall_id")
     .notNull()
     .references(() => faelle.id, { onDelete: "cascade" }),
-  art: text("art", { enum: ["abrechnung", "heizkosten", "vorjahr", "mietvertrag"] }).notNull(),
+  art: text("art", { enum: ["abrechnung", "heizkosten", "vorjahr", "mietvertrag", "kontoauszug"] }).notNull(),
   mimeType: text("mime_type").notNull(),
   groesse: integer("groesse").notNull(),
   sha256: text("sha256").notNull(),

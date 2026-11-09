@@ -17,10 +17,10 @@ export function FallSeite({ id }: { id: string }) {
     async (pfad = "", init?: RequestInit) => {
       const antwort = await fetch(`/api/faelle/${id}${pfad}`, {
         ...init,
-        headers: { "x-zugang": token ?? "", ...(init?.body ? { "content-type": "application/json" } : {}) },
+        headers: { "x-zugang": token ?? "", ...(typeof init?.body === "string" ? { "content-type": "application/json" } : {}) },
         cache: "no-store",
       });
-      const daten = (await antwort.json().catch(() => ({}))) as FallAnsicht & { fehler?: string };
+      const daten = (await antwort.json().catch(() => ({}))) as FallAnsicht & { fehler?: string; meldung?: string };
       if (!antwort.ok) throw new Error(daten.fehler ?? "Unbekannter Fehler");
       return daten;
     },
@@ -95,6 +95,15 @@ export function FallSeite({ id }: { id: string }) {
             aktionen={{
               beantworte: async (feld, wert) => setAnsicht(await anfrage("/antworten", { method: "POST", body: JSON.stringify({ feld, wert }) })),
               freischalten: async () => setAnsicht(await anfrage("/freischalten", { method: "POST" })),
+              unterlageHochladen: async (datei, art) => {
+                const formular = new FormData();
+                formular.set("datei", datei);
+                formular.set("art", art);
+                formular.set("einwilligung", "ja");
+                const { meldung, ...neu } = await anfrage("/unterlagen", { method: "POST", body: formular });
+                setAnsicht(neu);
+                return meldung ?? "";
+              },
               beratungAnfragen: async (daten) => {
                 await anfrage("/beratung", { method: "POST", body: JSON.stringify(daten) });
               },

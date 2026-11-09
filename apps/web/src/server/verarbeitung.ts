@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { AuslesenFehler, leseAus, type Auslesung, type Dokument } from "@biaticheck/auslesen";
+import { AuslesenFehler, leseAus, leseVorauszahlungen, type Auslesung, type Dokument, type Dokumenttyp } from "@biaticheck/auslesen";
 import {
   AntwortFehler,
   MUSTERABRECHNUNG,
@@ -8,6 +8,7 @@ import {
   type AbrechnungEingabe,
   type Pruefbericht,
 } from "@biaticheck/pruefkern";
+import { createHash } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "./db";
 import { antworten, dokumente, faelle, protokoll, type Fallstatus } from "./db/schema";
@@ -183,4 +184,80 @@ export async function beantworteRueckfrage(
     await tx.update(faelle).set({ daten, bericht, aktualisiertAm: new Date() }).where(eq(faelle.id, fallId));
     await tx.insert(protokoll).values({ fallId, akteur: "kunde", aktion: "rueckfrage_beantwortet", details: { feld } });
   });
+}
+
+export type UnterlagenErgebnis =
+  | { art: "uebernommen"; meldung: string }
+  | { art: "nichts_gefunden" | "experte" | "fehler"; meldung: string };
+
+/**
+ * Nachgereichte Unterlage (Vorjahresabrechnung oder Kontoauszüge) für den Prüfbedarf bei Vorauszahlungen:
+ * verschlüsselt ablegen, Vorauszahlungsverlauf auslesen und neu prüfen.
+ * Ohne KI-Zugang geht die Unterlage an einen Fachprüfer.
+ */
+export async function verarbeiteUnterlage(
+  fallId: string,
+  datei: { daten: Uint8Array; mimeType: Dokumenttyp; art: "vorjahr" | "kontoauszug" },
+  deps: Pick<Abhaengigkeiten, "db" | "speicher" | "client" | "heute">,
+): Promise<UnterlagenErgebnis> {
+  const { db } = deps;
+  const [fall] = await db.select().from(faelle).where(eq(faelle.id, fallId));
+  if (!fall) throw new FallFehler(404, "Fall nicht gefunden");
+  if (!fall.daten) throw new FallFehler(409, "Die Abrechnung ist noch nicht ausgelesen");
+
+  const [dok] = await db
+    .insert(dokumente)
+    .values({
+      fallId,
+      art: datei.art,
+      mimeType: datei.mimeType,
+      groesse: datei.daten.byteLength,
+      sha256: createHash("sha256").update(datei.daten).digest("hex"),
+      speicherschluessel: "ausstehend",
+    })
+    .returning({ id: dokumente.id });
+  const schluessel = `${fallId}/${dok!.id}`;
+  await deps.speicher.speichere(schluessel, datei.daten);
+  await db.update(dokumente).set({ speicherschluessel: schluessel }).where(eq(dokumente.id, dok!.id));
+  await protokolliere(db, fallId, "kunde", "unterlage_nachgereicht", { art: datei.art, mimeType: datei.mimeType, groesse: datei.daten.byteLength });
+
+  if (!deps.client) {
+    await protokolliere(db, fallId, "system", "unterlage_an_experte", { art: datei.art });
+    return { art: "experte", meldung: "Danke, wir haben Ihre Unterlage erhalten. Ein Fachprüfer wertet sie aus und aktualisiert Ihr Ergebnis." };
+  }
+
+  let verlauf;
+  try {
+    verlauf = await leseVorauszahlungen(deps.client, [{ daten: datei.daten, mimeType: datei.mimeType }], fall.daten.meta?.abrechnungszeitraum);
+  } catch (fehler) {
+    if (!(fehler instanceof AuslesenFehler)) throw fehler;
+    await protokolliere(db, fallId, "system", "unterlage_auslesen_fehlgeschlagen", { code: fehler.code });
+    return { art: "fehler", meldung: "Die Unterlage konnte nicht gelesen werden. Bitte versuchen Sie es noch einmal oder mit einem deutlicheren Foto." };
+  }
+  if (!verlauf.verlauf.length) {
+    await protokolliere(db, fallId, "system", "unterlage_ohne_vorauszahlungen", { art: datei.art });
+    return { art: "nichts_gefunden", meldung: "In dieser Unterlage finden wir keine Angaben zu Ihren monatlichen Vorauszahlungen. Bitte laden Sie die Vorjahresabrechnung oder Kontoauszüge hoch." };
+  }
+
+  let ergebnis: UnterlagenErgebnis = { art: "uebernommen", meldung: "" };
+  await db.transaction(async (tx) => {
+    const [aktuell] = await tx.select().from(faelle).where(eq(faelle.id, fallId)).for("update");
+    let daten = wendeAntwortAn(aktuell!.daten!, "vorauszahlungenDetail.verlauf", verlauf.verlauf);
+    daten = { ...daten, vorauszahlungenDetail: { ...daten.vorauszahlungenDetail, verlaufQuelle: verlauf.quelle } };
+    const bericht = pruefeAbrechnung(daten, { heute: deps.heute?.() });
+    await tx.insert(antworten).values({ fallId, feld: "vorauszahlungenDetail.verlauf", wert: verlauf.verlauf });
+    await tx.update(faelle).set({ daten, bericht, aktualisiertAm: new Date() }).where(eq(faelle.id, fallId));
+    await tx.insert(protokoll).values({ fallId, akteur: "system", aktion: "vorauszahlungen_uebernommen", details: { quelle: verlauf.quelle, eintraege: verlauf.verlauf.length } });
+    const r05 = bericht.ergebnisse.filter((e) => e.regelId === "R-05");
+    const fehlt = r05.filter((e) => e.status === "abweichung").reduce((x, e) => x + (e.betragZugunstenMieter ?? 0), 0);
+    ergebnis = {
+      art: "uebernommen",
+      meldung: fehlt > 0
+        ? `Bestätigt: Bei Ihren Vorauszahlungen fehlen ${new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(fehlt)}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.`
+        : r05.some((e) => e.status === "pruefbedarf")
+          ? "Die Unterlage reicht noch nicht für alle Vorauszahlungen. Bitte laden Sie eine weitere Unterlage hoch."
+          : "Alles in Ordnung: Ihre Vorauszahlungen wurden richtig angerechnet. Der Punkt ist erledigt.",
+    };
+  });
+  return ergebnis;
 }
