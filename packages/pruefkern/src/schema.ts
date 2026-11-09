@@ -91,6 +91,15 @@ export const Kostenposition = z.object({
   /** Auf die Mieterwohnung entfallender Betrag laut Abrechnung. */
   anteilMieter: betrag,
   fundstelle: Fundstelle.optional(),
+  /**
+   * Genauere Art bei Wasser und Entwässerung. Fehlt sie, wird sie aus der Bezeichnung abgeleitet
+   * (siehe `wasserart`). "wasser_abwasser" = Sammelposition, deren Inhalt unklar ist.
+   */
+  unterart: z.enum(["frischwasser", "schmutzwasser", "niederschlagswasser", "wasser_abwasser"]).optional(),
+  /** Aufschlüsselung laut Abrechnung oder Anlage, Beträge für das ganze Haus (wie `gesamtkosten`). */
+  bestandteile: z.array(z.object({ bezeichnung: z.string(), betrag: betrag, fundstelle: Fundstelle.optional() })).optional(),
+  /** Erläuterungen und Fußnoten, die sich ausdrücklich auf diese Position beziehen (wörtlich). */
+  hinweise: z.array(z.string()).optional(),
 });
 export type Kostenposition = z.infer<typeof Kostenposition>;
 
@@ -180,6 +189,12 @@ export const Abrechnung = z.object({
       verlaufQuelle: z.enum(["vorjahresabrechnung", "kontoauszug", "kunde"]).optional(),
     })
     .optional(),
+  /**
+   * Erläuterungen, Fußnoten und Texte aus Anlagen, wörtlich (z. B. „Hauswart und Aufzug enthalten keine
+   * Verwaltungs-, Reparatur- oder Instandsetzungskosten.“). Werden als Aussage des Dokuments gewertet,
+   * nicht als Beweis – ausdrücklich ausgewiesene Beträge gehen vor.
+   */
+  erlaeuterungen: z.array(z.object({ text: z.string(), seite: z.number().int().positive().optional() })).default([]),
   /** Werte, die die Abrechnung selbst als Ergebnis ausweist. */
   ausgewiesen: z
     .object({

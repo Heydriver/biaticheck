@@ -13,6 +13,8 @@ export const MINDESTERSPARNIS = 30;
 export const PREIS = 9.9;
 
 export interface FehlerKurz {
+  /** Belegter Fehler, begründeter Prüfbedarf, Hinweis oder Vergleich. */
+  einordnung: Auffaelligkeit["einordnung"];
   titel: string;
   satz: string;
   betrag?: number;
@@ -25,6 +27,7 @@ export interface FehlerKurz {
 }
 
 const kurz = (p: Auffaelligkeit): FehlerKurz => ({
+  einordnung: p.einordnung,
   titel: p.kurz.titel,
   satz: p.kurz.satz,
   ...(p.betrag !== undefined ? { betrag: p.betrag } : {}),
@@ -49,6 +52,8 @@ export interface FallAnsicht {
   fehler?: FehlerKurz[];
   /** Mögliche Fehler, die erst mit weiteren Unterlagen sicher sind (kostenlos, ohne Betrag im Potenzial). */
   pruefbedarf?: FehlerKurz[];
+  /** Hinweise und Vergleichswerte ohne Fehlerverdacht – zählen nie als Fehler. */
+  hinweise?: FehlerKurz[];
   unterlagen?: Unterlagenanforderung[];
   stufe2?: Stufe2;
 }
@@ -68,6 +73,9 @@ export function erstelleFallAnsicht(
   const pruefbedarf = stufe2?.auffaelligkeiten
     .filter((p) => p.status === "pruefbedarf")
     .map(kurz);
+  const hinweise = stufe2?.auffaelligkeiten
+    .filter((p) => p.status === "hinweis")
+    .map(kurz);
   return {
     id: fall.id,
     status: fall.status,
@@ -79,6 +87,7 @@ export function erstelleFallAnsicht(
     stufe1,
     fehler,
     pruefbedarf,
+    hinweise,
     unterlagen: stufe2?.unterlagen,
     stufe2: bezahlt || !lohnt ? stufe2 : undefined,
   };

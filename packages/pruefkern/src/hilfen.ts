@@ -48,3 +48,20 @@ export function tageInklusive(von: string, bis: string): number {
 export function vergleiche(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
+
+/**
+ * Monate zwischen zwei Daten (beide inklusive), kalendergenau: volle Kalendermonate zählen 1,
+ * angebrochene Monate anteilig nach Tagen. 01.01.–31.12. ergibt genau 12.
+ */
+export function monateZwischen(von: string, bis: string): number {
+  const [jv, mv, tv] = von.split("-").map(Number) as [number, number, number];
+  const [jb, mb, tb] = bis.split("-").map(Number) as [number, number, number];
+  let summe = 0;
+  for (let j = jv, m = mv; j < jb || (j === jb && m <= mb); m === 12 ? ((j += 1), (m = 1)) : (m += 1)) {
+    const tageImMonat = new Date(Date.UTC(j, m, 0)).getUTCDate();
+    const start = j === jv && m === mv ? tv : 1;
+    const ende = j === jb && m === mb ? tb : tageImMonat;
+    summe += Math.max(0, ende - start + 1) / tageImMonat;
+  }
+  return summe;
+}

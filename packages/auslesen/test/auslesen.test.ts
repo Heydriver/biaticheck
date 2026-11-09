@@ -43,6 +43,21 @@ describe("Umwandlung", () => {
     expect(aus.zusammenfassung).toEqual(golden.zusammenfassung);
   });
 
+  it("übernimmt Erläuterungen, Aufschlüsselungen und Unterart bis in die Prüfung", () => {
+    const r = roh();
+    const aufzug = r.kostenpositionen.find((p) => p.kategorie === "aufzug")!;
+    aufzug.bezeichnung = "Aufzug: Betrieb, Wartung und Prüfung";
+    aufzug.bestandteile = [{ bezeichnung: "Reparatur Türantrieb", betrag: 400 }];
+    r.erlaeuterungen = [{ text: "Hauswart und Aufzug enthalten keine Reparaturkosten.", seite: 2 }];
+    r.kostenpositionen[0]!.hinweise = ["Grundsteuerbescheid vom 03.02.2024"];
+    const { abrechnung } = wandleUm(r);
+    expect(abrechnung.erlaeuterungen).toEqual([{ text: "Hauswart und Aufzug enthalten keine Reparaturkosten.", seite: 2 }]);
+    expect(abrechnung.kostenpositionen[0]!.hinweise).toEqual(["Grundsteuerbescheid vom 03.02.2024"]);
+    const i07 = pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }).ergebnisse.find((e) => e.regelId === "I-07" && e.status !== "ok")!;
+    // Ausgewiesene Reparatur geht der pauschalen Erklärung vor
+    expect(i07.status).toBe("abweichung");
+  });
+
   it("verwirft ungültige Datumsangaben mit Hinweis", () => {
     const r = roh();
     r.erstelltAm = "25.11.2025";

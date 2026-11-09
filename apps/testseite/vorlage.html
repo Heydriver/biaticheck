@@ -249,7 +249,7 @@ details[open] summary { margin-bottom: 12px; }
     return seiten;
   }
 
-  const ABSCHREIBEN = "Die Bilder zeigen aufeinanderfolgende Seiten einer deutschen Nebenkostenabrechnung. Schreibe den Inhalt jeder Seite vollständig und genau ab, insbesondere alle Zahlen, Beträge, Daten, Flächen, Verteilerschlüssel und Einheiten. Tabellen zeilenweise, Spalten mit \" | \" getrennt. Beginne jede Seite mit der Zeile \"--- Seite N ---\" (N wie unten angegeben). Übernimm auch Namen, Anschriften, E-Mail-Adressen und Mieter- oder Kundennummern, aber keine Kontonummern und keine IBAN. Keine Kommentare, nur der abgeschriebene Inhalt.";
+  const ABSCHREIBEN = "Die Bilder zeigen aufeinanderfolgende Seiten einer deutschen Nebenkostenabrechnung. Schreibe den Inhalt jeder Seite vollständig und genau ab, insbesondere alle Zahlen, Beträge, Daten, Flächen, Verteilerschlüssel und Einheiten. Tabellen zeilenweise, Spalten mit \" | \" getrennt. Fußnoten, Erläuterungen, Anmerkungen und Anlagen ebenfalls wörtlich abschreiben, auch Kleingedrucktes. Beginne jede Seite mit der Zeile \"--- Seite N ---\" (N wie unten angegeben). Übernimm auch Namen, Anschriften, E-Mail-Adressen und Mieter- oder Kundennummern, aber keine Kontonummern und keine IBAN. Keine Kommentare, nur der abgeschriebene Inhalt.";
 
   // Seiten ohne Textebene (Scans, Fotos) in Gruppen abschreiben lassen
   async function abschreiben(seiten, maxBilder, art = "Nebenkostenabrechnung", fortschritt = (t) => ($("laden-text").textContent = t)) {
@@ -295,18 +295,20 @@ details[open] summary { margin-bottom: 12px; }
     const f = r.s1.fehlerpotenzial;
     const lohnt = f.sicher + f.zuKlaeren >= MINDESTERSPARNIS;
     const frei = z.bezahlt || !lohnt;
-    ziel.innerHTML = ergebnisKarte(r) + fehlerListe(r) + pruefbedarfKarte(r) + fragenKarte(r) + (frei ? loesung(r, lohnt) : angebot(r)) + gelesen(r) +
+    ziel.innerHTML = ergebnisKarte(r) + fehlerListe(r) + hinweisListe(r) + pruefbedarfKarte(r) + fragenKarte(r) + (frei ? loesung(r, lohnt) : angebot(r)) + gelesen(r) +
       `<p class="leise">${z.beispiel ? "Beispiel mit einer anonymisierten Musterabrechnung. " : ""}<button class="textknopf" type="button" data-aktion="neu">Andere Abrechnung prüfen</button></p>`;
   }
 
   function ergebnisKarte(r) {
     const s1 = r.s1, f = s1.fehlerpotenzial, k = s1.kosten, w = s1.widerspruchsfrist;
-    const anzahl = f.anzahl.abweichung + f.anzahl.auffaelligkeit;
-    const summe = f.sicher + f.zuKlaeren;
+    // Einordnung: belegte Fehler, begründeter Prüfbedarf; Hinweise und Vergleichswerte zählen nicht
+    const fehlerAnz = f.anzahl.abweichung, klaeren = f.anzahl.auffaelligkeit;
     const titel = f.sicher > 0 ? `${euro(f.sicher)} müssen Sie nicht bezahlen.`
-      : summe > 0 ? `Bis zu ${euro(summe)} könnten falsch abgerechnet sein.`
-      : anzahl ? "Ihre Abrechnung hat Auffälligkeiten." : "Ihre Abrechnung sieht korrekt aus.";
-    const unter = anzahl ? `Wir haben ${anzahl === 1 ? "einen Punkt" : `${anzahl} Punkte`} gefunden, die Sie Geld kosten können.` : "Wir haben keine Fehler gefunden.";
+      : f.zuKlaeren > 0 ? `Bis zu ${euro(f.zuKlaeren)} könnten falsch abgerechnet sein.`
+      : fehlerAnz + klaeren ? "Einige Punkte sollten Sie klären."
+      : f.anzahl.pruefbedarf ? "Wir brauchen noch eine Unterlage." : "Wir haben keine Fehler gefunden.";
+    const teile = [fehlerAnz ? (fehlerAnz === 1 ? "einen belegten Fehler" : `${fehlerAnz} belegte Fehler`) : "", klaeren ? `${klaeren === 1 ? "einen Punkt" : `${klaeren} Punkte`} mit begründetem Prüfbedarf` : ""].filter(Boolean);
+    const unter = teile.length ? `Wir haben ${teile.join(" und ")} gefunden.` : "Wir haben keine Fehler gefunden.";
     const frist = w.status === "offen"
       ? `<dd class="${w.tageVerbleibend <= 30 ? "dringend" : ""}">bis ${datumDE(w.bis)}</dd><small>noch ${w.tageVerbleibend} ${w.tageVerbleibend === 1 ? "Tag" : "Tage"}</small>`
       : w.status === "abgelaufen" ? `<dd class="dringend">abgelaufen</dd><small>am ${datumDE(w.bis)}</small>`
@@ -319,9 +321,10 @@ details[open] summary { margin-bottom: 12px; }
     let vergleich = "";
     if (s1.vergleich.ok && s1.vergleich.vergleich.gesamt.abweichungProzent !== undefined) {
       const v = s1.vergleich.vergleich, g = v.gesamt, a = g.abweichungProzent;
-      vergleich = `<div><dt>${r.plz ? `Vergleich für PLZ ${esc(r.plz)}` : "Ihre Nebenkosten"}</dt><dd>${a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
+      // Lokal heißt der Vergleich nur, wenn tatsächlich lokale Daten verwendet werden
+      vergleich = `<div><dt>${esc(v.bezeichnung)}</dt><dd>${a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
         <small>${zahl(g.ihr)} € statt ${zahl(g.durchschnitt)} € je m² im Monat</small>
-        <small>${v.fallzahl ? `Durchschnitt aus ${v.fallzahl} Abrechnungen im ${esc(v.region)}` : `Durchschnitt Deutschland${v.regionalFolgt ? `, Wert für das ${esc(v.regionalFolgt)} folgt ab 10 Abrechnungen` : ""}`}</small>
+        <small>${esc(v.kostenarten)}. Quelle: ${esc(v.quelle)}${v.fallzahl ? ` (${v.fallzahl} Abrechnungen)` : ""}. Statistische Einordnung, kein Nachweis eines Fehlers.</small>
         ${r.plz ? "" : `<small>Postleitzahl für den regionalen Vergleich:</small>${plzFrage}`}</div>`;
     } else {
       vergleich = `<div><dt>Vergleich mit Ihrer Region</dt><dd style="font-size:15px;font-weight:500">${r.plz ? "Wohnfläche fehlt für den Vergleich" : "Postleitzahl Ihrer Wohnung?"}</dd>${r.plz ? "" : plzFrage}</div>`;
@@ -331,11 +334,11 @@ details[open] summary { margin-bottom: 12px; }
       <p class="leise">${z.beispiel ? "Beispiel · " : ""}Ihre Abrechnung ${s1.abrechnungsjahr ?? ""}</p>
       <h1>${titel}</h1>
       <p>${unter}</p>
-      ${f.pruefbedarf.anzahl ? `<p class="leise" style="font-size:15px">${f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`} mit bis zu ${euro(f.pruefbedarf.betrag)} prüfen wir, sobald Sie eine Unterlage nachreichen.</p>` : ""}
+      ${f.pruefbedarf.anzahl ? `<p class="leise" style="font-size:15px">${f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`}${f.pruefbedarf.betrag > 0 ? ` mit bis zu ${euro(f.pruefbedarf.betrag)}` : ""} prüfen wir, sobald Sie eine Unterlage nachreichen.${f.pruefbedarf.ohneBetrag ? ` ${f.pruefbedarf.betrag > 0 ? "Teilweise ist die" : "Die"} Auswirkung ist noch nicht bezifferbar.` : ""}</p>` : ""}
       ${!r.konsistenz.konsistent ? `<p class="hinweis">Einige Zahlen konnten wir nicht sicher lesen. Bitte prüfen Sie unten die ausgelesenen Beträge.</p>` : ""}
       <dl class="fakten">
         ${fehler}
-        ${saldo !== undefined ? `<div><dt>${saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}</dt><dd>${euro(Math.abs(saldo))}</dd></div>` : ""}
+        ${saldo !== undefined ? `<div><dt>${saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}</dt><dd>${euro(Math.abs(saldo))}</dd>${k.korrigierterSaldo !== undefined ? `<small>Nach Korrektur der belegten Fehler: ${k.korrigierterSaldo > 0 ? `Nachzahlung ${euro(k.korrigierterSaldo)}` : `Guthaben ${euro(Math.abs(k.korrigierterSaldo))}`}</small>` : ""}</div>` : ""}
         <div><dt>Einspruch möglich</dt>${frist}</div>
         ${vergleich}
       </dl>
@@ -350,7 +353,8 @@ details[open] summary { margin-bottom: 12px; }
     const fakten = (p.fakten ?? []).map((f) => `<div><dt>${esc(f.label)}</dt><dd${f.betont ? ' class="betont"' : ""}>${esc(f.wert)}</dd></div>`).join("");
     const grundlage = (p.grundlage ?? "").replace(/\s*\(Schwellenwert[^)]*\)/, "");
     const quelle = [p.fundstelle ? `In Ihrer Abrechnung: ${p.fundstelle}` : "", grundlage ? `Grundlage: ${grundlage}` : ""].filter(Boolean).join(" · ");
-    return `<li class="befund"><div class="kopfzeile"><div><b>${esc(p.kurz.titel)}</b><span>${esc(p.kurz.satz)}</span></div>${p.betrag ? `<span class="betrag">${praefix}${euro(p.betrag)}</span>` : ""}</div>
+    const EINORDNUNG = { fehler: "Belegter Fehler", pruefbedarf: "Begründeter Prüfbedarf", hinweis: "Hinweis", vergleich: "Vergleichswert" };
+    return `<li class="befund"><div class="kopfzeile"><div>${EINORDNUNG[p.einordnung] ? `<small class="leise" style="display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em">${EINORDNUNG[p.einordnung]}</small>` : ""}<b>${esc(p.kurz.titel)}</b><span>${esc(p.kurz.satz)}</span></div>${p.betrag ? `<span class="betrag">${praefix}${euro(p.betrag)}</span>` : ""}</div>
       ${fakten ? `<dl class="fakten-klein">${fakten}</dl>` : ""}${quelle ? `<p class="quelle">${esc(quelle)}</p>` : ""}</li>`;
   }
 
@@ -358,6 +362,12 @@ details[open] summary { margin-bottom: 12px; }
     const beanstandet = r.s2.auffaelligkeiten.filter((p) => p.status === "abweichung" || p.status === "auffaelligkeit");
     if (!beanstandet.length) return "";
     return `<section class="karte"><h2>Das haben wir gefunden</h2><ul class="punkte">${beanstandet.map((p) => befundHtml(p)).join("")}</ul></section>`;
+  }
+
+  function hinweisListe(r) {
+    const hinweise = r.s2.auffaelligkeiten.filter((p) => p.status === "hinweis");
+    if (!hinweise.length) return "";
+    return `<details class="karte"><summary><b>Gut zu wissen: ${hinweise.length === 1 ? "ein Hinweis" : `${hinweise.length} Hinweise`} ohne Fehlerverdacht</b></summary><ul class="punkte">${hinweise.map((p) => befundHtml(p)).join("")}</ul></details>`;
   }
 
   function angebot(r) {

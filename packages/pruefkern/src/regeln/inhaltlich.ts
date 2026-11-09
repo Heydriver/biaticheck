@@ -1,4 +1,5 @@
-import { euro, runde, tageInklusive, vergleiche, zahlDE } from "../hilfen";
+import { euro, monateZwischen, runde, tageInklusive, vergleiche, zahlDE } from "../hilfen";
+import { anteilVon, bewerteReparatur, findeAussagen, texteZu, wasserart } from "../textanalyse";
 import type { Befund, Regel } from "../regel";
 import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema";
 
@@ -256,31 +257,85 @@ export const I06_AufzugErdgeschoss: Regel = {
   },
 };
 
+/**
+ * Wartung ohne Reparaturanteil (§ 2 Nr. 7 BetrKV; § 1 Abs. 2 Nr. 2 BetrKV).
+ *
+ * Umlagefähig sind laut § 2 Nr. 7 BetrKV u. a. Betriebsstrom, Beaufsichtigung, Bedienung, Überwachung und
+ * Pflege, regelmäßige Prüfung der Betriebsbereitschaft und -sicherheit einschließlich Einstellung sowie
+ * Reinigung. „Betrieb, Wartung und Prüfung“ ist daher kein Anhaltspunkt für Reparaturen.
+ *
+ * Konkreter Befund nur bei
+ * 1. ausdrücklich ausgewiesenem Reparaturbestandteil → Fehler, nur dieser Anteil (geht einer pauschalen
+ *    Ausschlusserklärung vor, weil der Beleg konkreter ist),
+ * 2. Vollwartungsvertrag ohne Aufschlüsselung → Prüfbedarf ohne Betrag (Höhe des Reparaturanteils unbekannt),
+ * 3. Bezeichnung nennt Reparaturen ausdrücklich (nicht verneint) → Prüfbedarf ohne Betrag.
+ * Eine ausdrückliche Verneinung im Dokument („enthalten keine Reparaturkosten“) wird als Dokumentaussage
+ * vermerkt; ohne widersprechenden Beleg entsteht kein Befund.
+ */
 export const I07_WartungMitReparatur: Regel = {
   id: "I-07",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Wartungskosten ohne Reparaturanteil",
   bereich: "inhaltlich",
-  grundlage: "§ 1 Abs. 2 Nr. 2 BetrKV; § 2 Nr. 7 BetrKV",
+  grundlage: "§ 2 Nr. 7 BetrKV; § 1 Abs. 2 Nr. 2 BetrKV",
   stand: "entwurf",
   pruefe(a) {
-    return a.kostenpositionen
-      .filter(
-        (p) =>
-          p.kategorie !== "instandhaltung" &&
-          (p.steuerlich35a === "handwerker" || (p.kategorie === "aufzug" && /wart/i.test(p.bezeichnung))),
-      )
-      .map((p) => ({
-        status: "auffaelligkeit" as const,
-        titel: `Reparaturanteil prüfen: ${p.bezeichnung}`,
-        erklaerung:
-          `In „${p.bezeichnung}“ (Gesamtkosten ${p.gesamtkosten !== undefined ? euro(p.gesamtkosten) : "unbekannt"}, Ihr Anteil ${euro(p.anteilMieter)}) können Reparaturen enthalten sein` +
-          (p.steuerlich35a === "handwerker" ? " – die Position ist als Handwerkerleistung gekennzeichnet." : ".") +
-          " Umlagefähig sind nur Prüfung und Wartung. Bei Vollwartungsverträgen muss der Reparaturanteil herausgerechnet werden.",
-        naechsterSchritt: "Verlangen Sie Einsicht in den Wartungsvertrag und die Rechnungen. Enthält der Vertrag Reparaturen, muss der Anteil abgezogen werden.",
+    const kandidaten = a.kostenpositionen.filter(
+      (p) => p.kategorie !== "instandhaltung" && p.kategorie !== "hauswart" && (WARTUNGSKATEGORIEN.has(p.kategorie) || /wart|prüf|pruef/i.test(p.bezeichnung)),
+    );
+    const befunde: Befund[] = [];
+    for (const p of kandidaten) {
+      const r = bewerteReparatur(p, a);
+      if (r.bestandteile.length > 0) {
+        const haus = runde(r.bestandteile.reduce((x, b) => x + b.betrag, 0));
+        const anteil = anteilVon(p, haus);
+        const liste = r.bestandteile.map((b) => `„${b.bezeichnung}“ ${euro(b.betrag)}`).join(", ");
+        befunde.push({
+          status: anteil !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: `Reparaturkosten in ${p.bezeichnung}`,
+          erklaerung:
+            `In „${p.bezeichnung}“ sind Reparaturkosten ausdrücklich ausgewiesen: ${liste}.` +
+            (anteil !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(runde(anteil))}.` : "") +
+            " Reparaturen und Instandsetzung trägt der Vermieter. Prüfung und Wartung bleiben umlagefähig." +
+            (r.ausschluss ? ` Die Abrechnung erklärt zwar „${r.ausschluss.text}“, die Aufstellung weist die Reparatur aber aus.` : ""),
+          naechsterSchritt: anteil !== undefined ? `Fordern Sie den Abzug des Reparaturanteils (${euro(runde(anteil))}).` : "Fordern Sie den Abzug des Reparaturanteils.",
+          betragZugunstenMieter: anteil !== undefined ? runde(anteil) : undefined,
+          positionId: p.id,
+          textstelle: liste,
+          beleg: { gesamtkosten: p.gesamtkosten, reparaturHaus: haus, anteilMieter: p.anteilMieter, ausschlussImDokument: r.ausschluss?.text },
+        });
+        continue;
+      }
+      if (r.vollwartung || r.genannt) {
+        const quelle = (r.vollwartung ?? r.genannt)!;
+        befunde.push({
+          status: "pruefbedarf",
+          titel: r.vollwartung ? `Vollwartung ohne Aufschlüsselung: ${p.bezeichnung}` : `Reparaturen genannt: ${p.bezeichnung}`,
+          erklaerung:
+            (r.vollwartung
+              ? `„${quelle.text}“ deutet auf einen Vollwartungsvertrag hin. Darin sind meist auch Reparaturen enthalten, die nicht umgelegt werden dürfen.`
+              : `„${quelle.text}“ nennt Reparaturen. Reparaturen dürfen nicht umgelegt werden.`) +
+            " Wie hoch der Reparaturanteil ist, steht nicht in der Abrechnung. Ihr Anteil an der Position ist kein Einsparbetrag.",
+          naechsterSchritt: "Verlangen Sie Einsicht in den Wartungsvertrag und die Rechnungen. Der Reparaturanteil muss herausgerechnet werden.",
+          positionId: p.id,
+          betroffen: p.anteilMieter,
+          textstelle: quelle.text,
+          unterlagen: ["rechnungen"],
+          beleg: { gesamtkosten: p.gesamtkosten, anteilMieter: p.anteilMieter, ausschlussImDokument: r.ausschluss?.text },
+        });
+        continue;
+      }
+      befunde.push({
+        status: "ok",
+        titel: `Keine Reparaturen erkennbar: ${p.bezeichnung}`,
+        erklaerung: r.ausschluss
+          ? `Die Abrechnung erklärt: „${r.ausschluss.text}“ Es gibt keinen gegenteiligen Beleg.`
+          : "Betrieb, Wartung und Prüfung sind umlagefähig. Es gibt keinen Hinweis auf Reparaturen.",
         positionId: p.id,
-        beleg: { gesamtkosten: p.gesamtkosten, steuerlich35a: p.steuerlich35a },
-      }));
+        textstelle: r.ausschluss?.text,
+      });
+    }
+    return befunde;
   },
 };
 
@@ -340,72 +395,161 @@ export const I08_CO2Aufteilung: Regel = {
 };
 
 /** Monate im Zeitraum (gerundet). */
-const monateIm = (von: string, bis: string) => Math.max(1, Math.round(tageInklusive(von, bis) / (365.25 / 12)));
+const monateIm = monateZwischen;
+const HAUSWART_DURCHSCHNITT = 0.37; // € je m² und Monat, DMB-Betriebskostenspiegel 2024 (bundesweit)
+/** Kostenarten mit Wartungs- und Prüfleistungen, in denen Reparaturen stecken können. */
+const WARTUNGSKATEGORIEN = new Set(["aufzug", "heizung", "warmwasser", "verbundene_anlagen", "antenne_kabel", "sonstige", "waeschepflege", "beleuchtung"]);
 
 /**
- * Kaltwasser und Abwasser nach Verbrauch: Hat die Wohnung einen eigenen Zähler, muss nach Verbrauch
- * abgerechnet werden. Ohne Angabe zum Zähler: Prüfbedarf mit Rückfrage – kein Betrag.
+ * Wasser nach Verbrauch (§ 556a Abs. 1 Satz 2 BGB; § 2 Nr. 2 und 3 BetrKV).
+ *
+ * Gilt nur für Frischwasser und Schmutzwasser (dieses wird üblicherweise nach dem Frischwasserverbrauch
+ * berechnet). Niederschlagswasser hängt nicht vom Verbrauch ab: die Gemeinde berechnet es nach der
+ * angeschlossenen bzw. versiegelten Grundstücksfläche, die Verteilung auf die Mieter nach Wohnfläche ist
+ * der gesetzliche Regelfall (§ 556a Abs. 1 Satz 1 BGB). Sammelpositionen („Wasser/Abwasser“) werden
+ * nicht automatisch der Verbrauchsregel unterworfen, sondern zuerst ihr Inhalt geklärt.
  */
 export const I09_WasserNachVerbrauch: Regel = {
   id: "I-09",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Wasser nach Verbrauch abgerechnet",
   bereich: "inhaltlich",
-  grundlage: "§ 556a Abs. 1 Satz 2 BGB",
+  grundlage: "§ 556a Abs. 1 Satz 2 BGB; § 2 Nr. 2, 3 BetrKV",
   stand: "entwurf",
   pruefe(a) {
-    const wasser = a.kostenpositionen.filter(
-      (p) => (p.kategorie === "wasser" || p.kategorie === "entwaesserung") && !/z[äa]hler/i.test(p.bezeichnung) && p.umlageschluessel,
-    );
-    if (wasser.length === 0) return [];
-    const nachFlaeche = wasser.filter((p) => p.umlageschluessel!.typ !== "verbrauch" && p.umlageschluessel!.typ !== "direkt");
-    if (nachFlaeche.length === 0) {
-      return [{ status: "ok", titel: "Wasser nach Verbrauch abgerechnet", erklaerung: "Wasser und Abwasser werden nach Ihrem Verbrauch verteilt." }];
-    }
+    const mitSchluessel = a.kostenpositionen.filter((p) => wasserart(p) !== undefined && p.umlageschluessel && !/z[äa]hler/i.test(p.bezeichnung));
+    const nichtVerbrauch = (p: (typeof mitSchluessel)[number]) => p.umlageschluessel!.typ !== "verbrauch" && p.umlageschluessel!.typ !== "direkt";
+    const verbrauchsabhaengig = mitSchluessel.filter((p) => wasserart(p) === "frischwasser" || wasserart(p) === "schmutzwasser");
+    const sammel = mitSchluessel.filter((p) => wasserart(p) === "wasser_abwasser" && nichtVerbrauch(p));
+    const befunde: Befund[] = [];
+    if (verbrauchsabhaengig.length === 0 && sammel.length === 0) return [];
+
+    const nachFlaeche = verbrauchsabhaengig.filter(nichtVerbrauch);
+    const zaehler = a.ausstattung?.wasserzaehler;
     const namen = nachFlaeche.map((p) => `„${p.bezeichnung}“`).join(", ");
     const summe = runde(nachFlaeche.reduce((x, p) => x + p.anteilMieter, 0));
-    const zaehler = a.ausstattung?.wasserzaehler;
-    if (zaehler === false) {
-      return [{ status: "ok", titel: "Wasser nach Fläche zulässig", erklaerung: "Ohne eigenen Wasserzähler darf Wasser nach Fläche oder Personen verteilt werden." }];
-    }
-    if (zaehler === true) {
-      return [
-        {
-          status: "auffaelligkeit",
-          titel: "Wasser nicht nach Verbrauch abgerechnet",
-          erklaerung: `${namen} (${euro(summe)}) werden nicht nach Verbrauch verteilt, obwohl Ihre Wohnung einen Wasserzähler hat. Dann muss nach dem erfassten Verbrauch abgerechnet werden.`,
-          naechsterSchritt: "Fordern Sie eine Abrechnung nach Verbrauch und geben Sie Ihre Zählerstände zu Beginn und Ende des Abrechnungszeitraums an.",
-          beleg: { positionen: nachFlaeche.map((p) => p.id), summe },
-        },
-      ];
-    }
-    return [
-      {
-        status: "pruefbedarf",
-        titel: "Wasser nach Fläche verteilt",
-        erklaerung: `${namen} (${euro(summe)}) werden nicht nach Verbrauch verteilt. Das ist nur zulässig, wenn Ihre Wohnung keinen eigenen Wasserzähler hat.`,
-        naechsterSchritt: "Sehen Sie nach, ob in Ihrer Wohnung ein Wasserzähler eingebaut ist (meist im Bad oder in der Küche unter der Spüle), und beantworten Sie die Frage.",
+    if (verbrauchsabhaengig.length > 0 && nachFlaeche.length === 0) {
+      befunde.push({ status: "ok", titel: "Wasser nach Verbrauch abgerechnet", erklaerung: "Frisch- und Schmutzwasser werden nach Ihrem Verbrauch verteilt." });
+    } else if (nachFlaeche.length > 0 && zaehler === false) {
+      befunde.push({ status: "ok", titel: "Wasser nach Fläche zulässig", erklaerung: "Ohne erfassten Verbrauch darf Wasser nach Fläche oder Personen verteilt werden." });
+    } else if (nachFlaeche.length > 0 && zaehler === true) {
+      befunde.push({
+        status: "auffaelligkeit",
+        titel: "Wasser nicht nach Verbrauch abgerechnet",
+        erklaerung: `${namen} (${euro(summe)}) werden nicht nach Verbrauch verteilt, obwohl Ihre Wohnung einen Wasserzähler hat. Wird der Verbrauch aller Wohnungen erfasst, muss danach abgerechnet werden.`,
+        naechsterSchritt: "Fragen Sie, ob alle Wohnungen Wasserzähler haben. Wenn ja, fordern Sie eine Abrechnung nach Verbrauch und geben Sie Ihre Zählerstände an.",
+        betroffen: summe,
+        beleg: { positionen: nachFlaeche.map((p) => p.id), summe },
+      });
+    } else if (nachFlaeche.length > 0) {
+      befunde.push({
+        status: "nicht_pruefbar",
+        titel: "Frischwasser nach Fläche verteilt",
+        erklaerung: `${namen} werden nicht nach Verbrauch verteilt. Das ist zulässig, solange der Verbrauch nicht in allen Wohnungen erfasst wird.`,
+        naechsterSchritt: "Beantworten Sie die Frage nach dem Wasserzähler.",
         beleg: { positionen: nachFlaeche.map((p) => p.id), summe },
         rueckfrage: { feld: "ausstattung.wasserzaehler", frage: "Hat Ihre Wohnung einen eigenen Wasserzähler (meist im Bad oder unter der Spüle)?" },
-      },
-    ];
+      });
+    }
+    for (const p of sammel) {
+      if (zaehler !== true) continue;
+      befunde.push({
+        status: "hinweis",
+        titel: `Inhalt unklar: ${p.bezeichnung}`,
+        erklaerung: `„${p.bezeichnung}“ wird nach ${p.umlageschluessel!.typ === "wohnflaeche" ? "Fläche" : "einem festen Schlüssel"} verteilt. Die Position kann Frischwasser, Schmutzwasser und Niederschlagswasser zusammenfassen. Nur verbrauchsabhängige Teile müssten nach Verbrauch verteilt werden.`,
+        naechsterSchritt: "Fragen Sie, welche Kosten in der Position enthalten sind.",
+        positionId: p.id,
+      });
+    }
+    return befunde;
   },
 };
 
-/** Rauchwarnmelder: Wartung ist umlagefähig, Miete oder Leasing nicht (BGH, Urteil vom 11.05.2022, VIII ZR 379/20). */
+/**
+ * Entwässerung nicht doppelt berechnet (§ 2 Nr. 3 BetrKV): Niederschlagswasser darf nur einmal enthalten sein –
+ * entweder als eigene Position oder in der Entwässerung, nicht in beiden.
+ */
+export const I15_EntwaesserungDoppelt: Regel = {
+  id: "I-15",
+  version: "1.0.0",
+  titel: "Niederschlagswasser nicht doppelt berechnet",
+  bereich: "inhaltlich",
+  grundlage: "§ 2 Nr. 3 BetrKV; § 556 Abs. 3 BGB",
+  stand: "entwurf",
+  pruefe(a) {
+    const regen = a.kostenpositionen.filter((p) => wasserart(p) === "niederschlagswasser");
+    if (regen.length === 0) return [];
+    const befunde: Befund[] = [];
+    if (regen.length > 1) {
+      befunde.push({
+        status: "auffaelligkeit",
+        titel: "Niederschlagswasser mehrfach berechnet?",
+        erklaerung: `Niederschlagswasser erscheint in ${regen.length} Positionen (${regen.map((p) => `„${p.bezeichnung}“ ${euro(p.anteilMieter)}`).join(", ")}). Die Gebühr fällt nur einmal an.`,
+        naechsterSchritt: "Fragen Sie, ob es sich um unterschiedliche Gebühren handelt, und verlangen Sie den Gebührenbescheid.",
+        betroffen: runde(regen.slice(1).reduce((x, p) => x + p.anteilMieter, 0)),
+        unterlagen: ["rechnungen"],
+        beleg: { positionen: regen.map((p) => p.id) },
+      });
+    }
+    const sammel = a.kostenpositionen.filter((p) => wasserart(p) === "wasser_abwasser" && p.kategorie === "entwaesserung");
+    const hinweis = sammel.find((p) => findeAussagen([p.bezeichnung, ...(p.hinweise ?? [])], /niederschlag|regenwasser|oberflächenwasser/i).some((x) => !x.verneint));
+    if (hinweis) {
+      befunde.push({
+        status: "auffaelligkeit",
+        titel: "Niederschlagswasser doppelt enthalten?",
+        erklaerung: `Neben „${regen[0]!.bezeichnung}“ nennt auch „${hinweis.bezeichnung}“ Niederschlagswasser. Dieselbe Gebühr darf nicht zweimal umgelegt werden.`,
+        naechsterSchritt: "Verlangen Sie den Gebührenbescheid der Gemeinde für die Entwässerung.",
+        positionId: hinweis.id,
+        betroffen: regen[0]!.anteilMieter,
+        unterlagen: ["rechnungen"],
+      });
+    }
+    if (befunde.length === 0) {
+      befunde.push({
+        status: "ok",
+        titel: "Niederschlagswasser korrekt behandelt",
+        erklaerung: "Niederschlagswasser ist einmal enthalten. Es hängt nicht vom Wasserverbrauch ab und darf nach Fläche verteilt werden.",
+        positionId: regen[0]!.id,
+      });
+    }
+    return befunde;
+  },
+};
+
+/**
+ * Rauchwarnmelder: Wartung und Prüfung sind umlagefähig, Miete und Leasing nicht (BGH, Urt. v. 11.05.2022 –
+ * VIII ZR 379/20). Ist der Mietanteil ausgewiesen, wird nur dieser beanstandet.
+ */
 export const I10_Rauchwarnmelder: Regel = {
   id: "I-10",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Rauchwarnmelder ohne Mietkosten",
   bereich: "inhaltlich",
   grundlage: "BGH VIII ZR 379/20; § 2 Nr. 17 BetrKV",
   stand: "entwurf",
   pruefe(a) {
+    const MIETE = /miet|leasing/i;
     return a.kostenpositionen
       .filter((p) => /rauch(warn)?melder|rwm\b/i.test(p.bezeichnung))
       .map((p): Befund => {
-        const miete = /miet|leasing/i.test(p.bezeichnung);
-        const wartung = /wart|pr[üu]f|service/i.test(p.bezeichnung);
+        const mietteile = (p.bestandteile ?? []).filter((b) => MIETE.test(b.bezeichnung));
+        if (mietteile.length > 0) {
+          const haus = runde(mietteile.reduce((x, b) => x + b.betrag, 0));
+          const anteil = anteilVon(p, haus);
+          const liste = mietteile.map((b) => `„${b.bezeichnung}“ ${euro(b.betrag)}`).join(", ");
+          return {
+            status: anteil !== undefined ? "abweichung" : "auffaelligkeit",
+            titel: `Mietkosten Rauchwarnmelder: ${p.bezeichnung}`,
+            erklaerung: `In „${p.bezeichnung}“ (Ihr Anteil ${euro(p.anteilMieter)}) ist Miete für die Geräte ausgewiesen: ${liste}.${anteil !== undefined ? ` Auf Ihre Wohnung entfallen ${euro(runde(anteil))}.` : ""} Die Miete darf nicht umgelegt werden, die Wartung schon.`,
+            naechsterSchritt: anteil !== undefined ? `Fordern Sie den Abzug des Mietanteils (${euro(runde(anteil))}).` : "Fordern Sie den Abzug des Mietanteils.",
+            betragZugunstenMieter: anteil !== undefined ? runde(anteil) : undefined,
+            positionId: p.id,
+            textstelle: liste,
+            beleg: { gesamtkosten: p.gesamtkosten, mieteHaus: haus, anteilMieter: p.anteilMieter },
+          };
+        }
+        const miete = findeAussagen([p.bezeichnung, ...(p.hinweise ?? [])], MIETE).find((x) => !x.verneint);
+        const wartung = /wart|pr[üu]f|service|kontrolle/i.test(p.bezeichnung);
         if (miete && !wartung)
           return {
             status: "abweichung",
@@ -414,23 +558,32 @@ export const I10_Rauchwarnmelder: Regel = {
             naechsterSchritt: `Fordern Sie die Streichung dieser Position (${euro(p.anteilMieter)}).`,
             betragZugunstenMieter: p.anteilMieter,
             positionId: p.id,
+            textstelle: miete.text,
           };
-        return {
-          status: "auffaelligkeit",
-          titel: `Miete in Rauchwarnmeldern? ${p.bezeichnung}`,
-          erklaerung: `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) kann neben der Wartung auch Miete für die Geräte enthalten. Die Miete darf nicht umgelegt werden.`,
-          naechsterSchritt: "Verlangen Sie die Rechnung des Dienstleisters und lassen Sie Miete und Wartung getrennt ausweisen. Der Mietanteil ist abzuziehen.",
-          positionId: p.id,
-        };
+        if (miete)
+          return {
+            status: "pruefbedarf",
+            titel: `Miete in Rauchwarnmeldern? ${p.bezeichnung}`,
+            erklaerung: `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) enthält neben der Wartung auch Miete für die Geräte. Die Miete darf nicht umgelegt werden. Wie hoch sie ist, steht nicht in der Abrechnung.`,
+            naechsterSchritt: "Verlangen Sie die Rechnung des Dienstleisters mit Miete und Wartung getrennt. Der Mietanteil ist abzuziehen.",
+            positionId: p.id,
+            betroffen: p.anteilMieter,
+            textstelle: miete.text,
+            unterlagen: ["rechnungen"],
+          };
+        return { status: "ok", titel: `Rauchwarnmelder: ${p.bezeichnung}`, erklaerung: "Wartung und Prüfung der Rauchwarnmelder sind umlagefähig.", positionId: p.id };
       });
   },
 };
 
-/** Hauswart: Reparatur-, Verwaltungs- und Bereitschaftsanteile sind nicht umlagefähig und müssen herausgerechnet werden. */
-const HAUSWART_DURCHSCHNITT = 0.37; // € je m² und Monat, DMB-Betriebskostenspiegel 2024
+/**
+ * Hauswart ohne Reparatur- und Verwaltungsanteil (§ 2 Nr. 14 BetrKV).
+ * Konkreter Anhaltspunkt: Bezeichnung oder Hinweis nennt Reparaturen, Verwaltung oder Bereitschaft (nicht verneint).
+ * Hohe Kosten im Vergleich zum Bundesdurchschnitt sind nur ein statistischer Hinweis.
+ */
 export const I11_Hauswart: Regel = {
   id: "I-11",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Hauswart ohne Reparatur- und Verwaltungsanteil",
   bereich: "inhaltlich",
   grundlage: "§ 2 Nr. 14 BetrKV; § 1 Abs. 2 BetrKV",
@@ -438,23 +591,43 @@ export const I11_Hauswart: Regel = {
   pruefe(a) {
     const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
     const flaeche = a.flaechen?.wohnflaecheMieter;
+    const NICHT_UMLAGEFAEHIG = /reparatur|instand|verwalt|notdienst|bereitschaft|schönheitsrep/i;
     return a.kostenpositionen
       .filter((p) => p.kategorie === "hauswart")
       .map((p): Befund => {
-        const hinweis = /reparatur|instand|verwalt|notdienst|bereitschaft/i.test(p.bezeichnung);
-        const jeQm = flaeche && zeitraum ? runde(p.anteilMieter / flaeche / monateIm(zeitraum.von, zeitraum.bis)) : undefined;
+        const { eigene, erlaeuterungen } = texteZu(p, a);
+        const genannt = findeAussagen(eigene, NICHT_UMLAGEFAEHIG).find((x) => !x.verneint);
+        const ausschluss = findeAussagen([...eigene, ...erlaeuterungen], NICHT_UMLAGEFAEHIG).find((x) => x.verneint);
+        const jeQm = flaeche && zeitraum ? p.anteilMieter / flaeche / monateIm(zeitraum.von, zeitraum.bis) : undefined;
         const teuer = jeQm !== undefined && jeQm > HAUSWART_DURCHSCHNITT * 1.3;
-        if (!hinweis && !teuer)
-          return { status: "ok", titel: `Hauswart im üblichen Rahmen: ${p.bezeichnung}`, erklaerung: "Die Hauswartkosten liegen im üblichen Rahmen.", positionId: p.id };
+        if (genannt)
+          return {
+            status: "pruefbedarf",
+            titel: `Reparatur- oder Verwaltungsanteil im Hauswart? ${p.bezeichnung}`,
+            erklaerung: `„${genannt.text}“ nennt Tätigkeiten, die nicht umlagefähig sind (Reparaturen, Verwaltung oder Bereitschaft). Wie hoch dieser Anteil ist, steht nicht in der Abrechnung.`,
+            naechsterSchritt: "Verlangen Sie den Hauswartvertrag und das Leistungsverzeichnis. Anteile für Reparaturen, Verwaltung oder Bereitschaft müssen abgezogen werden.",
+            positionId: p.id,
+            betroffen: p.anteilMieter,
+            textstelle: genannt.text,
+            unterlagen: ["rechnungen"],
+            beleg: { jeQm: jeQm !== undefined ? runde(jeQm) : undefined },
+          };
+        if (teuer && !ausschluss)
+          return {
+            status: "hinweis",
+            art: "vergleich",
+            titel: `Hauswart teurer als üblich: ${p.bezeichnung}`,
+            erklaerung: `„${p.bezeichnung}“ kostet ${zahlDE(runde(jeQm!))} € je m² im Monat, der Bundesdurchschnitt liegt bei etwa ${zahlDE(HAUSWART_DURCHSCHNITT)} €. Das ist kein Fehler, kann aber ein Anlass für die Belegeinsicht sein.`,
+            naechsterSchritt: "Bei Interesse: Hauswartvertrag und Leistungsverzeichnis einsehen.",
+            positionId: p.id,
+            beleg: { jeQm: runde(jeQm!) },
+          };
         return {
-          status: "auffaelligkeit",
-          titel: `Reparatur- oder Verwaltungsanteil im Hauswart? ${p.bezeichnung}`,
-          erklaerung: hinweis
-            ? `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) deutet auf Tätigkeiten hin, die nicht umlagefähig sind (Reparaturen, Verwaltung oder Bereitschaft).`
-            : `„${p.bezeichnung}“ kostet ${zahlDE(jeQm!)} € je m² im Monat – deutlich mehr als üblich (etwa ${zahlDE(HAUSWART_DURCHSCHNITT)} €). Häufig sind Reparaturen oder Verwaltungsarbeiten enthalten, die herausgerechnet werden müssen.`,
-          naechsterSchritt: "Verlangen Sie den Hauswartvertrag und das Leistungsverzeichnis. Anteile für Reparaturen, Verwaltung oder Bereitschaft müssen abgezogen werden.",
+          status: "ok",
+          titel: `Hauswart: ${p.bezeichnung}`,
+          erklaerung: ausschluss ? `Die Abrechnung erklärt: „${ausschluss.text}“` : "Kein Hinweis auf nicht umlagefähige Tätigkeiten.",
           positionId: p.id,
-          beleg: { jeQm, hinweis },
+          textstelle: ausschluss?.text,
         };
       });
   },
@@ -572,6 +745,7 @@ export const INHALTLICHE_REGELN = [
   I07_WartungMitReparatur,
   I08_CO2Aufteilung,
   I09_WasserNachVerbrauch,
+  I15_EntwaesserungDoppelt,
   I10_Rauchwarnmelder,
   I11_Hauswart,
   I12_Gewerbe,

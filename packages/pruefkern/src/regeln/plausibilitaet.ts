@@ -1,4 +1,4 @@
-import { euro, runde, tageInklusive, zahlDE } from "../hilfen";
+import { euro, monateZwischen, runde, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import { KOSTENKATEGORIEN } from "../schema";
 
@@ -48,11 +48,13 @@ export const P01_Vorjahresvergleich: Regel = {
       const steigerung = aktuell - vorher;
       const quote = vorher > 0 ? steigerung / vorher : Infinity;
       if (quote > einstellungen.vorjahrSteigerungSchwelle && steigerung > einstellungen.vorjahrSteigerungMindestEuro) {
+        // Ein Anstieg allein belegt keinen Verstoß gegen das Wirtschaftlichkeitsgebot – nur ein Hinweis.
         befunde.push({
-          status: "auffaelligkeit",
+          status: "hinweis",
+          art: "vergleich",
           titel: `Starker Anstieg: ${name}`,
-          erklaerung: `Die Kosten sind von ${euro(vorher)} auf ${euro(aktuell)} gestiegen (+${Math.round(quote * 100)} %).`,
-          naechsterSchritt: "Verlangen Sie Belegeinsicht für diese Kostenart und eine Erklärung für den Anstieg.",
+          erklaerung: `Die Kosten sind von ${euro(vorher)} auf ${euro(aktuell)} gestiegen (+${Math.round(quote * 100)} %). Ein Anstieg ist für sich kein Fehler, kann aber ein Anlass für die Belegeinsicht sein.`,
+          naechsterSchritt: "Bei Interesse: Belegeinsicht für diese Kostenart und eine Erklärung für den Anstieg verlangen.",
           beleg: { kategorie, vorher, aktuell, steigerung: runde(steigerung), quote: runde(quote) },
         });
       }
@@ -92,17 +94,20 @@ export const P02_KostenProQm: Regel = {
     const ohneHeizung = a.kostenpositionen
       .filter((p) => !["heizung", "warmwasser", "verbundene_anlagen"].includes(p.kategorie))
       .reduce((s, p) => s + p.anteilMieter, 0);
-    const monate = tageInklusive(zeitraum.von, zeitraum.bis) / (365.25 / 12);
-    const proQmMonat = runde(ohneHeizung / flaeche / monate);
+    const monate = monateZwischen(zeitraum.von, zeitraum.bis);
+    // Ungerundet vergleichen, erst bei der Ausgabe runden
+    const genau = ohneHeizung / flaeche / monate;
+    const proQmMonat = runde(genau);
     const schwelle = einstellungen.kostenProQmMonatSchwelle;
 
-    if (proQmMonat > schwelle) {
+    if (genau > schwelle) {
       return [
         {
-          status: "auffaelligkeit",
+          status: "hinweis",
+          art: "vergleich",
           titel: "Überdurchschnittlich hohe Nebenkosten",
-          erklaerung: `Ihre kalten Nebenkosten liegen bei ${euro(proQmMonat)} pro m² und Monat. Das liegt über dem üblichen Rahmen von etwa ${euro(schwelle)}.`,
-          naechsterSchritt: "Lassen Sie sich die Belege der größten Kostenpositionen zeigen.",
+          erklaerung: `Ihre kalten Nebenkosten liegen bei ${euro(proQmMonat)} pro m² und Monat, über dem bundesweiten Rahmen von etwa ${euro(schwelle)}. Das ist ein statistischer Vergleich und kein Nachweis eines Fehlers.`,
+          naechsterSchritt: "Bei Interesse: Belege der größten Kostenpositionen einsehen.",
           beleg: { proQmMonat, schwelle, ohneHeizung: runde(ohneHeizung), flaeche, monate: runde(monate) },
         },
       ];
@@ -144,7 +149,8 @@ export const P03_Warmwasser: Regel = {
     }
     return [
       {
-        status: "auffaelligkeit",
+        status: "hinweis",
+        art: "vergleich",
         titel: "Hohe Warmwasserkosten",
         erklaerung:
           `Warmwasser kostet im Haus ${euro(proM3)} pro m³ – deutlich mehr als üblich (bis etwa ${euro(schwelle)}).` +

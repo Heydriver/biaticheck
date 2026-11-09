@@ -7,9 +7,28 @@ import type { Abrechnung } from "./schema";
  * - auffaelligkeit:  ungewöhnlich, sollte geklärt werden (Belegeinsicht, Rückfrage)
  * - pruefbedarf:     möglicher Fehler, aber nicht sicher genug – erst weitere Unterlagen prüfen;
  *                    der Betrag zählt NICHT zum Einspar- oder Klärungspotenzial
+ * - hinweis:         allgemeine Information oder statistischer Vergleich ohne konkreten Fehlerverdacht;
+ *                    zählt nie als Fehler, nie zum Potenzial und nie in die Überschrift
  * - nicht_pruefbar:  mit den vorliegenden Unterlagen nicht prüfbar
  */
-export type Status = "ok" | "abweichung" | "auffaelligkeit" | "pruefbedarf" | "nicht_pruefbar";
+export type Status = "ok" | "abweichung" | "auffaelligkeit" | "pruefbedarf" | "hinweis" | "nicht_pruefbar";
+
+/**
+ * Einordnung für den Kunden:
+ * - fehler:      konkreter, anhand der Angaben nachvollziehbar belegter Fehler (abweichung)
+ * - pruefbedarf: konkreter Anhaltspunkt, aber eine entscheidende Information fehlt (auffaelligkeit, pruefbedarf)
+ * - hinweis:     hilfreiche Information ohne konkreten Fehlerverdacht
+ * - vergleich:   statistische Einordnung (Kostenvergleich), kein Nachweis eines Fehlers
+ * - frage:       offene Angabe, die der Kunde beantworten kann (nicht_pruefbar)
+ */
+export type Einordnung = "fehler" | "pruefbedarf" | "hinweis" | "vergleich" | "frage";
+
+export function einordnung(status: Exclude<Status, "ok">, bereich?: Regelbereich, art?: "vergleich"): Einordnung {
+  if (status === "abweichung") return "fehler";
+  if (status === "auffaelligkeit" || status === "pruefbedarf") return "pruefbedarf";
+  if (status === "hinweis") return art === "vergleich" || bereich === "plausibilitaet" ? "vergleich" : "hinweis";
+  return "frage";
+}
 
 /** Unterlagen, die das Tool für eine sichere Prüfung nachfordern kann. */
 export type Unterlage = "vorjahresabrechnung" | "kontoauszug" | "mietvertrag" | "heizkostenabrechnung" | "zaehlerstaende" | "rechnungen";
@@ -54,6 +73,15 @@ export interface Befund {
   rueckfrage?: Rueckfrage;
   /** Bei Prüfbedarf: welche Unterlagen die Prüfung sicher machen (eine davon genügt). */
   unterlagen?: Unterlage[];
+  /**
+   * Abgerechneter Kostenanteil, der von einem Verdacht möglicherweise betroffen ist.
+   * Ausdrücklich KEIN Einsparpotenzial – nur zur Einordnung.
+   */
+  betroffen?: number;
+  /** Wörtliche Textstelle aus der Abrechnung, die den Befund trägt (z. B. Erläuterung, Anlage). */
+  textstelle?: string;
+  /** "vergleich": Befund beruht auf einem statistischen Vergleich, nicht auf einem Rechtsverstoß. */
+  art?: "vergleich";
 }
 
 export interface Regel {

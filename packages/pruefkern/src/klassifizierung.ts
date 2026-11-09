@@ -1,3 +1,4 @@
+import { findeAussagen } from "./textanalyse";
 import type { Kostenkategorie } from "./schema";
 
 /**
@@ -30,7 +31,13 @@ const MUSTER: [Kostenkategorie, RegExp][] = [
 export function ordneKategorieZu(bezeichnung: string): Kostenkategorie {
   const text = bezeichnung.toLowerCase();
   for (const [kategorie, muster] of MUSTER) {
-    if (muster.test(text)) return kategorie;
+    if (!muster.test(text)) continue;
+    // „Wartung (keine Reparaturen enthalten)“ ist keine Instandhaltung
+    if (kategorie === "instandhaltung") {
+      const aussagen = findeAussagen([text], muster);
+      if (aussagen.length > 0 && aussagen.every((x) => x.verneint)) continue;
+    }
+    return kategorie;
   }
   return "unbekannt";
 }

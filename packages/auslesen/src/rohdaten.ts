@@ -26,6 +26,14 @@ export const Rohposition = z.object({
   anteilMieter: z.number().describe("Auf die Wohnung entfallender Betrag in Euro"),
   steuerlich35a: z.enum(["haushaltsnah", "handwerker"]).nullable(),
   seite: z.number().int().nullable().describe("Seitennummer im hochgeladenen Dokument (1-basiert)"),
+  unterart: z
+    .enum(["frischwasser", "schmutzwasser", "niederschlagswasser", "wasser_abwasser"])
+    .nullable()
+    .describe("Nur bei Wasser/Entwässerung: Frischwasser, Schmutzwasser, Niederschlagswasser (Regen-/Oberflächenwasser) oder wasser_abwasser, wenn die Position mehreres zusammenfasst oder unklar ist; sonst null"),
+  bestandteile: z
+    .array(z.object({ bezeichnung: z.string(), betrag: z.number().describe("Betrag für das ganze Haus in Euro") }))
+    .describe("Aufschlüsselung der Position, wenn die Abrechnung oder eine Anlage sie ausweist (z. B. Wartung 1.100,00 / Reparatur 400,00 oder Gerätemiete / Wartung); sonst leere Liste"),
+  hinweise: z.array(z.string()).describe("Fußnoten oder Erläuterungen, die sich ausdrücklich nur auf diese Position beziehen, wörtlich; sonst leere Liste"),
   quelle: z.enum(["betriebskostenabrechnung", "heizkostenabrechnung"]),
 });
 export type Rohposition = z.infer<typeof Rohposition>;
@@ -67,6 +75,9 @@ export const Rohdaten = z.object({
   monatlicheVorauszahlungHeizkosten: zahl,
   summeKostenMieter: zahl.describe("Summe aller Kosten der Wohnung laut Abrechnung"),
   saldo: zahl.describe("Abrechnungsergebnis: positiv = Nachzahlung des Mieters, negativ = Guthaben"),
+  erlaeuterungen: z
+    .array(z.object({ text: z.string().describe("Wörtlich, ohne Namen oder Adressen"), seite: z.number().int().nullable() }))
+    .describe("Erläuterungen, Fußnoten und Anmerkungen der Abrechnung und ihrer Anlagen, die mehrere Positionen oder die ganze Abrechnung betreffen (z. B. „Hauswart und Aufzug enthalten keine Reparaturkosten.“), wörtlich"),
   unsicherheiten: z.array(z.string()).describe("Angaben, die unleserlich, mehrdeutig oder widersprüchlich waren"),
 });
 export type Rohdaten = z.infer<typeof Rohdaten>;

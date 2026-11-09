@@ -1,4 +1,4 @@
-import { runde, tageInklusive } from "./hilfen";
+import { monateZwischen, runde } from "./hilfen";
 import type { Abrechnung, Kostenkategorie } from "./schema";
 
 /**
@@ -111,6 +111,14 @@ export interface Kennwert {
 }
 
 export interface Kostenvergleich {
+  /** "bund": Bundesdurchschnitt; "region": eigene Daten aus demselben PLZ-Gebiet. */
+  ebene: "bund" | "region";
+  /** Überschrift für den Kunden, z. B. "Vergleich mit dem Bundesdurchschnitt". */
+  bezeichnung: string;
+  /** Welche Kosten auf beiden Seiten verglichen werden. */
+  kostenarten: string;
+  /** "gesamt": inkl. Heizung und Warmwasser; "kalt": ohne (wenn die Abrechnung keine Heizkosten enthält). */
+  basis: "gesamt" | "kalt";
   region: string;
   quelle: string;
   jahr: number;
@@ -142,7 +150,7 @@ export function kostenJeQmMonat(a: Abrechnung): { gesamt: number; heizung: numbe
   const flaeche = a.flaechen.wohnflaecheMieter;
   const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
   if (!flaeche || !zeitraum) return undefined;
-  const monate = tageInklusive(zeitraum.von, zeitraum.bis) / (365.25 / 12);
+  const monate = monateZwischen(zeitraum.von, zeitraum.bis);
   const jeQm = (euro: number) => euro / flaeche / monate;
 
   const gruppen: Partial<Record<Vergleichsgruppe, number>> = {};
@@ -178,16 +186,27 @@ export function vergleicheKosten(a: Abrechnung, regional?: Referenzwerte): Koste
 
   const kaltDurchschnitt = runde(ref.gesamt.durchschnitt - ref.heizungWarmwasser.durchschnitt);
   const region = plzRegion(a.meta.plz);
+  const ebene = regional ? "region" : "bund";
+  // Vergleichbarkeit: Enthält die Abrechnung keine Heizkosten (z. B. Gasetagenheizung), wird nur kalt mit kalt verglichen.
+  const basis = ihr.heizung > 0 ? "gesamt" : "kalt";
+  const gesamt = basis === "gesamt" ? kennwert(ihr.gesamt, ref.gesamt.durchschnitt, ref.gesamt.maximum) : kennwert(ihr.gesamt, kaltDurchschnitt);
 
   return {
     ok: true,
     vergleich: {
+      ebene,
+      bezeichnung: ebene === "bund" ? "Vergleich mit dem Bundesdurchschnitt" : `Vergleich mit dem ${ref.region}`,
+      kostenarten:
+        basis === "gesamt"
+          ? "Alle Betriebskosten einschließlich Heizung und Warmwasser"
+          : "Kalte Betriebskosten ohne Heizung und Warmwasser (Ihre Abrechnung enthält keine Heizkosten)",
+      basis,
       region: ref.region,
       quelle: ref.quelle,
       jahr: ref.jahr,
       fallzahl: ref.fallzahl,
       regionalFolgt: !regional && region ? `PLZ-Gebiet ${region}` : undefined,
-      gesamt: kennwert(ihr.gesamt, ref.gesamt.durchschnitt, ref.gesamt.maximum),
+      gesamt,
       heizungWarmwasser: kennwert(ihr.heizung, ref.heizungWarmwasser.durchschnitt, ref.heizungWarmwasser.maximum),
       kalt: kennwert(ihr.gesamt - ihr.heizung, kaltDurchschnitt),
       gruppen: (Object.keys(ihr.gruppen) as Vergleichsgruppe[])
@@ -205,9 +224,19 @@ export function vergleicheKosten(a: Abrechnung, regional?: Referenzwerte): Koste
  */
 export const MINDESTFAELLE_REGION = 10;
 
+/** Höchste zulässige Streuung (Variationskoeffizient) der Gesamtkosten, damit ein Mittelwert aussagekräftig ist. */
+export const MAX_STREUUNG_REGION = 0.5;
+
 export function regionaleReferenz(region: string, faelle: Abrechnung[], jahr: number): Referenzwerte | undefined {
-  const werte = faelle.map(kostenJeQmMonat).filter((w): w is NonNullable<typeof w> => Boolean(w));
+  // Vergleichbarkeit: nur Abrechnungen desselben Jahres, mit Heizkosten (gleiche Kostenarten wie der Bundeswert)
+  const werte = faelle
+    .filter((a) => !a.meta.abrechnungszeitraum || Number(a.meta.abrechnungszeitraum.bis.slice(0, 4)) === jahr)
+    .map(kostenJeQmMonat)
+    .filter((w): w is NonNullable<typeof w> => Boolean(w) && w!.heizung > 0);
   if (werte.length < MINDESTFAELLE_REGION) return undefined;
+  const mittelwert = werte.reduce((s, w) => s + w.gesamt, 0) / werte.length;
+  const sd = Math.sqrt(werte.reduce((s, w) => s + (w.gesamt - mittelwert) ** 2, 0) / werte.length);
+  if (mittelwert <= 0 || sd / mittelwert > MAX_STREUUNG_REGION) return undefined;
   const mittel = (xs: number[]) => runde(xs.reduce((s, x) => s + x, 0) / xs.length);
   const gruppen: Partial<Record<Vergleichsgruppe, number>> = {};
   for (const g of Object.keys(VERGLEICHSGRUPPEN) as Vergleichsgruppe[]) {

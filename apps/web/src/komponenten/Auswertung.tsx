@@ -45,6 +45,7 @@ export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stu
       )}
       <Ergebnis s1={ansicht.stufe1} beantworte={aktionen.beantworte}>{null}</Ergebnis>
       {ansicht.fehler && ansicht.fehler.length > 0 && <Gefunden fehler={ansicht.fehler} />}
+      {ansicht.hinweise && ansicht.hinweise.length > 0 && <Hinweise punkte={ansicht.hinweise} />}
       {ansicht.pruefbedarf && ansicht.pruefbedarf.length > 0 && (
         <Pruefbedarf punkte={ansicht.pruefbedarf} unterlagen={ansicht.unterlagen ?? []} beantworte={aktionen.beantworte} hochladen={hochladen} />
       )}
@@ -67,17 +68,9 @@ export function Auswertung({ ansicht, aktionen }: { ansicht: FallAnsicht & { stu
 
 function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktionen["beantworte"]; children: React.ReactNode }) {
   const f = s1.fehlerpotenzial;
-  const anzahl = f.anzahl.abweichung + f.anzahl.auffaelligkeit;
-  const summe = f.sicher + f.zuKlaeren;
-  const titel =
-    f.sicher > 0
-      ? `${euro(f.sicher)} müssen Sie nicht bezahlen.`
-      : summe > 0
-        ? `Bis zu ${euro(summe)} könnten falsch abgerechnet sein.`
-        : anzahl
-          ? "Ihre Abrechnung hat Auffälligkeiten."
-          : "Ihre Abrechnung sieht korrekt aus.";
+  const { titel, unter } = ergebnisText(s1);
   const saldo = s1.kosten.saldo;
+  const korrigiert = s1.kosten.korrigierterSaldo;
 
   return (
     <section className={KARTE} aria-labelledby="ergebnis-titel">
@@ -85,16 +78,23 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
       <h1 id="ergebnis-titel" className="text-[clamp(24px,4.4vw,34px)] leading-tight font-bold tracking-tight">
         {titel}
       </h1>
-      <p>{anzahl ? `Wir haben ${anzahl === 1 ? "einen Punkt" : `${anzahl} Punkte`} gefunden, die Sie Geld kosten können.` : "Wir haben keine Fehler gefunden."}</p>
+      <p>{unter}</p>
       {f.pruefbedarf.anzahl > 0 && (
         <p className="text-[15px] text-gedaempft">
-          {f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`} mit bis zu {euro(f.pruefbedarf.betrag)} prüfen wir, sobald Sie eine Unterlage nachreichen.
+          {f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`}
+          {f.pruefbedarf.betrag > 0 ? ` mit bis zu ${euro(f.pruefbedarf.betrag)}` : ""} prüfen wir, sobald Sie eine Unterlage nachreichen.
+          {f.pruefbedarf.ohneBetrag > 0 ? ` ${f.pruefbedarf.betrag > 0 ? "Teilweise ist die" : "Die"} Auswirkung ist noch nicht bezifferbar.` : ""}
         </p>
       )}
       <dl className="grid border-t border-linie sm:grid-cols-3 sm:border-b">
         {saldo !== undefined && (
           <Fakt titel={saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}>
             <dd className="text-xl font-bold tabular-nums">{euro(Math.abs(saldo))}</dd>
+            {korrigiert !== undefined && (
+              <dd className="text-[13px] text-gedaempft">
+                Nach Korrektur der belegten Fehler: {korrigiert > 0 ? `Nachzahlung ${euro(korrigiert)}` : `Guthaben ${euro(Math.abs(korrigiert))}`}
+              </dd>
+            )}
           </Fakt>
         )}
         <Frist s1={s1} beantworte={beantworte} />
@@ -103,6 +103,29 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
       {children}
     </section>
   );
+}
+
+/** Überschrift und Unterzeile – abgeleitet aus der Einordnung: belegte Fehler, begründeter Prüfbedarf, sonst keine Fehler. */
+function ergebnisText(s1: Stufe1): { titel: string; unter: string } {
+  const f = s1.fehlerpotenzial;
+  const fehler = f.anzahl.abweichung;
+  const klaeren = f.anzahl.auffaelligkeit;
+  const titel =
+    f.sicher > 0
+      ? `${euro(f.sicher)} müssen Sie nicht bezahlen.`
+      : f.zuKlaeren > 0
+        ? `Bis zu ${euro(f.zuKlaeren)} könnten falsch abgerechnet sein.`
+        : fehler + klaeren > 0
+          ? "Einige Punkte sollten Sie klären."
+          : f.anzahl.pruefbedarf > 0
+            ? "Wir brauchen noch eine Unterlage."
+            : "Wir haben keine Fehler gefunden.";
+  const teile = [
+    fehler ? `${fehler === 1 ? "einen belegten Fehler" : `${fehler} belegte Fehler`}` : "",
+    klaeren ? `${klaeren === 1 ? "einen Punkt" : `${klaeren} Punkte`} mit begründetem Prüfbedarf` : "",
+  ].filter(Boolean);
+  const unter = teile.length ? `Wir haben ${teile.join(" und ")} gefunden.` : "Wir haben keine Fehler gefunden.";
+  return { titel, unter };
 }
 
 function Fakt({ titel, children }: { titel: string; children: React.ReactNode }) {
@@ -145,11 +168,15 @@ function Vergleich({ s1 }: { s1: Stufe1 }) {
   const g = s1.vergleich.vergleich.gesamt;
   if (g.abweichungProzent === undefined || g.durchschnitt === undefined) return null;
   const a = g.abweichungProzent;
+  const v = s1.vergleich.vergleich;
   return (
-    <Fakt titel="Ihre Nebenkosten">
+    <Fakt titel={v.bezeichnung}>
       <dd className="text-xl font-bold">{a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
-      <dd className="text-[13px] text-gedaempft" title={`Quelle: ${s1.vergleich.vergleich.quelle}`}>
+      <dd className="text-[13px] text-gedaempft">
         {zahl(g.ihr)} € statt {zahl(g.durchschnitt)} € je m² im Monat
+      </dd>
+      <dd className="text-xs text-gedaempft">
+        {v.kostenarten}. Quelle: {v.quelle}. Statistische Einordnung, kein Nachweis eines Fehlers.
       </dd>
     </Fakt>
   );
@@ -335,12 +362,33 @@ function Gefunden({ fehler }: { fehler: NonNullable<FallAnsicht["fehler"]> }) {
   );
 }
 
+/** Hinweise und Vergleichswerte: eingeklappt, ohne Betrag, ausdrücklich keine Fehler. */
+function Hinweise({ punkte }: { punkte: NonNullable<FallAnsicht["hinweise"]> }) {
+  return (
+    <details className={KARTE}>
+      <summary className="cursor-pointer font-semibold">
+        Gut zu wissen: {punkte.length === 1 ? "ein Hinweis" : `${punkte.length} Hinweise`} ohne Fehlerverdacht
+      </summary>
+      <ul className="grid">
+        {punkte.map((p, i) => (
+          <li key={i} className="border-t border-linie py-4 first:border-0 first:pt-0">
+            <Befundzeile punkt={p} />
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+const EINORDNUNG: Record<string, string> = { fehler: "Belegter Fehler", pruefbedarf: "Begründeter Prüfbedarf", hinweis: "Hinweis", vergleich: "Vergleichswert" };
+
 /** Ein Befund mit Kurzsatz, konkreten Zahlen, Fundstelle und Rechtsgrundlage – zum Nachvollziehen. */
 function Befundzeile({ punkt, betragPraefix = "" }: { punkt: NonNullable<FallAnsicht["fehler"]>[number]; betragPraefix?: string }) {
   return (
     <div className="grid gap-2">
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
+          {EINORDNUNG[punkt.einordnung] && <p className="text-xs font-semibold tracking-wide text-gedaempft uppercase">{EINORDNUNG[punkt.einordnung]}</p>}
           <h3 className="font-semibold">{punkt.titel}</h3>
           <p className="text-[15px] text-gedaempft">{punkt.satz}</p>
         </div>

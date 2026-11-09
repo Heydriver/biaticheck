@@ -18,7 +18,8 @@ describe("G-001 – Großvermieter München 2024", () => {
     ["R-01", ["ok"]],
     ["R-02", ["ok"]],
     ["R-03", ["ok"]],
-    ["R-04", ["auffaelligkeit"]],
+    // Heizfläche 82,19 m² statt 84,28 m²: nach § 7 Abs. 1 HeizkostenV zulässig (beheizte Räume) – nur Hinweis
+    ["R-04", ["hinweis"]],
     ["R-05", ["ok", "pruefbedarf"]],
     ["I-01", ["ok"]],
     ["I-02", ["nicht_pruefbar", "nicht_pruefbar"]],
@@ -26,11 +27,13 @@ describe("G-001 – Großvermieter München 2024", () => {
     ["I-04", ["ok"]],
     ["I-05", ["auffaelligkeit"]],
     ["I-06", ["nicht_pruefbar"]],
-    ["I-07", ["auffaelligkeit"]],
+    // „Aufzugskosten Prüf./Wart.“ mit § 35a-Kennzeichnung „Handwerker“: Wartung ist auch Handwerkerleistung, kein Reparaturverdacht
+    ["I-07", ["ok", "ok", "ok", "ok", "ok", "ok", "ok"]],
     ["I-08", ["ok"]],
     ["P-01", ["nicht_pruefbar"]],
     ["P-02", ["ok"]],
-    ["P-03", ["auffaelligkeit"]],
+    // 31,14 €/m³ Warmwasser: statistischer Vergleich, kein Fehler
+    ["P-03", ["hinweis"]],
   ])("%s → %j", (id, erwartet) => {
     expect(status(id)).toEqual(erwartet);
   });

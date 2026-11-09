@@ -1,7 +1,7 @@
 import { antworttyp, type Antworttyp } from "./antworten";
 import { datumDE, euro, plusMonate, runde, tageInklusive, vergleiche, zahlDE } from "./hilfen";
 import { ALLE_REGELN, type Pruefbericht } from "./pruefung";
-import { istBeanstandet, UNTERLAGEN, type Regelergebnis, type Status, type Unterlage } from "./regel";
+import { einordnung, istBeanstandet, UNTERLAGEN, type Einordnung, type Regelergebnis, type Status, type Unterlage } from "./regel";
 import { Abrechnung, KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG, type AbrechnungEingabe, type Kostenkategorie } from "./schema";
 import { vergleicheKosten, type KostenvergleichErgebnis, type Referenzwerte } from "./vergleich";
 
@@ -89,7 +89,7 @@ export interface Stufe1 {
     regelnGesamt: number;
     stufe: Fehlerstufe;
     /** Mögliche Fehler, die erst nach weiteren Unterlagen sicher sind (nicht im Potenzial enthalten). */
-    pruefbedarf: { anzahl: number; betrag: number };
+    pruefbedarf: { anzahl: number; betrag: number; /** Punkte, deren Auswirkung noch nicht bezifferbar ist. */ ohneBetrag: number };
   };
   widerspruchsfrist: {
     status: Friststatus;
@@ -106,6 +106,8 @@ export interface Stufe1 {
     vorauszahlungen?: number;
     /** Positiv = Nachzahlung, negativ = Guthaben. */
     saldo?: number;
+    /** Ergebnis nach Abzug der belegten Fehler (nur wenn es belegte Fehler gibt). Positiv = Nachzahlung. */
+    korrigierterSaldo?: number;
   };
   vergleich: KostenvergleichErgebnis;
   /** Rückfragen, die Stufe 1 vervollständigen (z. B. Zugangsdatum, PLZ). */
@@ -167,10 +169,16 @@ export function erstelleStufe1(
       regelnAuffaellig,
       regelnGesamt: ALLE_REGELN.length,
       stufe: fehlerstufe(quote, z.einsparpotenzial),
-      pruefbedarf: { anzahl: z.anzahl.pruefbedarf, betrag: z.pruefbedarfBetrag },
+      pruefbedarf: { anzahl: z.anzahl.pruefbedarf, betrag: z.pruefbedarfBetrag, ohneBetrag: z.pruefbedarfOhneBetrag },
     },
     widerspruchsfrist: { ...widerspruch, abrechnungsfrist },
-    kosten: { betriebskosten, heizkosten, vorauszahlungen: a.vorauszahlungen, saldo: a.ausgewiesen.saldo },
+    kosten: {
+      betriebskosten,
+      heizkosten,
+      vorauszahlungen: a.vorauszahlungen,
+      saldo: a.ausgewiesen.saldo,
+      ...(a.ausgewiesen.saldo !== undefined && z.einsparpotenzial > 0 ? { korrigierterSaldo: runde(a.ausgewiesen.saldo - z.einsparpotenzial) } : {}),
+    },
     vergleich: vergleicheKosten(a, optionen.regional),
     rueckfragen: rueckfragen.map((r) => {
       const typ = antworttyp(r.feld);
@@ -185,6 +193,12 @@ export function erstelleStufe1(
 export interface Auffaelligkeit {
   regelId: string;
   status: Exclude<Status, "ok">;
+  /** Einordnung für den Kunden: belegter Fehler, begründeter Prüfbedarf, Hinweis, Vergleich oder offene Frage. */
+  einordnung: Einordnung;
+  /** Abgerechneter Kostenanteil, der möglicherweise betroffen ist – kein Einsparpotenzial. */
+  betroffen?: number;
+  /** Wörtliche Textstelle aus der Abrechnung, die den Befund trägt. */
+  textstelle?: string;
   titel: string;
   befund: string;
   loesung: string;
@@ -242,7 +256,7 @@ export interface Stufe2 {
   unterlagen: Unterlagenanforderung[];
 }
 
-const REIHENFOLGE: Record<Exclude<Status, "ok">, number> = { abweichung: 0, auffaelligkeit: 1, pruefbedarf: 2, nicht_pruefbar: 3 };
+const REIHENFOLGE: Record<Exclude<Status, "ok">, number> = { abweichung: 0, auffaelligkeit: 1, pruefbedarf: 2, hinweis: 3, nicht_pruefbar: 4 };
 
 const GRUNDLAGEN = new Map(ALLE_REGELN.map((r) => [r.id, r.grundlage]));
 
@@ -257,6 +271,9 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
       return {
         regelId: e.regelId,
         status: e.status,
+        einordnung: einordnung(e.status, e.bereich, e.art),
+        ...(e.betroffen !== undefined && !(e.betragZugunstenMieter && e.betragZugunstenMieter > 0) ? { betroffen: e.betroffen } : {}),
+        ...(e.textstelle ? { textstelle: e.textstelle } : {}),
         titel: e.titel,
         befund: e.erklaerung,
         loesung,
@@ -292,6 +309,8 @@ export function erstelleStufe2(bericht: Pruefbericht, eingabe: AbrechnungEingabe
  * - „Neue Kostenart“ (P-01) für Kosten, gegen die ohnehin ein Einwand erhoben wird, wäre doppelt
  */
 function gehoertInsAnschreiben(p: Auffaelligkeit, bericht: Pruefbericht): boolean {
+  // Hinweise und Vergleichswerte sind keine Einwände gegen die Abrechnung
+  if (p.status === "hinweis" || p.einordnung === "vergleich") return false;
   if (p.regelId === "P-02") return false;
   if (p.regelId === "P-01") {
     const quelle = bericht.ergebnisse.find((e) => e.regelId === "P-01" && e.titel === p.titel);
@@ -306,28 +325,36 @@ export function erstelleZusammenfassung(s1: Stufe1, punkte: Auffaelligkeit[]): s
   const jahr = s1.abrechnungsjahr ? ` ${s1.abrechnungsjahr}` : "";
   const saetze: string[] = [];
 
+  const klaeren = n.auffaelligkeit + n.pruefbedarf;
   const teile = [
-    n.abweichung ? `${n.abweichung} Fehler` : "",
-    n.auffaelligkeit ? `${n.auffaelligkeit} ${n.auffaelligkeit === 1 ? "Auffälligkeit" : "Auffälligkeiten"}` : "",
-    n.pruefbedarf ? `${n.pruefbedarf} ${n.pruefbedarf === 1 ? "Punkt" : "Punkte"} mit Prüfbedarf` : "",
-    n.nicht_pruefbar ? `${n.nicht_pruefbar} ${n.nicht_pruefbar === 1 ? "offenen Punkt" : "offene Punkte"}` : "",
+    n.abweichung ? `${n.abweichung} belegte${n.abweichung === 1 ? "n" : ""} Fehler` : "",
+    klaeren ? `${klaeren} ${klaeren === 1 ? "Punkt" : "Punkte"} mit begründetem Prüfbedarf` : "",
   ].filter(Boolean);
+  const zusatz = [
+    n.hinweis ? `${n.hinweis} ${n.hinweis === 1 ? "Hinweis" : "Hinweise"} ohne Fehlerverdacht` : "",
+    n.nicht_pruefbar ? `${n.nicht_pruefbar} ${n.nicht_pruefbar === 1 ? "offene Frage" : "offene Fragen"}` : "",
+  ].filter(Boolean);
+  const und = (xs: string[]) => xs.join(", ").replace(/, ([^,]*)$/, " und $1");
   saetze.push(
     teile.length
-      ? `Wir haben Ihre Abrechnung${jahr} anhand von ${ALLE_REGELN.length} Prüfregeln untersucht und dabei ${teile.join(", ").replace(/, ([^,]*)$/, " und $1")} festgestellt.`
-      : `Wir haben Ihre Abrechnung${jahr} geprüft und keine Fehler oder Auffälligkeiten festgestellt.`,
+      ? `Wir haben Ihre Abrechnung${jahr} anhand von ${ALLE_REGELN.length} Prüfregeln untersucht und dabei ${und(teile)} festgestellt.`
+      : `Wir haben Ihre Abrechnung${jahr} anhand von ${ALLE_REGELN.length} Prüfregeln untersucht und keine Fehler festgestellt.`,
   );
+  if (zusatz.length) saetze.push(`Außerdem gibt es ${und(zusatz)}.`);
 
   const { sicher, zuKlaeren } = s1.fehlerpotenzial;
   if (sicher > 0) saetze.push(`Sicher bezifferbar ist ein Einsparpotenzial von ${euro(sicher)}.`);
   if (zuKlaeren > 0) saetze.push(`Weitere ${euro(zuKlaeren)} können sich nach Klärung mit dem Vermieter als Ersparnis erweisen.`);
+  const ohne = punkte.filter((p) => (p.status === "auffaelligkeit" || p.status === "pruefbedarf") && p.betrag === undefined).length;
+  if (ohne) saetze.push(`Bei ${ohne === 1 ? "einem Punkt" : `${ohne} Punkten`} ist die Auswirkung noch nicht bezifferbar.`);
 
   if (s1.vergleich.ok) {
     const g = s1.vergleich.vergleich.gesamt;
     if (g.abweichungProzent !== undefined && g.durchschnitt !== undefined) {
       const richtung = g.abweichungProzent > 0 ? `${g.abweichungProzent} % über` : g.abweichungProzent < 0 ? `${-g.abweichungProzent} % unter` : "genau im";
+      const v = s1.vergleich.vergleich;
       saetze.push(
-        `Ihre Nebenkosten liegen mit ${zahlDE(g.ihr)} € je m² und Monat ${richtung} dem Durchschnitt (${zahlDE(g.durchschnitt)} €, ${s1.vergleich.vergleich.region}).`,
+        `${v.bezeichnung}: Ihre Kosten liegen mit ${zahlDE(g.ihr)} € je m² und Monat ${richtung} dem Durchschnitt von ${zahlDE(g.durchschnitt)} € (${v.quelle}). Das ist eine statistische Einordnung und kein Nachweis eines Fehlers.`,
       );
     }
   }
@@ -347,6 +374,8 @@ export function erstelleEmpfehlung(s1: Stufe1, punkte: Auffaelligkeit[]): Empfeh
   const f = s1.widerspruchsfrist;
   const saldo = s1.kosten.saldo ?? 0;
   const beanstandet = punkte.filter((p) => istBeanstandet(p.status));
+  const fehlerAnz = beanstandet.filter((p) => p.status === "abweichung").length;
+  const klaerAnz = beanstandet.length - fehlerAnz;
   const frist = f.status === "offen" && f.bis ? ` Senden Sie es bis spätestens ${datumDE(f.bis)}.` : "";
 
   if (f.status === "abgelaufen")
@@ -371,10 +400,15 @@ export function erstelleEmpfehlung(s1: Stufe1, punkte: Auffaelligkeit[]): Empfeh
   if (beanstandet.length)
     return {
       titel: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung",
-      text: `Darin fordern wir die Klärung von ${beanstandet.length === 1 ? "einem Punkt" : `${beanstandet.length} Punkten`}, die Sie Geld kosten können.${frist}`,
+      text: `Darin ${[
+        fehlerAnz ? `fordern wir die Korrektur von ${fehlerAnz === 1 ? "einem belegten Fehler" : `${fehlerAnz} belegten Fehlern`}` : "",
+        klaerAnz ? `${fehlerAnz ? "bitten" : "bitten wir"} um Klärung von ${klaerAnz === 1 ? "einem Punkt" : `${klaerAnz} Punkten`}` : "",
+      ]
+        .filter(Boolean)
+        .join(" und ")}.${frist}`,
       aktion: "schreiben",
     };
-  if (punkte.length)
+  if (punkte.some((p) => p.status === "nicht_pruefbar" && p.regelId !== "P-02"))
     return {
       titel: "Keine Fehler gefunden",
       text: "Einige Punkte lassen sich nur mit Ihrem Mietvertrag prüfen. Das übernehmen unsere Experten für Sie.",
@@ -417,6 +451,10 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "R-03":
       return s === "abweichung" ? k("Nachzahlung falsch berechnet", "Kosten minus Vorauszahlungen ergibt einen anderen Betrag.") : k("Vorauszahlungen fehlen", "Ohne sie lässt sich die Nachzahlung nicht prüfen.");
     case "R-04":
+      if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined)
+        return s === "abweichung"
+          ? k(`Falsche Gesamtfläche: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Ihr Anteil ist zu hoch.`)
+          : k(`Kleinere Gesamtfläche: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Der Grund muss erklärt werden.`);
       return k("Unterschiedliche Flächen", "Für Ihre Wohnung werden verschiedene Größen angesetzt.");
     case "R-05": {
       const art = b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten";
@@ -445,17 +483,24 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "I-06":
       return s === "abweichung" ? k("Aufzug trotz Erdgeschoss", "Ihr Mietvertrag nimmt Sie davon aus.") : k("Aufzug im Erdgeschoss", "Nur unzulässig, wenn Ihr Mietvertrag das so regelt.");
     case "I-07":
-      return k(`Reparaturen in „${name}“?`, "Reparaturen dürfen nicht auf Mieter umgelegt werden.");
+      if (s === "abweichung") return k(`Reparaturen in „${name}“`, "Der ausgewiesene Reparaturanteil darf nicht umgelegt werden.");
+      return e.titel.startsWith("Vollwartung")
+        ? k(`Vollwartung: „${name}“`, "Der Reparaturanteil ist nicht ausgewiesen. Auswirkung noch nicht bezifferbar.")
+        : k(`Reparaturen in „${name}“?`, "Die Bezeichnung nennt Reparaturen. Auswirkung noch nicht bezifferbar.");
     case "I-08":
       return k("CO₂-Kosten falsch verteilt", "Einen Teil davon muss der Vermieter selbst tragen.");
     case "I-09":
-      return s === "pruefbedarf"
-        ? k("Wasser nach Fläche verteilt", "Hat Ihre Wohnung einen eigenen Wasserzähler? Dann muss nach Verbrauch abgerechnet werden.")
-        : k("Wasser nicht nach Verbrauch abgerechnet", "Mit eigenem Wasserzähler muss nach Verbrauch abgerechnet werden.");
+      if (s === "nicht_pruefbar") return k("Wasserzähler in der Wohnung?", "Davon hängt ab, ob Frischwasser nach Verbrauch abgerechnet werden muss.");
+      if (s === "hinweis") return k(`Inhalt unklar: ${name}`, "Die Position kann verschiedene Wasserkosten zusammenfassen.");
+      return k("Wasser nicht nach Verbrauch abgerechnet", "Wird der Verbrauch aller Wohnungen erfasst, muss danach abgerechnet werden.");
+    case "I-15":
+      return k("Niederschlagswasser doppelt?", "Die Gebühr für Regenwasser darf nur einmal umgelegt werden.");
     case "I-10":
-      return s === "abweichung" ? k("Rauchwarnmelder: Miete umgelegt", "Mietkosten für Rauchwarnmelder dürfen nicht umgelegt werden.") : k("Rauchwarnmelder: Miete enthalten?", "Nur die Wartung ist erlaubt, die Miete der Geräte nicht.");
+      return s === "abweichung" ? k("Rauchwarnmelder: Miete umgelegt", "Die Miete der Geräte darf nicht umgelegt werden, die Wartung schon.") : k("Rauchwarnmelder: Miete enthalten", "Nur die Wartung ist erlaubt. Auswirkung noch nicht bezifferbar.");
     case "I-11":
-      return k("Hauswart: Reparaturen enthalten?", "Reparatur- und Verwaltungsarbeiten müssen herausgerechnet werden.");
+      return s === "hinweis"
+        ? k("Hauswart teurer als üblich", "Statistischer Vergleich, kein Fehler. Anlass für die Belegeinsicht.")
+        : k("Hauswart: Reparaturen enthalten?", "Reparatur- und Verwaltungsarbeiten müssen herausgerechnet werden.");
     case "R-06":
       return k("Ein- oder Auszug nicht berücksichtigt", "Sie zahlen Kosten für Tage, an denen Sie dort nicht gewohnt haben.");
     case "R-07":
@@ -468,9 +513,9 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return k("Grundsteuer stark verändert", "Seit 2025 gilt ein neuer Bescheid. Er muss zur Abrechnung passen.");
     case "P-01":
       if (s === "nicht_pruefbar") return k("Vorjahresabrechnung fehlt", "Mit ihr erkennen wir ungewöhnliche Preissprünge.");
-      return e.titel.startsWith("Neue") ? k(`Neu: ${name}`, "Diese Kosten gab es im Vorjahr nicht.") : k(`Stark gestiegen: ${name}`, "Deutlich teurer als im Vorjahr.");
+      return e.titel.startsWith("Neue") ? k(`Neu: ${name}`, "Diese Kosten gab es im Vorjahr nicht.") : k(`Stark gestiegen: ${name}`, "Deutlich teurer als im Vorjahr. Das ist für sich kein Fehler.");
     case "P-02":
-      return s === "nicht_pruefbar" ? k("Wohnfläche fehlt", "Damit vergleichen wir Ihre Kosten mit anderen.") : k("Nebenkosten über Durchschnitt", "Deutlich teurer als bei vergleichbaren Wohnungen.");
+      return s === "nicht_pruefbar" ? k("Wohnfläche fehlt", "Damit vergleichen wir Ihre Kosten mit anderen.") : k("Nebenkosten über dem Bundesdurchschnitt", "Statistischer Vergleich, kein Nachweis eines Fehlers.");
     case "P-03": {
       const m3 = zahl(b.proM3);
       return k("Warmwasser sehr teuer", m3 !== undefined ? `${euro(m3)} je m³, üblich sind bis etwa 20 €.` : "Deutlich teurer als üblich.");
@@ -506,6 +551,10 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
     case "R-03":
       return `Das ausgewiesene Abrechnungsergebnis stimmt nicht mit Kosten abzüglich Vorauszahlungen überein${betrag}.`;
     case "R-04":
+      if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined && name)
+        return e.status === "abweichung"
+          ? `${name}: Die Kosten werden auf ${zahlDE(zahl(b.nenner)!)} m² verteilt, die Abrechnung nennt als Gesamtfläche jedoch ${zahlDE(zahl(b.hausflaeche)!)} m². Mein Anteil beträgt danach ${euro(zahl(b.korrekt)!)} statt ${euro(zahl(b.abgerechnet)!)}${betrag}.`
+          : `${name}: Die Kosten werden auf ${zahlDE(zahl(b.nenner)!)} m² statt auf die Gesamtfläche von ${zahlDE(zahl(b.hausflaeche)!)} m² verteilt. Bitte erläutern Sie die kleinere Fläche.`;
       if (zahl(b.heizflaeche) !== undefined && zahl(b.wohnflaeche) !== undefined)
         return `Unterschiedliche Flächen: In der Heizkostenabrechnung werden ${zahlDE(zahl(b.heizflaeche)!)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(zahl(b.wohnflaeche)!)} m². Bitte erläutern Sie die Abweichung.`;
       return "Für meine Wohnung werden unterschiedliche Flächen angesetzt. Bitte erläutern Sie die Abweichung.";
@@ -531,10 +580,14 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
       if (e.status === "abweichung") return `Aufzugskosten${betrag}: Nach meinem Mietvertrag sind Erdgeschosswohnungen davon ausgenommen.`;
       break;
     case "I-07":
-      if (name) return `${name}: Bitte legen Sie den Wartungsvertrag vor und weisen Sie aus, ob darin Reparaturkosten enthalten sind.`;
+      if (e.status === "abweichung" && name) return `${name}${betrag}: Der ausgewiesene Reparaturanteil (${e.textstelle ?? "laut Aufstellung"}) ist nach § 1 Abs. 2 Nr. 2 BetrKV nicht umlagefähig. Bitte ziehen Sie ihn ab.`;
+      if (name) return `${name}: Bitte legen Sie den Wartungsvertrag und die Rechnungen vor und weisen Sie einen enthaltenen Reparaturanteil aus.`;
       break;
     case "I-09":
-      return "Wasser und Abwasser werden nicht nach Verbrauch verteilt, obwohl meine Wohnung einen Wasserzähler hat. Bitte rechnen Sie nach dem erfassten Verbrauch ab.";
+      if (e.status === "auffaelligkeit") return "Frisch- und Schmutzwasser werden nicht nach Verbrauch verteilt, obwohl meine Wohnung einen Wasserzähler hat. Bitte teilen Sie mit, ob der Verbrauch aller Wohnungen erfasst wird, und rechnen Sie in diesem Fall nach Verbrauch ab.";
+      break;
+    case "I-15":
+      return "Niederschlagswasser scheint mehrfach umgelegt zu werden. Bitte legen Sie den Gebührenbescheid für die Entwässerung vor.";
     case "I-10":
       if (e.status === "abweichung" && name) return `${name}${betrag}: Mietkosten für Rauchwarnmelder sind nicht als Betriebskosten umlagefähig.`;
       if (name) return `${name}: Bitte legen Sie die Rechnung vor und weisen Sie Miete und Wartung getrennt aus; der Mietanteil ist nicht umlagefähig.`;
@@ -864,7 +917,13 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       break;
     case "R-04": {
       const h = zahl(b.heizflaeche), w = zahl(b.wohnflaeche);
-      if (h !== undefined && w !== undefined) {
+      if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined) {
+        position();
+        add("Gesamtfläche laut Abrechnung", `${zahlDE(zahl(b.hausflaeche)!)} m²`);
+        add("Verwendeter Flächennenner", `${zahlDE(zahl(b.nenner)!)} m²`, true);
+        add("Richtig berechnet", `${eur(b.gesamtkosten)} × ${zahlDE(zahl(b.einheit)!)} / ${zahlDE(zahl(b.hausflaeche)!)} m² = ${eur(b.korrekt)}`);
+        if (e.betragZugunstenMieter) add(e.status === "abweichung" ? "Zu viel berechnet" : "Möglicherweise zu viel", e.status === "abweichung" ? euro(e.betragZugunstenMieter) : `bis zu ${euro(e.betragZugunstenMieter)}`, true);
+      } else if (h !== undefined && w !== undefined) {
         add("Fläche in der Heizkostenabrechnung", `${zahlDE(h)} m²`);
         add("Fläche in der Betriebskostenabrechnung", `${zahlDE(w)} m²`);
         add("Unterschied", `${zahlDE(Math.abs(w - h))} m² (${zahlDE((Math.abs(w - h) / w) * 100, 1)} %)`, true);
@@ -915,7 +974,15 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       break;
     case "I-07":
       position();
-      if (b.steuerlich35a === "handwerker") add("Kennzeichnung in der Abrechnung", "Handwerkerleistung (§ 35a EStG) – deutet auf Reparaturen hin");
+      add("Reparaturen laut Aufstellung (Haus)", eur(b.reparaturHaus));
+      if (typeof b.ausschlussImDokument === "string") add("Erklärung in der Abrechnung", `„${b.ausschlussImDokument}“`);
+      if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-15":
+      for (const id of (b.positionen as string[] | undefined) ?? []) {
+        const x = a.kostenpositionen.find((q) => q.id === id);
+        if (x) add(x.bezeichnung, euro(x.anteilMieter));
+      }
       break;
     case "I-08":
       add("CO₂-Ausstoß des Hauses", zahl(b.kgProQm) !== undefined ? `${zahlDE(zahl(b.kgProQm)!)} kg je m² und Jahr` : undefined);
@@ -934,13 +1001,14 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
     }
     case "I-10":
       position();
-      if (e.betragZugunstenMieter) add("Zu Ihren Gunsten", euro(e.betragZugunstenMieter), true);
+      add("Miete laut Aufstellung (Haus)", eur(b.mieteHaus));
+      if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
       break;
     case "I-11":
       position();
       if (zahl(b.jeQm) !== undefined) {
         add("Ihre Kosten je m² und Monat", `${zahlDE(zahl(b.jeQm)!)} €`, true);
-        add("Durchschnitt (Mieterbund)", "0,37 €");
+        add("Bundesdurchschnitt (Mieterbund 2024)", "0,37 €");
       }
       break;
     case "R-06":
@@ -987,6 +1055,13 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       break;
     default:
       position();
+  }
+  // Für alle Befunde: tragende Textstelle, betroffener Betrag (kein Potenzial), nicht bezifferbare Auswirkung
+  if (e.textstelle && !f.some((x) => x.wert.includes(e.textstelle!))) add("Textstelle", `„${e.textstelle}“`);
+  const ohneBetrag = !(e.betragZugunstenMieter && e.betragZugunstenMieter > 0);
+  if ((e.status === "auffaelligkeit" || e.status === "pruefbedarf") && ohneBetrag) {
+    if (e.betroffen !== undefined && !f.some((x) => x.label === "Ihr Anteil")) add("Abgerechneter Anteil (möglicherweise betroffen)", euro(e.betroffen));
+    add("Auswirkung", "noch nicht bezifferbar", true);
   }
   return f;
 }

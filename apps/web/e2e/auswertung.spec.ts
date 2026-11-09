@@ -24,14 +24,19 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await hochladen(page);
 
   await expect(page.getByRole("note")).toContainText("Demo-Modus");
-  await expect(page.getByText("Wir haben 4 Punkte gefunden, die Sie Geld kosten können.")).toBeVisible();
+  // Einordnung: Vergleichswerte (Warmwasser, Kostenvergleich) und die zulässige Heizfläche zählen nicht als Fehler
+  await expect(page.getByText("Wir haben einen Punkt mit begründetem Prüfbedarf gefunden.")).toBeVisible();
   // Prüfbedarf: die 1.222,87 € zählen erst, wenn sie belegt sind
   await expect(page.getByText(/Ein weiterer Punkt mit bis zu 1\.222,87\s€ prüfen wir, sobald Sie eine Unterlage nachreichen/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten: Prüfbedarf" })).toBeVisible();
   await expect(page.getByText(/Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto/)).toBeVisible();
   await expect(page.getByText("Ihre Nachzahlung").locator("..")).toContainText("1.214,88 €");
-  await expect(page.getByText("Ihre Nebenkosten").locator("..")).toContainText("45 % über Durchschnitt");
+  const vergleich = page.getByText("Vergleich mit dem Bundesdurchschnitt", { exact: true }).locator("..");
+  await expect(vergleich).toContainText("45 % über Durchschnitt");
+  await expect(vergleich).toContainText("Deutscher Mieterbund");
+  await expect(vergleich).toContainText("kein Nachweis eines Fehlers");
+  await expect(page.getByText(/Gut zu wissen: (ein|\d+) Hinweise? ohne Fehlerverdacht/)).toBeVisible();
 
   // Eingangsdatum: unmögliches Datum wird verständlich abgewiesen, gültiges ergibt die Frist
   await zugangsdatum(page, "2025-11-20");
@@ -54,6 +59,9 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   // Nachvollziehbar: konkrete Zahlen, Fundstelle und Grundlage je Punkt
   await expect(page.getByText("Wohneinheiten: 1 von 42")).toBeVisible();
   await expect(page.getByText(/In Ihrer Abrechnung: Seite 5 · Grundlage: § 2 Nr\. 15 BetrKV/)).toBeVisible();
+  // Die abweichende Heizfläche steht nur noch unter „Gut zu wissen“ (eingeklappt)
+  await expect(page.getByText("2,09 m² (2,5 %)")).toBeHidden();
+  await page.getByText(/Gut zu wissen:/).click();
   await expect(page.getByText("2,09 m² (2,5 %)")).toBeVisible();
   expect(await page.content()).not.toContain("Unsere Empfehlung");
   expect(await page.content()).not.toContain("Sehr geehrte Damen und Herren");

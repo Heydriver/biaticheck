@@ -19,6 +19,9 @@ const pos = (
   steuerlich35a: null,
   seite: 5,
   quelle: "betriebskostenabrechnung",
+  unterart: null,
+  bestandteile: [],
+  hinweise: [],
   ...extra,
 });
 const je = { schluesselTyp: "einheiten", anteilEinheit: 1, anteilGesamt: 42 } as const;
@@ -79,5 +82,6 @@ export const G001_ROH: Rohdaten = {
   monatlicheVorauszahlungHeizkosten: 199.94,
   summeKostenMieter: 3917.21,
   saldo: 1214.88,
+  erlaeuterungen: [],
   unsicherheiten: ["Gesamteinheiten Satellitenanlage: 20,89 ST passt nicht zum Betrag"],
 };

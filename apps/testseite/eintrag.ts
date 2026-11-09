@@ -10,6 +10,15 @@ export const REGELN_ANZAHL = ALLE_REGELN.length;
 export const ANWEISUNG = SYSTEM_PROMPT;
 export const SCHEMA = JSON.stringify(z.toJSONSchema(Rohdaten));
 
+/** Ältere Antworten (und das Beispiel) kennen die neuen Felder noch nicht – mit leeren Werten ergänzen. */
+function ergaenze(roh: unknown): unknown {
+  if (!roh || typeof roh !== "object") return roh;
+  const r = { erlaeuterungen: [], ...(roh as Record<string, unknown>) };
+  if (Array.isArray(r.kostenpositionen))
+    r.kostenpositionen = r.kostenpositionen.map((p: unknown) => (p && typeof p === "object" ? { unterart: null, bestandteile: [], hinweise: [], ...(p as object) } : p));
+  return r;
+}
+
 /** Rohausgabe des Modells → geprüftes Ergebnis (Stufe 1 und 2). */
 type Verlauf = { ab: string; betriebskosten?: number; heizkosten?: number }[];
 
@@ -20,7 +29,7 @@ export function werteAus(
   mietvertrag?: { pauschaleVereinbart?: boolean; vereinbarteSonstigeKosten?: string[]; aufzugAusgenommen?: boolean; mietbeginn?: string; mietende?: string; wohnflaeche?: number; gewerbeImHaus?: boolean },
   vorauszahlungen?: { verlauf: Verlauf; quelle: "vorjahresabrechnung" | "kontoauszug" | "kunde" },
 ) {
-  const roh = Rohdaten.safeParse(rohJson);
+  const roh = Rohdaten.safeParse(ergaenze(rohJson));
   if (!roh.success) return { fehler: "format", details: roh.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`) };
   if (!roh.data.istNebenkostenabrechnung) return { fehler: "keine_abrechnung" };
   let { abrechnung, hinweise } = wandleUm(roh.data);

@@ -49,8 +49,8 @@ describe("fehlerhafte Abrechnung", () => {
     expect(nur(e, "I-04")).toMatchObject([{ status: "auffaelligkeit", beleg: { verbrauchsanteilProzent: 80 } }]);
   });
 
-  it("meldet hohe Kosten pro m²", () => {
-    expect(nur(e, "P-02")[0]?.status).toBe("auffaelligkeit");
+  it("meldet hohe Kosten pro m² nur als Vergleichshinweis, nicht als Fehler", () => {
+    expect(nur(e, "P-02")[0]).toMatchObject({ status: "hinweis", art: "vergleich" });
   });
 
   it("rechnet Summe und Saldo nach (beides hier korrekt addiert)", () => {
@@ -232,10 +232,10 @@ describe("Neue Regeln: Wasser, Rauchwarnmelder, Hauswart", () => {
     return pruefeAbrechnung(a, { heute: HEUTE });
   };
 
-  it("I-09: Wasser nach Personen ohne Angabe zum Zähler → Prüfbedarf mit Rückfrage, ohne Betrag", () => {
+  it("I-09: Frischwasser nach Personen ohne Angabe zum Zähler → offene Frage, kein Prüfbedarf, ohne Betrag", () => {
     const b = mit((a) => delete a.ausstattung);
     const e = nur(b.ergebnisse, "I-09")[0]!;
-    expect(e.status).toBe("pruefbedarf");
+    expect(e.status).toBe("nicht_pruefbar");
     expect(e.betragZugunstenMieter).toBeUndefined();
     expect(e.rueckfrage?.feld).toBe("ausstattung.wasserzaehler");
     expect(b.zusammenfassung.einsparpotenzial + b.zusammenfassung.klaerungspotenzial).toBe(0);
@@ -252,16 +252,16 @@ describe("Neue Regeln: Wasser, Rauchwarnmelder, Hauswart", () => {
     const b = mit((a) => a.kostenpositionen.push({ id: "r1", bezeichnung: "Miete Rauchwarnmelder", kategorie: "sonstige", anteilMieter: 24.5 }));
     expect(nur(b.ergebnisse, "I-10")[0]).toMatchObject({ status: "abweichung", betragZugunstenMieter: 24.5 });
     const c = mit((a) => a.kostenpositionen.push({ id: "r1", bezeichnung: "Rauchwarnmelder Miete und Wartung", kategorie: "sonstige", anteilMieter: 30 }));
-    expect(nur(c.ergebnisse, "I-10")[0]).toMatchObject({ status: "auffaelligkeit" });
+    expect(nur(c.ergebnisse, "I-10")[0]).toMatchObject({ status: "pruefbedarf", betroffen: 30 });
     expect(nur(c.ergebnisse, "I-10")[0]!.betragZugunstenMieter).toBeUndefined();
   });
 
-  it("I-11: Hauswart mit Reparaturhinweis oder deutlich über dem Durchschnitt → Auffälligkeit ohne Betrag", () => {
+  it("I-11: Reparaturhinweis → Prüfbedarf ohne Betrag; nur teuer → Vergleichshinweis", () => {
     const hinweis = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hausmeister inkl. Kleinreparaturen", kategorie: "hauswart", anteilMieter: 150 }));
-    expect(nur(hinweis.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("auffaelligkeit");
+    expect(nur(hinweis.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("pruefbedarf");
     // 72 m², 12 Monate: 600 € → 0,69 €/m²/Monat, deutlich über 0,37 €
     const teuer = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hauswart", kategorie: "hauswart", anteilMieter: 600 }));
-    expect(nur(teuer.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("auffaelligkeit");
+    expect(nur(teuer.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("hinweis");
     const normal = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hauswart", kategorie: "hauswart", anteilMieter: 250 }));
     expect(nur(normal.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("ok");
   });

@@ -68,12 +68,13 @@ describe("Stufe 1.2 – Kostenvergleich, Betriebskosten und Nachzahlung (G-001)"
     expect(v.regionalFolgt).toBe("PLZ-Gebiet 80");
     // 3.917,21 € / 84,28 m² / 12 Monate (366 Tage) ≈ 3,87 €
     expect(v.gesamt).toMatchObject({ ihr: 3.87, durchschnitt: 2.67, maximum: 3.68, abweichungProzent: 45 });
-    // 1.859,40 € / 84,28 m² / 12,02 Monate (2024 hat 366 Tage)
-    expect(v.heizungWarmwasser).toMatchObject({ ihr: 1.83, durchschnitt: 1.32 });
-    // Stärkste Abweichung zuerst: Müll/Straßenreinigung (+78 %), dann Wasser (+71 %)
+    // 1.859,40 € / 84,28 m² / 12 Kalendermonate = 1,8385 €
+    expect(v.heizungWarmwasser).toMatchObject({ ihr: 1.84, durchschnitt: 1.32 });
+    expect(v).toMatchObject({ ebene: "bund", bezeichnung: "Vergleich mit dem Bundesdurchschnitt", basis: "gesamt" });
+    // Stärkste Abweichung zuerst: Müll/Straßenreinigung (+79 %), dann Wasser (+72 %) – 12 Kalendermonate statt 12,02
     expect(v.gruppen.slice(0, 2)).toMatchObject([
-      { gruppe: "muell_strassenreinigung", ihr: 0.36, durchschnitt: 0.2, abweichungProzent: 78 },
-      { gruppe: "wasser_abwasser", ihr: 0.5, durchschnitt: 0.29, abweichungProzent: 71 },
+      { gruppe: "muell_strassenreinigung", ihr: 0.36, durchschnitt: 0.2, abweichungProzent: 79 },
+      { gruppe: "wasser_abwasser", ihr: 0.5, durchschnitt: 0.29, abweichungProzent: 72 },
     ]);
   });
 
@@ -107,7 +108,8 @@ describe("Stufe 2 – Auffälligkeiten, Lösungsvorschläge, Zusammenfassung", (
   });
 
   it("Zusammenfassung in ganzen Sätzen", () => {
-    expect(s2.zusammenfassung[0]).toBe(`Wir haben Ihre Abrechnung 2025 anhand von ${ALLE_REGELN.length} Prüfregeln untersucht und dabei 3 Fehler und 5 Auffälligkeiten festgestellt.`);
+    expect(s2.zusammenfassung[0]).toBe(`Wir haben Ihre Abrechnung 2025 anhand von ${ALLE_REGELN.length} Prüfregeln untersucht und dabei 3 belegte Fehler und 3 Punkte mit begründetem Prüfbedarf festgestellt.`);
+    expect(s2.zusammenfassung[1]).toMatch(/^Außerdem gibt es \d+ Hinweise? ohne Fehlerverdacht/);
     expect(s2.zusammenfassung).toContain(`Sicher bezifferbar ist ein Einsparpotenzial von ${euro(198)}.`);
     expect(s2.zusammenfassung).toContain(`Der wichtigste Punkt ist „Nicht umlagefähig: Verwaltungskosten“. Fordern Sie die Streichung dieser Position (${euro(144)}).`);
   });
@@ -132,14 +134,15 @@ describe("Anschreiben für die Musterabrechnung G-001", () => {
     // Prüfbedarf gehört nicht ins Schreiben, solange er nicht belegt ist
     expect(brief).not.toContain("Vorauszahlungen für Heizkosten");
     expect(brief).toContain("Satellitenanlage: Bitte belegen Sie, dass nur Kosten bis zum 30.06.2024 enthalten sind.");
-    expect(brief).toContain("Unterschiedliche Flächen: In der Heizkostenabrechnung werden 82,19 m² angesetzt, in der Betriebskostenabrechnung 84,28 m².");
-    expect(brief).toContain("Aufzugskosten Prüf./Wart.: Bitte legen Sie den Wartungsvertrag vor");
-    expect(brief).toContain(`Warmwasserkosten von ${euro(31.14)} je m³`);
+    expect(brief).not.toContain("Unterschiedliche Flächen");
+    // Wartung ohne Reparaturhinweis und statistische Vergleichswerte gehören nicht ins Schreiben
+    expect(brief).not.toContain("Aufzugskosten Prüf./Wart.");
+    expect(brief).not.toContain("Warmwasserkosten von");
   });
 
   it("enthält keine an den Kunden gerichteten Aufforderungen", () => {
     const punkte = brief.split("\n").filter((z) => /^\d+\. /.test(z));
-    expect(punkte.length).toBeGreaterThan(3);
+    expect(punkte.length).toBeGreaterThanOrEqual(1);
     for (const z of punkte) expect(z, z).not.toMatch(/ prüfen(:|$)/);
   });
 });
@@ -224,7 +227,7 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
     const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
     expect(s2.empfehlung).toEqual({
       titel: "Schicken Sie das vorbereitete Schreiben an Ihre Hausverwaltung",
-      text: "Darin fordern wir die Klärung von 4 Punkten, die Sie Geld kosten können. Senden Sie es bis spätestens 28.11.2026.",
+      text: "Darin bitten wir um Klärung von einem Punkt. Senden Sie es bis spätestens 28.11.2026.",
       aktion: "schreiben",
     });
     const r05 = s2.auffaelligkeiten.find((p) => p.regelId === "R-05")!;
@@ -281,9 +284,9 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
 });
 
 describe("Fehlerquote und persönliches Anschreiben", () => {
-  it("G-001: 4 Prüfregeln auffällig (Prüfbedarf zählt nicht), Fehlerpotenzial mittel", () => {
+  it("G-001: 1 Prüfregel auffällig (Prüfbedarf und Hinweise zählen nicht), Fehlerpotenzial gering", () => {
     const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
-    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 4, regelnGesamt: ALLE_REGELN.length, quote: Math.round((4 / ALLE_REGELN.length) * 100), stufe: "mittel" });
+    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 1, regelnGesamt: ALLE_REGELN.length, quote: Math.round((1 / ALLE_REGELN.length) * 100), stufe: "gering" });
   });
 
   it("Stufen nach Quote, sicherer Fehler immer hoch", () => {
@@ -334,7 +337,7 @@ describe("Fahrplan: konkrete Ergebnisse", () => {
       "Steuern sparen",
     ]);
     expect(f.schritte[2]!.bis).toBe("2026-11-28");
-    expect(f.belege).toContain("Rechnungen für Energie und Warmwasserbereitung");
+    expect(f.belege).not.toContain("Rechnungen für Energie und Warmwasserbereitung");
     expect(f.mietvertragOffen).toBe(3);
     expect(f.steuer!.ersparnisBis).toBeGreaterThan(0);
   });

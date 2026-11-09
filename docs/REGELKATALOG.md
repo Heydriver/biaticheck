@@ -1,4 +1,4 @@
-# Regelkatalog v0.4 (Entwurf)
+# Regelkatalog v0.5 (Entwurf)
 
 Alle Regeln haben den Stand **Entwurf** und müssen vom Expertenteam bestätigt werden.
 Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
@@ -13,7 +13,7 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | R-01 | Anteil je Position nachrechnen (inkl. Zeitanteil bei Ein-/Auszug) | § 556a BGB | Abweichung mit Betrag | nicht prüfbar |
 | R-02 | Gesamtsumme der Positionen | Rechnerisch | Abweichung | – |
 | R-03 | Saldo = Kosten − Vorauszahlungen | Rechnerisch | Abweichung | Rückfrage Vorauszahlungen |
-| R-04 | Einheitliche Wohn-, Gesamt- und Heizflächen | § 556a BGB | Auffälligkeit | – |
+| R-04 | Einheitliche Flächen; Flächennenner je Position = Gesamtfläche laut Abrechnung | § 556a BGB; § 7 Abs. 1 HeizkostenV | Kleinerer Nenner ohne Begründung: Fehler mit Betrag, wenn die Abrechnung selbst eine andere (beheizte) Gesamtfläche nennt; sonst Prüfbedarf mit „bis zu“-Betrag. Heizfläche ≠ Wohnfläche: nur Hinweis (beheizte Räume zulässig) | – |
 | R-05 | Angerechnete Vorauszahlungen passen zu den tatsächlichen Zahlungen | § 556 Abs. 2 BGB | ohne Beleg: **Prüfbedarf** (Betrag zählt nicht zum Potenzial); mit belegtem Verlauf: Fehler mit Betrag | Vorjahresabrechnung oder Kontoauszüge |
 | R-06 | Ein- oder Auszug im Abrechnungsjahr berücksichtigt (Mietbeginn/-ende laut Mietvertrag) | § 556a Abs. 1 BGB | Auffälligkeit mit „bis zu“-Betrag: zeitabhängige Kosten × Tage außerhalb der Mietzeit | Mietvertrag |
 | R-07 | Wohnfläche der Abrechnung passt zum Mietvertrag (Toleranz 3 %) | § 556a BGB; BGH VIII ZR 220/17 (tatsächliche Fläche maßgeblich) | Auffälligkeit mit „bis zu“-Betrag auf nach Fläche verteilte Kosten | Mietvertrag |
@@ -23,17 +23,18 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | I-04 | Heizkosten: Verbrauchsanteil 50–70 %, Verbrauch erfasst (sonst 15 % Kürzung) | §§ 7, 8, 12 HeizkostenV | Abweichung / Auffälligkeit | Rückfrage Heizkostenabrechnung |
 | I-05 | Kabel-/SAT-Kosten nur bis 30.06.2024 | § 2 Nr. 15 BetrKV, § 230 Abs. 4 TKG | Abweichung / Auffälligkeit (zeitanteilig) | – |
 | I-06 | Aufzugskosten bei EG-Wohnung | BGH VIII ZR 103/06; Mietvertrag | Abweichung bei vertraglicher Ausnahme | Rückfrage Mietvertrag |
-| I-07 | Wartung ohne Reparaturanteil (Vollwartung, Handwerkerleistung) | § 1 Abs. 2 BetrKV | Auffälligkeit | – |
+| I-07 | Wartung ohne Reparaturanteil | § 2 Nr. 7, § 1 Abs. 2 Nr. 2 BetrKV | Betrieb, Wartung, Prüfung allein: kein Befund. Ausgewiesener Reparaturbestandteil: Fehler nur in dessen Höhe (geht pauschaler Ausschlusserklärung vor). Vollwartung ohne Aufschlüsselung oder ausdrücklich genannte Reparaturen: Prüfbedarf ohne Betrag. Verneinungen („keine Reparaturkosten“) werden erkannt | Rechnungen, Wartungsvertrag |
 | I-08 | CO₂-Kosten nach Stufenmodell aufgeteilt | CO2KostAufG | Abweichung | – |
-| I-09 | Wasser nach Verbrauch, wenn ein Wasserzähler vorhanden ist | § 556a Abs. 1 S. 2 BGB | ohne Angabe: Prüfbedarf (ohne Betrag); mit Zähler: Auffälligkeit | Rückfrage: eigener Wasserzähler? |
-| I-10 | Rauchwarnmelder: nur Wartung, keine Miete | BGH VIII ZR 379/20 | „Miete“: Abweichung mit Betrag; gemischt oder unklar: Auffälligkeit ohne Betrag | Rechnung mit getrennter Miete/Wartung |
-| I-11 | Hauswart ohne Reparatur-, Verwaltungs- oder Bereitschaftsanteil | § 2 Nr. 14, § 1 Abs. 2 BetrKV | Hinweis im Namen oder > 130 % des DMB-Werts (0,37 €/m²/Monat): Auffälligkeit ohne Betrag | Hauswartvertrag, Leistungsverzeichnis |
+| I-09 | Frisch- und Schmutzwasser nach Verbrauch, wenn der Verbrauch erfasst wird | § 556a Abs. 1 S. 2 BGB; § 2 Nr. 2, 3 BetrKV | Mit Zähler: Prüfbedarf ohne Betrag. Niederschlagswasser ist ausgenommen (Gebühr nach versiegelter Fläche, Verteilung nach Wohnfläche ist Regelfall). Sammelposition „Wasser/Abwasser“: nur Hinweis, Inhalt klären | Rückfrage: eigener Wasserzähler? (offene Frage, nicht bei Niederschlagswasser) |
+| I-15 | Niederschlagswasser nicht doppelt berechnet | § 2 Nr. 3 BetrKV | Mehrfach angesetzt: Prüfbedarf ohne Betrag | Gebührenbescheid |
+| I-10 | Rauchwarnmelder: nur Wartung, keine Miete | BGH VIII ZR 379/20 | Ausgewiesener Mietanteil: Fehler nur in dessen Höhe; nur Miete: Fehler; gemischt ohne Aufschlüsselung: Prüfbedarf ohne Betrag | Rechnung mit getrennter Miete/Wartung |
+| I-11 | Hauswart ohne Reparatur-, Verwaltungs- oder Bereitschaftsanteil | § 2 Nr. 14, § 1 Abs. 2 BetrKV | Genannt (nicht verneint): Prüfbedarf ohne Betrag; nur > 130 % des Bundesdurchschnitts: Vergleichshinweis | Hauswartvertrag, Leistungsverzeichnis |
 | I-12 | Vorwegabzug bei Gewerbe im Haus | § 556a BGB; BGH VIII ZR 78/05 | Gewerbe ja, kein Vorwegabzug: Auffälligkeit ohne Betrag | Rückfrage: Gewerbe im Haus? |
 | I-13 | Leerstand trägt der Vermieter (gleiche Wohnungsanzahl bei nach Einheiten verteilten Kosten) | § 556a BGB; BGH VIII ZR 159/05 | Auffälligkeit mit „bis zu“-Betrag | – |
 | I-14 | Grundsteuer ab 2025: Änderung ≥ 20 % gegenüber Vorjahr belegt | § 2 Nr. 1 BetrKV; GrStG | Auffälligkeit, Grundsteuerbescheid anfordern | Vorjahresabrechnung |
-| P-01 | Vorjahresvergleich (> 10 % und > 25 €; neue Kostenarten) | Wirtschaftlichkeitsgebot | Auffälligkeit | Rückfrage Vorjahresabrechnung |
-| P-02 | Kalte Nebenkosten pro m² und Monat (Schwelle 2,50 € – **Entwurf**) | Betriebskostenspiegel | Auffälligkeit | Rückfrage Wohnfläche |
-| P-03 | Warmwasserkosten pro m³ (Schwelle 20 € – **Entwurf**) | Wirtschaftlichkeitsgebot | Auffälligkeit | – |
+| P-01 | Vorjahresvergleich (> 10 % und > 25 €; neue Kostenarten) | Wirtschaftlichkeitsgebot | Anstieg: Vergleichshinweis; neue Kostenart: Prüfbedarf | Rückfrage Vorjahresabrechnung |
+| P-02 | Kalte Nebenkosten pro m² und Monat (Schwelle 2,50 € – **Entwurf**) | Betriebskostenspiegel | Vergleichshinweis (kein Fehler) | Rückfrage Wohnfläche |
+| P-03 | Warmwasserkosten pro m³ (Schwelle 20 € – **Entwurf**) | Wirtschaftlichkeitsgebot | Vergleichshinweis (kein Fehler) | – |
 
 Hinweis F-03: Gerechnet wird vorsichtig „Zugang + 12 Monate“ (taggenau). Ob die Frist erst zum Monatsende abläuft, soll das Expertenteam entscheiden.
 
@@ -56,3 +57,19 @@ Hinweis F-03: Gerechnet wird vorsichtig „Zugang + 12 Monate“ (taggenau). Ob 
 | Nicht prüfbar (`nicht_pruefbar`) | Angaben fehlen | nein |
 
 Leitlinie: Ein Betrag erscheint erst dann als mögliche Ersparnis, wenn das Tool sich sicher genug ist. Sonst lieber eine Unterlage nachfordern als ein Schreiben mit einer falschen Forderung empfehlen.
+
+## Einordnung der Ergebnisse (ab v0.5)
+
+| Einordnung | Status | Zählt als Fehler | Zählt zum Potenzial |
+|---|---|---|---|
+| Belegter Fehler | abweichung | ja | ja (sicher) |
+| Begründeter Prüfbedarf | auffaelligkeit, pruefbedarf | nein | nur „bis zu“, nur wenn bezifferbar; sonst „Auswirkung noch nicht bezifferbar“ |
+| Hinweis | hinweis | nein | nein |
+| Vergleichswert | hinweis (art „vergleich“) | nein | nein |
+| Offene Frage | nicht_pruefbar | nein | nein |
+
+Beträge werden getrennt: abgerechneter Anteil (Fakt „Ihr Anteil“), möglicherweise betroffener Betrag (`betroffen`, kein Potenzial) und belegtes Korrekturpotenzial (`betragZugunstenMieter` bei Fehlern). Jeder Befund trägt seine Textstelle (`textstelle`), Zahlen (`fakten`/`beleg`) und Regel (`grundlage`).
+
+Kostenvergleich: ausdrücklich „Vergleich mit dem Bundesdurchschnitt“, solange keine regionalen Daten genutzt werden; Quelle, Jahr und Kostenarten werden angezeigt. Ohne Heizkosten in der Abrechnung wird nur kalt mit kalt verglichen. Regionale Werte erst bei ≥ 10 Abrechnungen desselben Jahres mit Heizkosten und Streuung ≤ 50 %. Monate kalendergenau (ein Kalenderjahr = 12), Rundung erst bei der Ausgabe.
+
+Rechtsgrundlagen geprüft am 09.11.2026 gegen gesetze-im-internet.de: § 1, § 2 BetrKV; § 556, § 556a BGB; § 7 HeizkostenV.

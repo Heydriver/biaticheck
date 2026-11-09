@@ -1,3 +1,4 @@
+import { findeAussagen, texteZu } from "../textanalyse";
 import { datumDE, euro, runde, tageInklusive, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import type { Abrechnung } from "../schema";
@@ -189,6 +190,41 @@ export const R04_Flaechen: Regel = {
     if (a.flaechen.wohnflaecheMieter !== undefined) wohnflaechen.add(a.flaechen.wohnflaecheMieter);
 
     const befunde: Befund[] = [];
+    // Flächennenner je Position gegen die in der Abrechnung genannte Gesamtfläche
+    const hausflaeche = a.flaechen.gesamtflaeche;
+    const geprueft = new Set<string>();
+    if (hausflaeche) {
+      for (const p of flaechenPositionen) {
+        const u = p.umlageschluessel!;
+        if (u.anteilGesamt === undefined || u.anteilGesamt === hausflaeche || u.anteilEinheit === undefined || p.gesamtkosten === undefined) continue;
+        geprueft.add(p.id);
+        const korrekt = (p.gesamtkosten * u.anteilEinheit) / hausflaeche;
+        const zuViel = runde(p.anteilMieter - korrekt);
+        const heizung = ["heizung", "warmwasser", "verbundene_anlagen"].includes(p.kategorie);
+        const begruendet =
+          p.gesamtkostenVorVorwegabzug !== undefined ||
+          findeAussagen(texteZu(p, a).erlaeuterungen.concat(p.hinweise ?? []), /gewerbe|ausgenommen|nicht beheizt|unbeheizt|beheizte fläche|vorwegabzug/i).length > 0;
+        // § 7 Abs. 1 Satz 5 HeizkostenV erlaubt für Grundkosten die Fläche der beheizten Räume. Sicher falsch ist
+        // der Nenner nur, wenn die Abrechnung selbst die beheizte Gesamtfläche anders angibt.
+        const widerspruch = heizung ? a.heizkosten?.gesamtflaeche === hausflaeche : false;
+        const sicher = zuViel > 0 && widerspruch && !begruendet;
+        const rechnung = `${euro(p.gesamtkosten)} × ${zahlDE(u.anteilEinheit)} / ${zahlDE(hausflaeche)} m² = ${euro(runde(korrekt))}`;
+        befunde.push({
+          status: sicher ? "abweichung" : "auffaelligkeit",
+          titel: `Falscher Flächennenner: ${p.bezeichnung}`,
+          erklaerung:
+            `„${p.bezeichnung}“ wird auf ${zahlDE(u.anteilGesamt)} m² verteilt, die Abrechnung nennt als Gesamtfläche aber ${zahlDE(hausflaeche)} m²` +
+            (widerspruch ? " (auch für die Heizkosten)" : "") +
+            `. Mit ${zahlDE(hausflaeche)} m² ergibt sich Ihr Anteil zu ${rechnung} statt ${euro(p.anteilMieter)}.` +
+            (sicher ? "" : heizung ? " Eine kleinere Fläche ist nur zulässig, wenn es die Fläche der beheizten Räume ist." : " Eine kleinere Fläche kann berechtigt sein (z. B. Gewerbe ausgenommen), muss aber erklärt werden."),
+          naechsterSchritt: sicher ? `Fordern Sie die Korrektur Ihres Anteils (${euro(zuViel)} weniger).` : "Bitten Sie um eine Erklärung der kleineren Gesamtfläche.",
+          betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
+          positionId: p.id,
+          textstelle: `${p.bezeichnung}: ${zahlDE(u.anteilEinheit)} / ${zahlDE(u.anteilGesamt)} m²`,
+          beleg: { nenner: u.anteilGesamt, hausflaeche, gesamtkosten: p.gesamtkosten, einheit: u.anteilEinheit, korrekt: runde(korrekt), abgerechnet: p.anteilMieter, zuViel },
+        });
+      }
+    }
     if (wohnflaechen.size > 1) {
       befunde.push({
         status: "auffaelligkeit",
@@ -198,7 +234,7 @@ export const R04_Flaechen: Regel = {
         beleg: { wohnflaechen: [...wohnflaechen] },
       });
     }
-    if (gesamtflaechen.size > 1) {
+    if (gesamtflaechen.size > 1 && flaechenPositionen.some((p) => !geprueft.has(p.id) && p.umlageschluessel?.anteilGesamt !== hausflaeche)) {
       befunde.push({
         status: "auffaelligkeit",
         titel: "Unterschiedliche Gesamtflächen verwendet",
@@ -210,11 +246,12 @@ export const R04_Flaechen: Regel = {
     const h = a.heizkosten;
     const wohnflaeche = a.flaechen.wohnflaecheMieter ?? [...wohnflaechen][0];
     if (h?.flaecheMieter !== undefined && wohnflaeche !== undefined && h.flaecheMieter !== wohnflaeche) {
+      // § 7 Abs. 1 Satz 5 HeizkostenV erlaubt die Fläche der beheizten Räume – ohne weiteren Anhaltspunkt nur ein Hinweis
       befunde.push({
-        status: "auffaelligkeit",
+        status: "hinweis",
         titel: "Heizfläche weicht von Wohnfläche ab",
-        erklaerung: `In der Heizkostenabrechnung werden für Ihre Wohnung ${zahlDE(h.flaecheMieter)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(wohnflaeche)} m². Das kann berechtigt sein (z. B. unbeheizte Räume), sollte aber erklärt werden.`,
-        naechsterSchritt: "Fragen Sie nach, welche Räume nicht als beheizte Fläche zählen.",
+        erklaerung: `In der Heizkostenabrechnung werden für Ihre Wohnung ${zahlDE(h.flaecheMieter)} m² angesetzt, in der Betriebskostenabrechnung ${zahlDE(wohnflaeche)} m². Für Heizkosten darf die Fläche der beheizten Räume verwendet werden (§ 7 Abs. 1 HeizkostenV). Das ist daher kein Fehler.`,
+        naechsterSchritt: "Bei Interesse: Fragen Sie, welche Räume nicht als beheizte Fläche zählen.",
         beleg: { heizflaeche: h.flaecheMieter, wohnflaeche, heizGesamtflaeche: h.gesamtflaeche },
       });
     }
