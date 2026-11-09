@@ -14,6 +14,7 @@ describe("Vorauszahlungen aus nachgereichten Unterlagen", () => {
           { ab: "2024-06-01", betriebskosten: null, heizkosten: null },
           { ab: "2024-07-01", betriebskosten: -5, heizkosten: 0 },
         ],
+        abrechnungszeitraum: { von: "2023-01-01", bis: "2023-12-31" },
         hinweis: "",
       }),
     ).toEqual({
@@ -22,6 +23,7 @@ describe("Vorauszahlungen aus nachgereichten Unterlagen", () => {
         { ab: "2024-01-01", betriebskosten: 140 },
         { ab: "2024-03-01", betriebskosten: 150, heizkosten: 110 },
       ],
+      abrechnungszeitraum: { von: "2023-01-01", bis: "2023-12-31" },
       hinweis: "",
     });
   });
@@ -29,7 +31,7 @@ describe("Vorauszahlungen aus nachgereichten Unterlagen", () => {
   it("ruft das Modell mit Zeitraum auf und gibt den bereinigten Verlauf zurück", async () => {
     const parse = vi.fn().mockResolvedValue({
       stop_reason: "end_turn",
-      parsed_output: { dokument: "kontoauszug", verlauf: [{ ab: "2024-01-01", betriebskosten: null, heizkosten: 110 }], hinweis: "" },
+      parsed_output: { dokument: "kontoauszug", verlauf: [{ ab: "2024-01-01", betriebskosten: null, heizkosten: 110 }], abrechnungszeitraum: null, hinweis: "" },
     });
     const client = { beta: { messages: { parse } } } as unknown as Anthropic;
     const ergebnis = await leseVorauszahlungen(client, [{ daten: new Uint8Array([1]), mimeType: "image/png" }], { von: "2024-01-01", bis: "2024-12-31" });

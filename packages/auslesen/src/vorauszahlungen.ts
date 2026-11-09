@@ -16,6 +16,10 @@ export const VorauszahlungenRoh = z.object({
       heizkosten: z.number().nullable().describe("monatliche Vorauszahlung Heizkosten in Euro oder null"),
     }),
   ),
+  abrechnungszeitraum: z
+    .object({ von: z.string().describe("YYYY-MM-DD"), bis: z.string().describe("YYYY-MM-DD") })
+    .nullable()
+    .describe("Abrechnungszeitraum, wenn das Dokument selbst eine Nebenkostenabrechnung ist; sonst null"),
   hinweis: z.string().describe("kurz, was unsicher war; sonst leer"),
 });
 export type VorauszahlungenRoh = z.infer<typeof VorauszahlungenRoh>;
@@ -23,6 +27,8 @@ export type VorauszahlungenRoh = z.infer<typeof VorauszahlungenRoh>;
 export interface Vorauszahlungsverlauf {
   quelle: "vorjahresabrechnung" | "kontoauszug";
   verlauf: { ab: string; betriebskosten?: number; heizkosten?: number }[];
+  /** Abrechnungszeitraum der nachgereichten Abrechnung (nur bei Vorjahresabrechnungen). */
+  abrechnungszeitraum?: { von: string; bis: string };
   hinweis: string;
 }
 
@@ -32,6 +38,7 @@ Ermittle die monatlichen Vorauszahlungen (Abschläge) für Betriebskosten und f�
 - Übernimm nur Beträge, die ausdrücklich als Vorauszahlung oder Abschlag für Betriebs- oder Heizkosten erkennbar sind. Teile eine Gesamtmiete nicht selbst auf.
 - Zahlen genau übernehmen, nicht runden. Deutsche Schreibweise umwandeln: "1.214,88" → 1214.88.
 - Übernimm keine Namen, Anschriften, Kontonummern oder IBAN.
+- Ist das Dokument selbst eine Nebenkostenabrechnung, gib ihren Abrechnungszeitraum an.
 - Findest du nichts Passendes, gib eine leere Liste zurück.`;
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -45,7 +52,14 @@ export function bereinigeVerlauf(roh: VorauszahlungenRoh): Vorauszahlungsverlauf
     .filter((v) => v.betriebskosten !== undefined || v.heizkosten !== undefined)
     .map((v) => Object.fromEntries(Object.entries(v).filter(([, w]) => w !== undefined)) as Vorauszahlungsverlauf["verlauf"][number])
     .sort((a, b) => a.ab.localeCompare(b.ab));
-  return { quelle: roh.dokument === "vorjahresabrechnung" ? "vorjahresabrechnung" : "kontoauszug", verlauf, hinweis: roh.hinweis };
+  const z = roh.abrechnungszeitraum;
+  const zeitraum = z && ISO.test(z.von) && ISO.test(z.bis) && z.von < z.bis ? { von: z.von, bis: z.bis } : undefined;
+  return {
+    quelle: roh.dokument === "vorjahresabrechnung" ? "vorjahresabrechnung" : "kontoauszug",
+    verlauf,
+    ...(zeitraum && roh.dokument === "vorjahresabrechnung" ? { abrechnungszeitraum: zeitraum } : {}),
+    hinweis: roh.hinweis,
+  };
 }
 
 function inhaltsblock(d: Dokument): Anthropic.Beta.BetaContentBlockParam {

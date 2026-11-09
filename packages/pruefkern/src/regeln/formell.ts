@@ -48,9 +48,14 @@ export const F01_Abrechnungszeitraum: Regel = {
   },
 };
 
+/**
+ * Abrechnungsfrist. Eine versäumte Frist kostet den Vermieter die ganze Nachzahlung – deshalb gilt sie erst
+ * als sicher, wenn der Abrechnungszeitraum durch eine Unterlage bestätigt ist (Vorjahresabrechnung schließt
+ * lückenlos an). Vorher: Prüfbedarf, der Betrag zählt nicht zum Einsparpotenzial.
+ */
 export const F02_Abrechnungsfrist: Regel = {
   id: "F-02",
-  version: "1.0.0",
+  version: "2.0.0",
   titel: "Abrechnungsfrist eingehalten",
   bereich: "formell",
   grundlage: "§ 556 Abs. 3 Satz 2 und 3 BGB",
@@ -78,6 +83,19 @@ export const F02_Abrechnungsfrist: Regel = {
     }
 
     if (vergleiche(stichtag, fristEnde) > 0) {
+      if (saldo !== undefined && saldo > 0 && a.meta.zeitraumBestaetigt !== true) {
+        return [
+          {
+            status: "pruefbedarf",
+            titel: "Abrechnung möglicherweise verspätet",
+            erklaerung: `Nach den ausgelesenen Daten (Abrechnungszeitraum ${datumDE(z.von)} bis ${datumDE(z.bis)}, erhalten am ${datumDE(stichtag)}) wäre die Frist am ${datumDE(fristEnde)} abgelaufen. Dann müssten Sie die Nachzahlung von ${euro(saldo)} nicht zahlen. Weil davon viel abhängt, bestätigen wir den Abrechnungszeitraum zuerst mit der Abrechnung des Vorjahres.`,
+            naechsterSchritt: "Laden Sie die Abrechnung des Vorjahres hoch. Zahlen Sie die Nachzahlung bis zur Klärung nicht.",
+            betragZugunstenMieter: saldo,
+            beleg: { fristEnde, stichtag, saldo, zeitraum: z },
+            unterlagen: ["vorjahresabrechnung"],
+          },
+        ];
+      }
       if (saldo !== undefined && saldo > 0) {
         return [
           {

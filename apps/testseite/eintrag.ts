@@ -3,9 +3,9 @@ import { Rohdaten } from "../../packages/auslesen/src/rohdaten";
 import { SYSTEM_PROMPT } from "../../packages/auslesen/src/prompt";
 import { wandleUm } from "../../packages/auslesen/src/umwandlung";
 import { pruefeKonsistenz } from "../../packages/auslesen/src/konsistenz";
-import { ALLE_REGELN, erstelleStufe1, erstelleStufe2, pruefeAbrechnung, wendeAntwortAn, AntwortFehler, personalisiereAnschreiben } from "../../packages/pruefkern/src/index";
+import { ALLE_REGELN, schliesstAn, erstelleStufe1, erstelleStufe2, pruefeAbrechnung, wendeAntwortAn, AntwortFehler, personalisiereAnschreiben } from "../../packages/pruefkern/src/index";
 
-export { personalisiereAnschreiben };
+export { personalisiereAnschreiben, schliesstAn };
 export const REGELN_ANZAHL = ALLE_REGELN.length;
 export const ANWEISUNG = SYSTEM_PROMPT;
 export const SCHEMA = JSON.stringify(z.toJSONSchema(Rohdaten));

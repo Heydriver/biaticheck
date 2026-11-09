@@ -16,6 +16,7 @@ import {
   euro,
   fehlerstufe,
   personalisiereAnschreiben,
+  schliesstAn,
   type AbrechnungEingabe,
 } from "../src/index";
 import { fehlerhafteAbrechnung, korrekteAbrechnung } from "./faelle";
@@ -236,8 +237,19 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
     ]);
   });
 
-  it("verspätete Abrechnung: Nachzahlung entfällt", () => {
-    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
+  it("möglicherweise verspätet: erst Vorjahresabrechnung, Nachzahlung vorerst nicht zahlen", () => {
+    const { s1, s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
+    expect(s1.fehlerpotenzial.sicher).toBe(0);
+    const f02 = s2.auffaelligkeiten.find((p) => p.regelId === "F-02")!;
+    expect(f02.status).toBe("pruefbedarf");
+    expect(f02.kurz).toEqual({ titel: "Abrechnung möglicherweise zu spät", satz: `Dann müssten Sie ${euro(1214.88)} nicht zahlen. Das bestätigen wir mit Ihrer Vorjahresabrechnung.` });
+    expect(s2.unterlagen.map((u) => u.titel)).toContain("Abrechnung des Vorjahres");
+    expect(s2.fahrplan.schritte.map((x) => x.titel)).toContain("Nachzahlung vorerst nicht bezahlen");
+    expect(s2.anschreiben.text).not.toContain("Abrechnungsfrist");
+  });
+
+  it("verspätete Abrechnung mit bestätigtem Zeitraum: Nachzahlung entfällt", () => {
+    const { s2 } = stufen(wendeAntwortAn(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"), "meta.zeitraumBestaetigt", true));
     expect(s2.empfehlung.titel).toBe("Sie müssen die Nachzahlung nicht bezahlen");
     expect(s2.empfehlung.text).toContain(euro(1214.88));
   });
@@ -336,8 +348,8 @@ describe("Fahrplan: konkrete Ergebnisse", () => {
     expect(s2.fahrplan.zahlung!.hoechstens).toBeLessThan(1214.88);
   });
 
-  it("verspätete Abrechnung: Nachzahlung entfällt", () => {
-    const { s2 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"));
+  it("verspätete Abrechnung mit bestätigtem Zeitraum: Nachzahlung entfällt", () => {
+    const { s2 } = stufen(wendeAntwortAn(wendeAntwortAn(G001, "meta.zugangAm", "2026-01-15"), "meta.zeitraumBestaetigt", true));
     expect(s2.fahrplan.zahlung).toMatchObject({ hoechstens: 0, entfaellt: true });
     expect(s2.fahrplan.schritte.map((x) => x.titel)).toContain("Nachzahlung nicht bezahlen");
   });
@@ -375,5 +387,17 @@ describe("Prüfbedarf statt vorschnellem Fehler: Vorauszahlungen (R-05)", () => 
   it("Modell-B-Grenze und Schlagzeile zählen Prüfbedarf nicht mit", () => {
     const { s1 } = stufen(mitZugang());
     expect(s1.fehlerpotenzial.sicher + s1.fehlerpotenzial.zuKlaeren).toBeLessThan(30);
+  });
+});
+
+describe("Vorjahresabrechnung bestätigt den Abrechnungszeitraum", () => {
+  it("lückenloser Anschluss", () => {
+    expect(schliesstAn({ von: "2023-01-01", bis: "2023-12-31" }, { von: "2024-01-01", bis: "2024-12-31" })).toBe(true);
+    expect(schliesstAn({ von: "2022-07-01", bis: "2023-06-30" }, { von: "2023-07-01", bis: "2024-06-30" })).toBe(true);
+  });
+  it("kein Anschluss: falsches Jahr, Überschneidung oder ungültige Daten", () => {
+    expect(schliesstAn({ von: "2022-01-01", bis: "2022-12-31" }, { von: "2024-01-01", bis: "2024-12-31" })).toBe(false);
+    expect(schliesstAn({ von: "2024-01-01", bis: "2024-12-31" }, { von: "2024-01-01", bis: "2024-12-31" })).toBe(false);
+    expect(schliesstAn({ von: "x", bis: "2023-12-31" }, { von: "2024-01-01", bis: "2024-12-31" })).toBe(false);
   });
 });

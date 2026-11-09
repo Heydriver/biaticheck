@@ -137,7 +137,7 @@ describe("Statusentscheidung", () => {
 
 describe("Kundenansicht", () => {
   // Verspätet zugestellt: Nachzahlung entfällt → sichere Ersparnis über 30 €, das Erledigen-Paket kostet also
-  const daten = { ...G001, meta: { ...G001.meta, zugangAm: "2026-01-15" } };
+  const daten = { ...G001, meta: { ...G001.meta, zugangAm: "2026-01-15", zeitraumBestaetigt: true } };
   const bericht = pruefeAbrechnung(daten, { heute: "2026-10-29" });
   const fall = (status: (typeof faelle.$inferSelect)["status"], bezahltAm: Date | null = null) =>
     ({ id: "x", status, bericht, daten, erstelltAm: new Date(), zugangHash: "geheim", auslesung: null, bezahltAm }) as unknown as typeof faelle.$inferSelect;

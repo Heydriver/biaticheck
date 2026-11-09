@@ -3,6 +3,8 @@ import { AuslesenFehler, leseAus, leseVorauszahlungen, type Auslesung, type Doku
 import {
   AntwortFehler,
   MUSTERABRECHNUNG,
+  schliesstAn,
+  datumDE,
   pruefeAbrechnung,
   wendeAntwortAn,
   type AbrechnungEingabe,
@@ -234,30 +236,55 @@ export async function verarbeiteUnterlage(
     await protokolliere(db, fallId, "system", "unterlage_auslesen_fehlgeschlagen", { code: fehler.code });
     return { art: "fehler", meldung: "Die Unterlage konnte nicht gelesen werden. Bitte versuchen Sie es noch einmal oder mit einem deutlicheren Foto." };
   }
-  if (!verlauf.verlauf.length) {
-    await protokolliere(db, fallId, "system", "unterlage_ohne_vorauszahlungen", { art: datei.art });
-    return { art: "nichts_gefunden", meldung: "In dieser Unterlage finden wir keine Angaben zu Ihren monatlichen Vorauszahlungen. Bitte laden Sie die Vorjahresabrechnung oder Kontoauszüge hoch." };
+  const aktuellerZeitraum = fall.daten.meta?.abrechnungszeitraum;
+  const vj = verlauf.abrechnungszeitraum;
+  const zeitraumPasst = !!(vj && aktuellerZeitraum && schliesstAn(vj, aktuellerZeitraum));
+  if (!verlauf.verlauf.length && !zeitraumPasst) {
+    await protokolliere(db, fallId, "system", "unterlage_ohne_verwertbare_angaben", { art: datei.art, zeitraum: vj ?? null });
+    return {
+      art: "nichts_gefunden",
+      meldung: vj
+        ? `Der Zeitraum dieser Abrechnung (${datumDE(vj.von)} bis ${datumDE(vj.bis)}) schließt nicht an Ihre aktuelle Abrechnung an. Bitte laden Sie die Abrechnung des direkt vorhergehenden Jahres hoch.`
+        : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres oder Kontoauszüge hoch.",
+    };
   }
 
   let ergebnis: UnterlagenErgebnis = { art: "uebernommen", meldung: "" };
   await db.transaction(async (tx) => {
     const [aktuell] = await tx.select().from(faelle).where(eq(faelle.id, fallId)).for("update");
-    let daten = wendeAntwortAn(aktuell!.daten!, "vorauszahlungenDetail.verlauf", verlauf.verlauf);
-    daten = { ...daten, vorauszahlungenDetail: { ...daten.vorauszahlungenDetail, verlaufQuelle: verlauf.quelle } };
+    let daten = aktuell!.daten!;
+    if (verlauf.verlauf.length) {
+      daten = wendeAntwortAn(daten, "vorauszahlungenDetail.verlauf", verlauf.verlauf);
+      daten = { ...daten, vorauszahlungenDetail: { ...daten.vorauszahlungenDetail, verlaufQuelle: verlauf.quelle } };
+      await tx.insert(antworten).values({ fallId, feld: "vorauszahlungenDetail.verlauf", wert: verlauf.verlauf });
+    }
+    if (zeitraumPasst) {
+      daten = wendeAntwortAn(daten, "meta.zeitraumBestaetigt", true);
+      await tx.insert(antworten).values({ fallId, feld: "meta.zeitraumBestaetigt", wert: true });
+    }
     const bericht = pruefeAbrechnung(daten, { heute: deps.heute?.() });
-    await tx.insert(antworten).values({ fallId, feld: "vorauszahlungenDetail.verlauf", wert: verlauf.verlauf });
     await tx.update(faelle).set({ daten, bericht, aktualisiertAm: new Date() }).where(eq(faelle.id, fallId));
-    await tx.insert(protokoll).values({ fallId, akteur: "system", aktion: "vorauszahlungen_uebernommen", details: { quelle: verlauf.quelle, eintraege: verlauf.verlauf.length } });
-    const r05 = bericht.ergebnisse.filter((e) => e.regelId === "R-05");
-    const fehlt = r05.filter((e) => e.status === "abweichung").reduce((x, e) => x + (e.betragZugunstenMieter ?? 0), 0);
-    ergebnis = {
-      art: "uebernommen",
-      meldung: fehlt > 0
-        ? `Bestätigt: Bei Ihren Vorauszahlungen fehlen ${new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(fehlt)}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.`
-        : r05.some((e) => e.status === "pruefbedarf")
-          ? "Die Unterlage reicht noch nicht für alle Vorauszahlungen. Bitte laden Sie eine weitere Unterlage hoch."
-          : "Alles in Ordnung: Ihre Vorauszahlungen wurden richtig angerechnet. Der Punkt ist erledigt.",
-    };
+    await tx.insert(protokoll).values({
+      fallId,
+      akteur: "system",
+      aktion: "unterlage_uebernommen",
+      details: { quelle: verlauf.quelle, eintraege: verlauf.verlauf.length, zeitraumBestaetigt: zeitraumPasst },
+    });
+
+    const euroDE = (n: number) => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
+    const saetze: string[] = [];
+    const f02 = bericht.ergebnisse.find((e) => e.regelId === "F-02");
+    if (zeitraumPasst && f02?.status === "abweichung")
+      saetze.push(`Bestätigt: Die Abrechnung kam zu spät. Sie müssen die Nachzahlung von ${euroDE(f02.betragZugunstenMieter ?? 0)} nicht zahlen.`);
+    else if (zeitraumPasst) saetze.push("Der Abrechnungszeitraum ist bestätigt.");
+    if (verlauf.verlauf.length) {
+      const r05 = bericht.ergebnisse.filter((e) => e.regelId === "R-05");
+      const fehlt = r05.filter((e) => e.status === "abweichung").reduce((x, e) => x + (e.betragZugunstenMieter ?? 0), 0);
+      if (fehlt > 0) saetze.push(`Bei Ihren Vorauszahlungen fehlen ${euroDE(fehlt)}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.`);
+      else if (r05.some((e) => e.status === "pruefbedarf")) saetze.push("Für Ihre Vorauszahlungen reicht die Unterlage noch nicht. Bitte laden Sie eine weitere hoch.");
+      else saetze.push("Ihre Vorauszahlungen wurden richtig angerechnet.");
+    }
+    ergebnis = { art: "uebernommen", meldung: saetze.join(" ") };
   });
   return ergebnis;
 }

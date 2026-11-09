@@ -6,7 +6,7 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | ID | Regel | Grundlage | Ergebnis bei Verstoß | Wenn Daten fehlen |
 |---|---|---|---|---|
 | F-01 | Abrechnungszeitraum ≤ 12 Monate | § 556 Abs. 3 S. 1 BGB | Abweichung | nicht prüfbar |
-| F-02 | Abrechnungsfrist (12 Monate nach Ende des Zeitraums) | § 556 Abs. 3 S. 2–3 BGB | Abweichung: Nachzahlung entfällt | Rückfrage Zugangsdatum |
+| F-02 | Abrechnung innerhalb von 12 Monaten nach Ende des Zeitraums zugegangen | § 556 Abs. 3 S. 2, 3 BGB | verspätet, Zeitraum noch nicht bestätigt: **Prüfbedarf** (Nachzahlung zählt nicht); Zeitraum durch lückenlos anschließende Vorjahresabrechnung bestätigt: Abweichung, Nachzahlung entfällt | Eingangsdatum; Vorjahresabrechnung |
 | F-03 | Einwendungsfrist des Mieters | § 556 Abs. 3 S. 5–6 BGB | Auffälligkeit (abgelaufen) | Rückfrage Zugangsdatum |
 | F-04 | Gesamtkosten und Umlageschlüssel je Position | § 259 BGB; BGH VIII ZR 93/15 | Auffälligkeit | – |
 | F-05 | Keine Abrechnung bei Pauschale | Mietvertrag | Abweichung | – |

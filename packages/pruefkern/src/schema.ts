@@ -149,6 +149,11 @@ export const Abrechnung = z.object({
     erstelltAm: datum.optional(),
     /** Datum, an dem die Abrechnung beim Mieter angekommen ist (meist Angabe des Kunden). */
     zugangAm: datum.optional(),
+    /**
+     * Abrechnungszeitraum durch eine Unterlage bestätigt (z. B. schließt die Vorjahresabrechnung lückenlos an).
+     * Erst dann gilt eine versäumte Abrechnungsfrist als sicher.
+     */
+    zeitraumBestaetigt: z.boolean().optional(),
   }),
   flaechen: z
     .object({

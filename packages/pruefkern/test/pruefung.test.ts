@@ -64,9 +64,19 @@ describe("fehlerhafte Abrechnung", () => {
 });
 
 describe("Fristen", () => {
-  it("verspätete Abrechnung: Nachzahlung entfällt, Potenzial wird nicht doppelt gezählt", () => {
+  it("verspätete Abrechnung ohne bestätigten Zeitraum: Prüfbedarf mit Vorjahresabrechnung, kein Potenzial", () => {
     const a = fehlerhafteAbrechnung();
     a.meta.zugangAm = "2027-01-05";
+    const bericht = pruefeAbrechnung(a, { heute: "2027-01-10" });
+    expect(nur(bericht.ergebnisse, "F-02")).toMatchObject([{ status: "pruefbedarf", betragZugunstenMieter: 330, unterlagen: ["vorjahresabrechnung"] }]);
+    expect(bericht.zusammenfassung.pruefbedarfBetrag).toBeGreaterThanOrEqual(330);
+    expect(bericht.zusammenfassung.einsparpotenzial).toBeLessThan(330);
+  });
+
+  it("verspätete Abrechnung mit bestätigtem Zeitraum: Nachzahlung entfällt, Potenzial wird nicht doppelt gezählt", () => {
+    const a = fehlerhafteAbrechnung();
+    a.meta.zugangAm = "2027-01-05";
+    a.meta.zeitraumBestaetigt = true;
     const bericht = pruefeAbrechnung(a, { heute: "2027-01-10" });
     expect(nur(bericht.ergebnisse, "F-02")).toMatchObject([{ status: "abweichung", betragZugunstenMieter: 330 }]);
     expect(bericht.zusammenfassung.einsparpotenzial).toBe(330);
@@ -78,6 +88,8 @@ describe("Fristen", () => {
     a.meta.erstelltAm = "2026-12-31"; // Fristende ist der 31.12.2026 → Zugang könnte noch rechtzeitig sein
     expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "F-02")[0]?.status).toBe("nicht_pruefbar");
     a.meta.erstelltAm = "2027-01-02";
+    expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "F-02")[0]?.status).toBe("pruefbedarf");
+    a.meta.zeitraumBestaetigt = true;
     expect(nur(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse, "F-02")[0]?.status).toBe("abweichung");
   });
 

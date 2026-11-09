@@ -108,12 +108,13 @@ test("Beratungsanfrage erscheint im Prüfbereich", async ({ page, browser }) => 
   await expect(intern.getByText("max@example.org")).toBeVisible();
 });
 
-test("Verspätete Abrechnung: Nachzahlung entfällt", async ({ page }) => {
+test("Möglicherweise verspätete Abrechnung: erst Prüfbedarf mit Vorjahresabrechnung, kein vorschnelles Versprechen", async ({ page }) => {
   await hochladen(page);
   await zugangsdatum(page, "2026-01-15");
-  await expect(page.getByRole("heading", { name: /1\.214,88\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Für 9,90\s€ erledigen$/ }).click();
-  await expect(page.getByRole("heading", { name: "Sie müssen die Nachzahlung nicht bezahlen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Abrechnung möglicherweise zu spät" })).toBeVisible();
+  await expect(page.getByText(/Dann müssten Sie 1\.214,88\s€ nicht zahlen\. Das bestätigen wir mit Ihrer Vorjahresabrechnung\./)).toBeVisible();
+  await expect(page.getByText(/Bitte bereitlegen:.*Abrechnung des Vorjahres\. Damit bestätigen wir den Abrechnungszeitraum/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /müssen Sie nicht bezahlen/ })).toHaveCount(0);
 });
 
 test("Prüfbedarf: Unterlage nachreichen – ohne KI-Zugang geht sie an einen Fachprüfer", async ({ page }) => {

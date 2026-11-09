@@ -411,21 +411,36 @@ details[open] summary { margin-bottom: 12px; }
       status("Vorauszahlungen werden ermittelt …");
       const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n").slice(0, 150000);
       const antwort = await sample.json(`Das folgende Dokument ist eine Nebenkostenabrechnung des Vorjahres, Kontoauszüge oder ein Mietkonto eines Mieters. Ermittle die monatlichen Vorauszahlungen (Abschläge) für Betriebskosten und für Heizkosten, die im Zeitraum ${zr ? `${zr.von} bis ${zr.bis}` : "des Abrechnungsjahres"} galten, jeweils mit dem Datum, ab dem der Betrag galt. In einer Vorjahresabrechnung steht das meist als neue monatliche Vorauszahlung ab einem Datum. Übernimm nur Beträge, die ausdrücklich als Vorauszahlung oder Abschlag für Betriebs- oder Heizkosten erkennbar sind. Teile eine Gesamtmiete nicht selbst auf. Zahlen genau übernehmen, nicht runden.
-Antworte nur mit JSON: {"dokument": "vorjahresabrechnung" | "kontoauszug" | "mietkonto" | "anderes", "verlauf": [{"ab": "YYYY-MM-DD", "betriebskosten": number | null, "heizkosten": number | null}], "hinweis": string}
+Ist das Dokument selbst eine Nebenkostenabrechnung, gib zusätzlich ihren Abrechnungszeitraum an.
+Antworte nur mit JSON: {"dokument": "vorjahresabrechnung" | "kontoauszug" | "mietkonto" | "anderes", "verlauf": [{"ab": "YYYY-MM-DD", "betriebskosten": number | null, "heizkosten": number | null}], "abrechnungszeitraum": {"von": "YYYY-MM-DD", "bis": "YYYY-MM-DD"} | null, "hinweis": string}
 
 ${text}`, { modelTier: "complex", signal: ctl.signal });
       const verlauf = (Array.isArray(antwort?.verlauf) ? antwort.verlauf : [])
         .filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v?.ab ?? ""))
         .map((v) => ({ ab: v.ab, ...(typeof v.betriebskosten === "number" ? { betriebskosten: v.betriebskosten } : {}), ...(typeof v.heizkosten === "number" ? { heizkosten: v.heizkosten } : {}) }))
         .filter((v) => v.betriebskosten !== undefined || v.heizkosten !== undefined);
-      if (!verlauf.length) { status("In dieser Unterlage finden wir keine Angaben zu Ihren monatlichen Vorauszahlungen. Bitte laden Sie die Vorjahresabrechnung oder Ihre Kontoauszüge hoch."); $("vz-datei").disabled = false; return; }
-      z.vorauszahlungen = { verlauf, quelle: antwort.dokument === "vorjahresabrechnung" ? "vorjahresabrechnung" : "kontoauszug" };
+      const vj = antwort?.abrechnungszeitraum;
+      const vjGueltig = vj && /^\d{4}-\d{2}-\d{2}$/.test(vj.von ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(vj.bis ?? "");
+      const zeitraumPasst = !!(antwort?.dokument === "vorjahresabrechnung" && vjGueltig && zr && P.schliesstAn(vj, zr));
+      if (!verlauf.length && !zeitraumPasst) {
+        status(vjGueltig ? `Der Zeitraum dieser Abrechnung (${datumDE(vj.von)} bis ${datumDE(vj.bis)}) schließt nicht an Ihre aktuelle Abrechnung an. Bitte laden Sie die Abrechnung des direkt vorhergehenden Jahres hoch.` : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres oder Kontoauszüge hoch.");
+        $("vz-datei").disabled = false;
+        return;
+      }
+      if (verlauf.length) z.vorauszahlungen = { verlauf, quelle: antwort.dokument === "vorjahresabrechnung" ? "vorjahresabrechnung" : "kontoauszug" };
+      if (zeitraumPasst) z.antworten["meta.zeitraumBestaetigt"] = true;
       z.brief = null; z.vzStatus = "";
       const nachher = auswertung();
-      const bestaetigt = nachher.s2.auffaelligkeiten.filter((p) => p.regelId === "R-05" && p.status === "abweichung");
-      z.vzErgebnis = bestaetigt.length
-        ? `Bestätigt: Bei Ihren Vorauszahlungen fehlen ${euro(bestaetigt.reduce((x, p) => x + (p.betrag ?? 0), 0))}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.`
-        : "Alles in Ordnung: Ihre Vorauszahlungen wurden richtig angerechnet. Der Punkt ist erledigt.";
+      const saetze = [];
+      const f02 = nachher.s2.auffaelligkeiten.find((p) => p.regelId === "F-02");
+      if (zeitraumPasst && f02?.status === "abweichung") saetze.push(`Bestätigt: Die Abrechnung kam zu spät. Sie müssen die Nachzahlung von ${euro(f02.betrag ?? 0)} nicht zahlen.`);
+      else if (zeitraumPasst) saetze.push("Der Abrechnungszeitraum ist bestätigt.");
+      if (verlauf.length) {
+        const fehlt = nachher.s2.auffaelligkeiten.filter((p) => p.regelId === "R-05" && p.status === "abweichung").reduce((x, p) => x + (p.betrag ?? 0), 0);
+        const offen = nachher.s2.auffaelligkeiten.some((p) => p.regelId === "R-05" && p.status === "pruefbedarf");
+        saetze.push(fehlt > 0 ? `Bei Ihren Vorauszahlungen fehlen ${euro(fehlt)}. Der Betrag zählt jetzt als sicherer Fehler und steht im Schreiben.` : offen ? "Für Ihre Vorauszahlungen reicht die Unterlage noch nicht." : "Ihre Vorauszahlungen wurden richtig angerechnet.");
+      }
+      z.vzErgebnis = saetze.join(" ");
       const y = window.scrollY; zeige(); window.scrollTo({ top: y });
     } catch (e) {
       status(e?.code === "cancelled" ? "" : "Die Unterlage konnte nicht gelesen werden. Bitte versuchen Sie es noch einmal.");

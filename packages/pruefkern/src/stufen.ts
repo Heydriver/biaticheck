@@ -386,6 +386,8 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return s === "abweichung" ? k("Zeitraum zu lang", "Eine Abrechnung darf höchstens 12 Monate umfassen.") : k("Zeitraum fehlt", "Der Abrechnungszeitraum ist nicht erkennbar.");
     case "F-02":
       if (s === "abweichung") return k("Abrechnung kam zu spät", "Eine Nachzahlung müssen Sie deshalb nicht leisten.");
+      if (s === "pruefbedarf")
+        return k("Abrechnung möglicherweise zu spät", `Dann müssten Sie ${euro(zahl(b.saldo) ?? 0)} nicht zahlen. Das bestätigen wir mit Ihrer Vorjahresabrechnung.`);
       if (s === "nicht_pruefbar") return k("Eingangsdatum fehlt", "Davon hängt ab, ob Sie überhaupt nachzahlen müssen.");
       return k("Abrechnung kam zu spät", "Ein Guthaben steht Ihnen trotzdem zu.");
     case "F-03":
@@ -651,11 +653,15 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
   const f = s1.widerspruchsfrist;
   const schritte: Schritt[] = [];
   const nachreichen = sammleUnterlagen(punkte);
-  for (const u of nachreichen) schritte.push({ titel: `${u.titel} hochladen`, text: u.grund });
+  if (nachreichen.length === 1) schritte.push({ titel: `${nachreichen[0]!.titel} hochladen`, text: nachreichen[0]!.grund });
+  else if (nachreichen.length > 1) schritte.push({ titel: "Unterlagen hochladen", text: nachreichen.map((u) => `${u.titel}: ${u.grund}`).join(" ") });
 
   const zahlung = saldo !== undefined && saldo > 0 ? { laut: saldo, hoechstens: entfaellt ? 0 : runde(Math.max(0, saldo - sicher)), entfaellt } : undefined;
 
-  if (zahlung?.entfaellt) {
+  const fristUnsicher = punkte.some((p) => p.regelId === "F-02" && p.status === "pruefbedarf");
+  if (zahlung && fristUnsicher) {
+    schritte.push({ titel: "Nachzahlung vorerst nicht bezahlen", text: "Möglicherweise kam die Abrechnung zu spät. Warten Sie mit der Zahlung, bis wir das mit Ihrer Vorjahresabrechnung bestätigt haben." });
+  } else if (zahlung?.entfaellt) {
     schritte.push({ titel: "Nachzahlung nicht bezahlen", text: `Die ${euro(zahlung.laut)} schulden Sie nicht. Das teilen Sie mit dem Schreiben mit.` });
   } else if (zahlung && sicher > 0) {
     schritte.push({
@@ -700,6 +706,7 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
 // ---------- Unterlagen nachfordern ----------
 
 const GRUND: Partial<Record<string, string>> = {
+  "F-02": "Damit bestätigen wir den Abrechnungszeitraum. Davon hängt ab, ob die Frist wirklich versäumt ist und Sie die Nachzahlung nicht zahlen müssen.",
   "R-05": "Damit prüfen wir, ob bei Ihren Vorauszahlungen wirklich Geld fehlt. Ohne diese Unterlage zählen wir den Betrag nicht als Ersparnis.",
 };
 
@@ -717,4 +724,16 @@ export function sammleUnterlagen(punkte: Auffaelligkeit[]): Unterlagenanforderun
     });
   }
   return [...liste.values()];
+}
+
+/**
+ * Schließt der Zeitraum der Vorjahresabrechnung lückenlos an den aktuellen an?
+ * Erlaubt eine Lücke von höchstens 31 Tagen (z. B. Monatsende/Monatsanfang, Ein- oder Auszug).
+ */
+export function schliesstAn(vorjahr: { von: string; bis: string }, aktuell: { von: string; bis: string }): boolean {
+  const tag = 864e5;
+  const ende = Date.parse(vorjahr.bis), beginn = Date.parse(aktuell.von), vjBeginn = Date.parse(vorjahr.von);
+  if ([ende, beginn, vjBeginn].some(Number.isNaN) || vjBeginn >= ende) return false;
+  const luecke = (beginn - ende) / tag;
+  return luecke >= 1 && luecke <= 31;
 }

@@ -186,14 +186,14 @@ describe("Nachgereichte Unterlage zum Prüfbedarf (Vorauszahlungen)", () => {
     const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "kontoauszug" }, deps({ client }));
     expect(parse).toHaveBeenCalledOnce();
     expect(ergebnis.art).toBe("uebernommen");
-    expect(ergebnis.meldung).toMatch(/^Bestätigt: Bei Ihren Vorauszahlungen fehlen 143,59/);
+    expect(ergebnis.meldung).toMatch(/^Bei Ihren Vorauszahlungen fehlen 143,59/);
     expect(await r05(id)).toMatchObject({ status: "abweichung", betragZugunstenMieter: 143.59 });
     expect((await lade(id)).bericht!.zusammenfassung.einsparpotenzial).toBe(143.59);
     const doks = await db.select().from(dokumente).where(eq(dokumente.fallId, id));
     expect(doks.map((d) => d.art).sort()).toEqual(["abrechnung", "kontoauszug"]);
     const neu = doks.find((d) => d.art === "kontoauszug")!;
     expect(await speicher.lade(neu.speicherschluessel)).toEqual(png);
-    expect(await aktionen(id)).toEqual(expect.arrayContaining(["unterlage_nachgereicht", "vorauszahlungen_uebernommen"]));
+    expect(await aktionen(id)).toEqual(expect.arrayContaining(["unterlage_nachgereicht", "unterlage_uebernommen"]));
     expect((await db.select().from(antworten).where(eq(antworten.fallId, id))).map((a) => a.feld)).toContain("vorauszahlungenDetail.verlauf");
   });
 
@@ -204,7 +204,7 @@ describe("Nachgereichte Unterlage zum Prüfbedarf (Vorauszahlungen)", () => {
       parsed_output: { dokument: "vorjahresabrechnung", verlauf: [{ ab: "2024-01-01", betriebskosten: null, heizkosten: 98.03 }], hinweis: "" },
     }));
     const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client }));
-    expect(ergebnis.meldung).toMatch(/^Alles in Ordnung/);
+    expect(ergebnis.meldung).toBe("Ihre Vorauszahlungen wurden richtig angerechnet.");
     expect((await r05(id)).status).toBe("ok");
   });
 
@@ -222,5 +222,40 @@ describe("Nachgereichte Unterlage zum Prüfbedarf (Vorauszahlungen)", () => {
     const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client }));
     expect(ergebnis.art).toBe("nichts_gefunden");
     expect((await r05(id)).status).toBe("pruefbedarf");
+  });
+});
+
+describe("Möglicherweise verspätete Abrechnung: Vorjahresabrechnung bestätigt den Zeitraum", () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+  async function spaeterFall() {
+    const id = await neuerFall();
+    await verarbeiteFall(id, deps({ client: fakeClient(ok).client }));
+    await beantworteRueckfrage(id, "meta.zugangAm", "2026-01-15", deps());
+    return id;
+  }
+  const f02 = async (id: string) => (await lade(id)).bericht!.ergebnisse.find((e) => e.regelId === "F-02")!;
+  const vorjahr = (zeitraum: { von: string; bis: string }) =>
+    fakeClient(() => ({ stop_reason: "end_turn", parsed_output: { dokument: "vorjahresabrechnung", verlauf: [], abrechnungszeitraum: zeitraum, hinweis: "" } })).client;
+
+  it("ohne Vorjahresabrechnung: Prüfbedarf, die Nachzahlung zählt nicht als sichere Ersparnis", async () => {
+    const id = await spaeterFall();
+    expect((await f02(id)).status).toBe("pruefbedarf");
+    expect((await lade(id)).bericht!.zusammenfassung.einsparpotenzial).toBe(0);
+  });
+
+  it("passende Vorjahresabrechnung: Frist sicher versäumt, Nachzahlung entfällt", async () => {
+    const id = await spaeterFall();
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client: vorjahr({ von: "2023-01-01", bis: "2023-12-31" }) }));
+    expect(ergebnis.meldung).toMatch(/^Bestätigt: Die Abrechnung kam zu spät\. Sie müssen die Nachzahlung von 1\.214,88/);
+    expect(await f02(id)).toMatchObject({ status: "abweichung", betragZugunstenMieter: 1214.88 });
+    expect((await lade(id)).bericht!.zusammenfassung.einsparpotenzial).toBe(1214.88);
+  });
+
+  it("Vorjahresabrechnung aus dem falschen Jahr: verständliche Meldung, weiter Prüfbedarf", async () => {
+    const id = await spaeterFall();
+    const ergebnis = await verarbeiteUnterlage(id, { daten: png, mimeType: "image/png", art: "vorjahr" }, deps({ client: vorjahr({ von: "2022-01-01", bis: "2022-12-31" }) }));
+    expect(ergebnis.art).toBe("nichts_gefunden");
+    expect(ergebnis.meldung).toContain("schließt nicht an Ihre aktuelle Abrechnung an");
+    expect((await f02(id)).status).toBe("pruefbedarf");
   });
 });
