@@ -456,6 +456,16 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return s === "abweichung" ? k("Rauchwarnmelder: Miete umgelegt", "Mietkosten für Rauchwarnmelder dürfen nicht umgelegt werden.") : k("Rauchwarnmelder: Miete enthalten?", "Nur die Wartung ist erlaubt, die Miete der Geräte nicht.");
     case "I-11":
       return k("Hauswart: Reparaturen enthalten?", "Reparatur- und Verwaltungsarbeiten müssen herausgerechnet werden.");
+    case "R-06":
+      return k("Ein- oder Auszug nicht berücksichtigt", "Sie zahlen Kosten für Tage, an denen Sie dort nicht gewohnt haben.");
+    case "R-07":
+      return k("Mehr Fläche als im Mietvertrag", "Nach Fläche verteilte Kosten sind dadurch zu hoch.");
+    case "I-12":
+      return s === "nicht_pruefbar" ? k("Gewerbe im Haus?", "Dann müssen dessen höhere Kosten vorab abgezogen werden.") : k("Kein Abzug für Gewerbe", "Kosten des Gewerbes zahlen sonst die Mieter mit.");
+    case "I-13":
+      return k("Leere Wohnungen nicht mitgezählt?", "Den Anteil leerer Wohnungen trägt der Vermieter.");
+    case "I-14":
+      return k("Grundsteuer stark verändert", "Seit 2025 gilt ein neuer Bescheid. Er muss zur Abrechnung passen.");
     case "P-01":
       if (s === "nicht_pruefbar") return k("Vorjahresabrechnung fehlt", "Mit ihr erkennen wir ungewöhnliche Preissprünge.");
       return e.titel.startsWith("Neue") ? k(`Neu: ${name}`, "Diese Kosten gab es im Vorjahr nicht.") : k(`Stark gestiegen: ${name}`, "Deutlich teurer als im Vorjahr.");
@@ -528,6 +538,22 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
     case "I-10":
       if (e.status === "abweichung" && name) return `${name}${betrag}: Mietkosten für Rauchwarnmelder sind nicht als Betriebskosten umlagefähig.`;
       if (name) return `${name}: Bitte legen Sie die Rechnung vor und weisen Sie Miete und Wartung getrennt aus; der Mietanteil ist nicht umlagefähig.`;
+      break;
+    case "R-06":
+      if (typeof b.von === "string" && typeof b.bis === "string")
+        return `Ich habe die Wohnung im Abrechnungszeitraum nur vom ${datumDE(b.von)} bis ${datumDE(b.bis)} gemietet. Bitte rechnen Sie die zeitabhängigen Kosten nur für diesen Zeitraum ab${betrag}.`;
+      break;
+    case "R-07":
+      if (zahl(b.vertrag) !== undefined && zahl(b.abrechnung) !== undefined)
+        return `Die Abrechnung setzt ${zahlDE(zahl(b.abrechnung)!)} m² an, mein Mietvertrag nennt ${zahlDE(zahl(b.vertrag)!)} m². Bitte begründen Sie die angesetzte Fläche und legen Sie eine Wohnflächenberechnung vor${betrag}.`;
+      break;
+    case "I-12":
+      return "Im Haus gibt es Gewerbe, die Abrechnung enthält aber keinen Vorwegabzug. Bitte legen Sie dar, wie die Kosten des Gewerbes (insbesondere Müll, Wasser und Reinigung) berücksichtigt sind.";
+    case "I-13":
+      return "Bei den nach Wohnungen verteilten Kosten werden unterschiedlich viele Wohnungen angesetzt. Bitte erläutern Sie das; der Anteil leer stehender Wohnungen ist vom Vermieter zu tragen.";
+    case "I-14":
+      if (zahl(b.vorher) !== undefined && zahl(b.jetzt) !== undefined)
+        return `Grundsteuer: Mein Anteil hat sich von ${euro(zahl(b.vorher)!)} auf ${euro(zahl(b.jetzt)!)} geändert. Bitte legen Sie den aktuellen Grundsteuerbescheid vor.`;
       break;
     case "I-11":
       if (name) return `${name}: Bitte legen Sie den Hauswartvertrag mit Leistungsverzeichnis vor und rechnen Sie Anteile für Reparaturen, Verwaltung und Bereitschaft heraus.`;
@@ -649,6 +675,10 @@ function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
     case "I-09": return "Zählerstände und Verbrauchsaufstellung für Wasser";
     case "I-10": return name ? `Rechnung zu „${name}“ mit Miete und Wartung getrennt` : undefined;
     case "I-11": return name ? `Hauswartvertrag und Leistungsverzeichnis zu „${name}“` : undefined;
+    case "R-07": return "Wohnflächenberechnung für Ihre Wohnung";
+    case "I-12": return "Aufstellung des Vorwegabzugs für Gewerbe";
+    case "I-13": return "Liste der Wohnungen mit Leerstandszeiten";
+    case "I-14": return "Grundsteuerbescheid 2025";
     case "P-01": return name && e.status !== "nicht_pruefbar" ? `Rechnungen zu „${name}“` : undefined;
     case "P-03": return "Rechnungen für Energie und Warmwasserbereitung";
   }
@@ -912,6 +942,31 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
         add("Ihre Kosten je m² und Monat", `${zahlDE(zahl(b.jeQm)!)} €`, true);
         add("Durchschnitt (Mieterbund)", "0,37 €");
       }
+      break;
+    case "R-06":
+      add("Ihre Mietzeit im Zeitraum", typeof b.von === "string" && typeof b.bis === "string" ? `${datumDE(b.von)} bis ${datumDE(b.bis)}` : undefined);
+      if (zahl(b.tageMiete) !== undefined) add("Tage", `${zahl(b.tageMiete)} von ${zahl(b.tageGesamt)}`);
+      add("Zeitabhängige Kosten (ganzes Jahr)", eur(b.zeitKosten));
+      if (e.betragZugunstenMieter) add("Zu viel berechnet", `bis zu ${euro(e.betragZugunstenMieter)}`, true);
+      break;
+    case "R-07":
+      add("Fläche laut Mietvertrag", zahl(b.vertrag) !== undefined ? `${zahlDE(zahl(b.vertrag)!)} m²` : undefined);
+      add("Fläche in der Abrechnung", zahl(b.abrechnung) !== undefined ? `${zahlDE(zahl(b.abrechnung)!)} m²` : undefined, true);
+      add("Nach Fläche verteilte Kosten", eur(b.flaechenKosten));
+      if (e.betragZugunstenMieter) add("Mögliche Ersparnis", `bis zu ${euro(e.betragZugunstenMieter)}`, true);
+      break;
+    case "I-12":
+      add("Gewerbe im Haus", a.ausstattung?.gewerbeImHaus === true ? "ja" : "noch nicht bekannt");
+      add("Vorwegabzug in der Abrechnung", e.status === "nicht_pruefbar" ? undefined : "keiner", true);
+      break;
+    case "I-13":
+      add("Angesetzte Wohnungen", Array.isArray(b.werte) ? (b.werte as number[]).map((w) => zahlDE(w)).join(" und ") : undefined, true);
+      if (e.betragZugunstenMieter) add("Mögliche Ersparnis", `bis zu ${euro(e.betragZugunstenMieter)}`, true);
+      break;
+    case "I-14":
+      add("Grundsteuer Vorjahr", eur(b.vorher));
+      add("Grundsteuer jetzt", eur(b.jetzt), true);
+      if (zahl(b.aenderung) !== undefined) add("Änderung", `${zahl(b.aenderung)! > 0 ? "+" : ""}${zahlDE(zahl(b.aenderung)!, 0)} %`);
       break;
     case "P-01":
       add("Kostenart", typeof b.kategorie === "string" ? KOSTENKATEGORIEN_KURZ(b.kategorie) : undefined);

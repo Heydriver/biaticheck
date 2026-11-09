@@ -50,6 +50,7 @@ describe("G-001 – Großvermieter München 2024", () => {
       "meta.zugangAm",
       "mietvertrag.vereinbarteSonstigeKosten",
       "mietvertrag.aufzugAusgenommen",
+      "ausstattung.gewerbeImHaus",
       "vorjahr",
     ]);
   });

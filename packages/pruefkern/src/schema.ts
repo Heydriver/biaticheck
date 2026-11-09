@@ -202,6 +202,8 @@ export const Abrechnung = z.object({
     .object({
       /** Eigener Kaltwasserzähler in der Wohnung. */
       wasserzaehler: z.boolean().optional(),
+      /** Gewerbe im Haus (Laden, Praxis, Gaststätte). */
+      gewerbeImHaus: z.boolean().optional(),
     })
     .optional(),
   /** Angaben aus dem Mietvertrag, soweit bekannt (Rückfragen an den Kunden). */
@@ -213,6 +215,11 @@ export const Abrechnung = z.object({
       pauschaleVereinbart: z.boolean().optional(),
       /** Mietvertrag schließt Erdgeschosswohnungen von Aufzugskosten aus. */
       aufzugAusgenommen: z.boolean().optional(),
+      /** Beginn und Ende des Mietverhältnisses (für Ein- oder Auszug im Abrechnungsjahr). */
+      mietbeginn: datum.optional(),
+      mietende: datum.optional(),
+      /** Wohnfläche laut Mietvertrag in m². */
+      wohnflaeche: z.number().positive().optional(),
     })
     .optional(),
 });

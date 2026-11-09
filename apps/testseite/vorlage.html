@@ -295,7 +295,7 @@ details[open] summary { margin-bottom: 12px; }
     const f = r.s1.fehlerpotenzial;
     const lohnt = f.sicher + f.zuKlaeren >= MINDESTERSPARNIS;
     const frei = z.bezahlt || !lohnt;
-    ziel.innerHTML = ergebnisKarte(r) + fehlerListe(r) + pruefbedarfKarte(r) + (frei ? loesung(r, lohnt) : angebot(r)) + gelesen(r) +
+    ziel.innerHTML = ergebnisKarte(r) + fehlerListe(r) + pruefbedarfKarte(r) + fragenKarte(r) + (frei ? loesung(r, lohnt) : angebot(r)) + gelesen(r) +
       `<p class="leise">${z.beispiel ? "Beispiel mit einer anonymisierten Musterabrechnung. " : ""}<button class="textknopf" type="button" data-aktion="neu">Andere Abrechnung prüfen</button></p>`;
   }
 
@@ -395,6 +395,16 @@ details[open] summary { margin-bottom: 12px; }
       ${z.mietvertrag ? "" : mietvertragKarte(fp.mietvertragOffen)}`;
   }
 
+  function fragenKarte(r) {
+    const fragen = r.s2.auffaelligkeiten.filter((p) => p.status === "nicht_pruefbar" && p.rueckfrage?.typ === "janein");
+    if (!fragen.length) return "";
+    return `<section class="karte"><h2>Kurze Frage</h2>
+      ${fragen.map((p) => `<div class="reihe" style="gap:8px"><span style="font-size:15px;flex:1 1 220px">${esc(p.rueckfrage.frage)}</span>
+        <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="ja">Ja</button>
+        <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="nein">Nein</button></div>`).join("")}
+    </section>`;
+  }
+
   function pruefbedarfKarte(r) {
     const punkte = r.s2.auffaelligkeiten.filter((p) => p.status === "pruefbedarf");
     if (!punkte.length) return z.vzErgebnis ? `<section class="karte"><h2>Unterlage geprüft</h2><p>${esc(z.vzErgebnis)}</p></section>` : "";
@@ -484,7 +494,7 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
       status("Mietvertrag wird ausgewertet …");
       const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n").slice(0, 150000);
       const mv = await sample.json(`Lies aus diesem deutschen Wohnraum-Mietvertrag die Vereinbarungen zu den Betriebskosten aus. Antworte nur mit JSON:
-{"istMietvertrag": boolean, "pauschaleVereinbart": boolean | null (true, wenn statt Vorauszahlungen mit Abrechnung eine Betriebskostenpauschale vereinbart ist), "vereinbarteSonstigeKosten": string[] | null (alle ausdrücklich vereinbarten sonstigen Betriebskosten nach § 2 Nr. 17 BetrKV mit ihrer Bezeichnung; leere Liste, wenn keine vereinbart sind; null, wenn die Betriebskostenvereinbarung nicht enthalten ist), "aufzugAusgenommen": boolean | null (true, wenn Erdgeschosswohnungen ausdrücklich von den Aufzugskosten ausgenommen sind)}
+{"istMietvertrag": boolean, "pauschaleVereinbart": boolean | null (true, wenn statt Vorauszahlungen mit Abrechnung eine Betriebskostenpauschale vereinbart ist), "vereinbarteSonstigeKosten": string[] | null (alle ausdrücklich vereinbarten sonstigen Betriebskosten nach § 2 Nr. 17 BetrKV mit ihrer Bezeichnung; leere Liste, wenn keine vereinbart sind; null, wenn die Betriebskostenvereinbarung nicht enthalten ist), "aufzugAusgenommen": boolean | null (true, wenn Erdgeschosswohnungen ausdrücklich von den Aufzugskosten ausgenommen sind), "mietbeginn": string | null (Beginn des Mietverhältnisses als YYYY-MM-DD), "mietende": string | null (Ende des Mietverhältnisses als YYYY-MM-DD, nur wenn befristet oder gekündigt), "wohnflaeche": number | null (vereinbarte Wohnfläche in m²), "gewerbeImHaus": boolean | null (true, wenn der Vertrag Gewerbe im Haus erwähnt, z. B. Laden, Praxis, Gaststätte)}
 
 ${text}`, { modelTier: "complex", signal: ctl.signal });
       if (mv?.istMietvertrag === false) { status("Das sieht nicht nach einem Mietvertrag aus. Bitte laden Sie den Mietvertrag hoch."); $("mv-datei").disabled = false; return; }
@@ -492,6 +502,11 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
       if (typeof mv?.pauschaleVereinbart === "boolean") daten.pauschaleVereinbart = mv.pauschaleVereinbart;
       if (Array.isArray(mv?.vereinbarteSonstigeKosten)) daten.vereinbarteSonstigeKosten = mv.vereinbarteSonstigeKosten.map(String);
       if (typeof mv?.aufzugAusgenommen === "boolean") daten.aufzugAusgenommen = mv.aufzugAusgenommen;
+      const iso = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      if (iso(mv?.mietbeginn)) daten.mietbeginn = mv.mietbeginn;
+      if (iso(mv?.mietende)) daten.mietende = mv.mietende;
+      if (typeof mv?.wohnflaeche === "number" && mv.wohnflaeche > 10 && mv.wohnflaeche < 1000) daten.wohnflaeche = mv.wohnflaeche;
+      if (mv?.gewerbeImHaus === true) daten.gewerbeImHaus = true;
       const vorher = auswertung().s1.fehlerpotenzial;
       z.mietvertrag = daten; z.brief = null; z.mvStatus = "";
       const nachher = auswertung().s1.fehlerpotenzial;

@@ -17,7 +17,7 @@ export function werteAus(
   rohJson: unknown,
   heute: string,
   antworten: Record<string, unknown> = {},
-  mietvertrag?: { pauschaleVereinbart?: boolean; vereinbarteSonstigeKosten?: string[]; aufzugAusgenommen?: boolean },
+  mietvertrag?: { pauschaleVereinbart?: boolean; vereinbarteSonstigeKosten?: string[]; aufzugAusgenommen?: boolean; mietbeginn?: string; mietende?: string; wohnflaeche?: number; gewerbeImHaus?: boolean },
   vorauszahlungen?: { verlauf: Verlauf; quelle: "vorjahresabrechnung" | "kontoauszug" | "kunde" },
 ) {
   const roh = Rohdaten.safeParse(rohJson);
@@ -25,7 +25,11 @@ export function werteAus(
   if (!roh.data.istNebenkostenabrechnung) return { fehler: "keine_abrechnung" };
   let { abrechnung, hinweise } = wandleUm(roh.data);
   const konsistenz = pruefeKonsistenz(abrechnung);
-  if (mietvertrag) abrechnung = { ...abrechnung, mietvertrag: { ...abrechnung.mietvertrag, ...mietvertrag } };
+  if (mietvertrag) {
+    const { gewerbeImHaus, ...vertrag } = mietvertrag;
+    abrechnung = { ...abrechnung, mietvertrag: { ...abrechnung.mietvertrag, ...vertrag } };
+    if (gewerbeImHaus) abrechnung = { ...abrechnung, ausstattung: { ...abrechnung.ausstattung, gewerbeImHaus } };
+  }
   if (vorauszahlungen?.verlauf.length)
     abrechnung = { ...abrechnung, vorauszahlungenDetail: { ...abrechnung.vorauszahlungenDetail, verlauf: vorauszahlungen.verlauf, verlaufQuelle: vorauszahlungen.quelle } };
   for (const [feld, wert] of Object.entries(antworten)) {

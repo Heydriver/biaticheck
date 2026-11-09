@@ -18,7 +18,7 @@ export function korrekteAbrechnung(): AbrechnungEingabe {
       zugangAm: "2026-05-14",
     },
     flaechen: { wohnflaecheMieter: 72, gesamtflaeche: 960 },
-    ausstattung: { wasserzaehler: false },
+    ausstattung: { wasserzaehler: false, gewerbeImHaus: false },
     kostenpositionen: [
       { id: "p1", bezeichnung: "Grundsteuer", kategorie: "grundsteuer", gesamtkosten: 3840, umlageschluessel: wf(), anteilMieter: 288 },
       { id: "p2", bezeichnung: "Wasserversorgung", kategorie: "wasser", gesamtkosten: 5200, umlageschluessel: { typ: "personen", anteilEinheit: 2, anteilGesamt: 26 }, anteilMieter: 400 },

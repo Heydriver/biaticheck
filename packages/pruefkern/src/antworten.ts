@@ -23,6 +23,10 @@ export const ANTWORT_FELDER: Readonly<Record<string, Antworttyp>> = {
   "mietvertrag.vereinbarteSonstigeKosten": "liste",
   "mietvertrag.aufzugAusgenommen": "janein",
   "ausstattung.wasserzaehler": "janein",
+  "ausstattung.gewerbeImHaus": "janein",
+  "mietvertrag.mietbeginn": "datum",
+  "mietvertrag.mietende": "datum",
+  "mietvertrag.wohnflaeche": "zahl",
   // Wird beim Nachreichen der Vorjahresabrechnung gesetzt (nicht vom Kunden abgefragt).
   "meta.zeitraumBestaetigt": "janein",
   // Antwort ist ein weiteres Dokument (Upload) – wird über das Auslesen übernommen.

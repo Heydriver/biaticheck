@@ -1,4 +1,4 @@
-import { euro, runde, tageInklusive, zahlDE } from "../hilfen";
+import { datumDE, euro, runde, tageInklusive, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import type { Abrechnung } from "../schema";
 
@@ -335,4 +335,80 @@ export const R05_Vorauszahlungen: Regel = {
   },
 };
 
-export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen];
+/** Kosten, die mit der Zeit anfallen (nicht nach Verbrauch oder direkt zugeordnet). */
+const zeitabhaengig = (p: Abrechnung["kostenpositionen"][number]) => p.umlageschluessel?.typ !== "verbrauch" && p.umlageschluessel?.typ !== "direkt";
+
+/**
+ * Ein- oder Auszug im Abrechnungsjahr: Hat das Mietverhältnis laut Mietvertrag erst im Jahr begonnen (oder
+ * im Jahr geendet), dürfen zeitabhängige Kosten nur zeitanteilig berechnet werden.
+ */
+export const R06_EinAuszug: Regel = {
+  id: "R-06",
+  version: "1.0.0",
+  titel: "Zeitanteil bei Ein- oder Auszug",
+  bereich: "rechnerisch",
+  grundlage: "§ 556a Abs. 1 BGB; § 535 BGB",
+  stand: "entwurf",
+  pruefe(a) {
+    const z = a.meta.abrechnungszeitraum;
+    const mv = a.mietvertrag;
+    if (!z || (!mv?.mietbeginn && !mv?.mietende)) return [];
+    const von = mv.mietbeginn && mv.mietbeginn > z.von ? mv.mietbeginn : z.von;
+    const bis = mv.mietende && mv.mietende < z.bis ? mv.mietende : z.bis;
+    if (von === z.von && bis === z.bis) return [];
+    const n = a.meta.nutzungszeitraum;
+    if (n && n.von >= von && n.bis <= bis) {
+      return [{ status: "ok", titel: "Ein- oder Auszug berücksichtigt", erklaerung: `Die Abrechnung berücksichtigt Ihre Mietzeit (${datumDE(n.von)} bis ${datumDE(n.bis)}).` }];
+    }
+    const tageGesamt = tageInklusive(z.von, z.bis);
+    const tageMiete = Math.max(0, tageInklusive(von, bis));
+    const zeitKosten = runde(a.kostenpositionen.filter(zeitabhaengig).reduce((x, p) => x + p.anteilMieter, 0));
+    const zuViel = runde(zeitKosten * (1 - tageMiete / tageGesamt));
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: "Ein- oder Auszug nicht berücksichtigt",
+        erklaerung: `Laut Mietvertrag haben Sie die Wohnung im Abrechnungszeitraum nur vom ${datumDE(von)} bis ${datumDE(bis)} gemietet (${tageMiete} von ${tageGesamt} Tagen). Die Abrechnung berechnet die Kosten aber für den ganzen Zeitraum. Zeitabhängige Kosten dürfen nur anteilig berechnet werden.`,
+        naechsterSchritt: `Fordern Sie eine Abrechnung nur für Ihre Mietzeit. Zeitanteilig sind das bis zu ${euro(zuViel)} weniger.`,
+        betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
+        beleg: { von, bis, tageMiete, tageGesamt, zeitKosten, zuViel },
+      },
+    ];
+  },
+};
+
+/**
+ * Wohnfläche: Die Abrechnung setzt mehr Fläche an als der Mietvertrag. Maßgeblich ist die tatsächliche Fläche
+ * (BGH VIII ZR 220/17) – die Abweichung muss geklärt werden; bis dahin Auffälligkeit mit geschätztem Betrag.
+ */
+export const R07_WohnflaecheMietvertrag: Regel = {
+  id: "R-07",
+  version: "1.0.0",
+  titel: "Wohnfläche passt zum Mietvertrag",
+  bereich: "rechnerisch",
+  grundlage: "§ 556a Abs. 1 BGB; BGH, Urt. v. 30.05.2018 – VIII ZR 220/17",
+  stand: "entwurf",
+  pruefe(a) {
+    const vertrag = a.mietvertrag?.wohnflaeche;
+    const abrechnung = a.flaechen?.wohnflaecheMieter;
+    if (!vertrag || !abrechnung) return [];
+    const abweichung = (abrechnung - vertrag) / vertrag;
+    if (abweichung <= 0.03) {
+      return [{ status: "ok", titel: "Wohnfläche passt zum Mietvertrag", erklaerung: `Die Abrechnung setzt ${zahlDE(abrechnung)} m² an, der Mietvertrag nennt ${zahlDE(vertrag)} m².`, beleg: { vertrag, abrechnung } }];
+    }
+    const flaechenKosten = runde(a.kostenpositionen.filter((p) => p.umlageschluessel?.typ === "wohnflaeche").reduce((x, p) => x + p.anteilMieter, 0));
+    const zuViel = runde(flaechenKosten * (1 - vertrag / abrechnung));
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: "Mehr Wohnfläche als im Mietvertrag",
+        erklaerung: `Die Abrechnung setzt ${zahlDE(abrechnung)} m² an, Ihr Mietvertrag nennt ${zahlDE(vertrag)} m² (${zahlDE(abweichung * 100, 1)} % mehr). Maßgeblich ist die tatsächliche Fläche. Stimmt die Fläche aus dem Mietvertrag, zahlen Sie bei den nach Fläche verteilten Kosten bis zu ${euro(zuViel)} zu viel.`,
+        naechsterSchritt: "Fordern Sie eine Begründung für die angesetzte Fläche, zum Beispiel eine Wohnflächenberechnung.",
+        betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
+        beleg: { vertrag, abrechnung, flaechenKosten, zuViel },
+      },
+    ];
+  },
+};
+
+export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen, R06_EinAuszug, R07_WohnflaecheMietvertrag];

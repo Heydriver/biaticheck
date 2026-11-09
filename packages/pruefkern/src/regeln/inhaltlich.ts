@@ -460,6 +460,108 @@ export const I11_Hauswart: Regel = {
   },
 };
 
+/**
+ * Gewerbe im Haus: Verursacht Gewerbe deutlich höhere Kosten (z. B. Gaststätte, Arztpraxis), müssen diese
+ * vorab abgezogen werden (Vorwegabzug). Ohne Angabe nur eine Frage, ohne Betrag.
+ */
+export const I12_Gewerbe: Regel = {
+  id: "I-12",
+  version: "1.0.0",
+  titel: "Vorwegabzug für Gewerbe im Haus",
+  bereich: "inhaltlich",
+  grundlage: "§ 556a Abs. 1 BGB; BGH, Urt. v. 08.03.2006 – VIII ZR 78/05",
+  stand: "entwurf",
+  pruefe(a) {
+    const gewerbe = a.ausstattung?.gewerbeImHaus;
+    const vorweg = a.kostenpositionen.some((p) => p.gesamtkostenVorVorwegabzug !== undefined);
+    if (gewerbe === false) return [];
+    if (gewerbe === undefined) {
+      return [
+        {
+          status: "nicht_pruefbar",
+          titel: "Gewerbe im Haus?",
+          erklaerung: "Bei Gewerbe im Haus müssen dessen höhere Kosten vorab abgezogen werden.",
+          naechsterSchritt: "Beantworten Sie die Frage, ob es im Haus Gewerbe gibt.",
+          rueckfrage: { feld: "ausstattung.gewerbeImHaus", frage: "Gibt es in Ihrem Haus einen Laden, eine Praxis, ein Büro oder eine Gaststätte?" },
+        },
+      ];
+    }
+    if (vorweg) return [{ status: "ok", titel: "Vorwegabzug für Gewerbe vorgenommen", erklaerung: "Die Abrechnung zieht Kosten für das Gewerbe vorab ab." }];
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: "Kein Vorwegabzug für Gewerbe",
+        erklaerung: "In Ihrem Haus gibt es Gewerbe, die Abrechnung zieht dafür aber keine Kosten vorab ab. Verursacht das Gewerbe deutlich höhere Kosten (zum Beispiel Müll, Wasser, Reinigung), zahlen die Mieter sonst mit.",
+        naechsterSchritt: "Verlangen Sie eine Aufstellung, wie das Gewerbe bei Müll, Wasser und Reinigung berücksichtigt ist.",
+      },
+    ];
+  },
+};
+
+/**
+ * Leerstand: Unterschiedliche Anzahl Wohnungen bei nach Einheiten verteilten Kosten deutet darauf hin,
+ * dass leere Wohnungen nicht mitgezählt wurden – deren Anteil trägt der Vermieter.
+ */
+export const I13_Leerstand: Regel = {
+  id: "I-13",
+  version: "1.0.0",
+  titel: "Leerstand trägt der Vermieter",
+  bereich: "inhaltlich",
+  grundlage: "§ 556a Abs. 1 BGB; BGH, Urt. v. 31.05.2006 – VIII ZR 159/05",
+  stand: "entwurf",
+  pruefe(a) {
+    const einheiten = a.kostenpositionen.filter((p) => p.umlageschluessel?.typ === "einheiten" && p.umlageschluessel.anteilGesamt !== undefined);
+    const werte = [...new Set(einheiten.map((p) => p.umlageschluessel!.anteilGesamt!))];
+    if (werte.length < 2) return [];
+    const hoechst = Math.max(...werte);
+    const betroffen = einheiten.filter((p) => p.umlageschluessel!.anteilGesamt! < hoechst);
+    const zuViel = runde(betroffen.reduce((x, p) => x + p.anteilMieter * (1 - p.umlageschluessel!.anteilGesamt! / hoechst), 0));
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: "Leerstand auf Mieter verteilt?",
+        erklaerung: `Die nach Wohnungen verteilten Kosten rechnen mit unterschiedlich vielen Wohnungen (${werte.sort((x, y) => x - y).map((w) => zahlDE(w)).join(" und ")}). Werden leere Wohnungen weggelassen, zahlen die übrigen Mieter deren Anteil mit. Den Anteil leerer Wohnungen trägt der Vermieter.`,
+        naechsterSchritt: "Fragen Sie nach, warum unterschiedlich viele Wohnungen angesetzt sind, und verlangen Sie, dass leere Wohnungen mitgezählt werden.",
+        betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
+        beleg: { werte, hoechst, positionen: betroffen.map((p) => p.id), zuViel },
+      },
+    ];
+  },
+};
+
+/**
+ * Grundsteuer ab 2025: Mit der Reform wird die Grundsteuer neu berechnet. Starke Änderungen gegenüber
+ * dem Vorjahr sollten mit dem neuen Grundsteuerbescheid belegt werden.
+ */
+export const I14_Grundsteuer2025: Regel = {
+  id: "I-14",
+  version: "1.0.0",
+  titel: "Grundsteuer nach der Reform 2025 belegt",
+  bereich: "inhaltlich",
+  grundlage: "§ 2 Nr. 1 BetrKV; Grundsteuerreform (GrStG ab 2025)",
+  stand: "entwurf",
+  pruefe(a) {
+    const z = a.meta.abrechnungszeitraum;
+    if (!z || z.bis < "2025-01-01") return [];
+    const jetzt = runde(a.kostenpositionen.filter((p) => p.kategorie === "grundsteuer").reduce((x, p) => x + p.anteilMieter, 0));
+    const vorher = runde((a.vorjahr?.kostenpositionen ?? []).filter((p) => p.kategorie === "grundsteuer").reduce((x, p) => x + p.anteilMieter, 0));
+    if (!jetzt || !vorher) return [];
+    const aenderung = (jetzt - vorher) / vorher;
+    if (Math.abs(aenderung) < 0.2) {
+      return [{ status: "ok", titel: "Grundsteuer kaum verändert", erklaerung: `Grundsteuer ${euro(jetzt)} (Vorjahr ${euro(vorher)}).`, beleg: { jetzt, vorher } }];
+    }
+    return [
+      {
+        status: "auffaelligkeit",
+        titel: aenderung > 0 ? "Grundsteuer stark gestiegen" : "Grundsteuer stark verändert",
+        erklaerung: `Seit 2025 wird die Grundsteuer neu berechnet. Ihr Anteil hat sich von ${euro(vorher)} auf ${euro(jetzt)} geändert (${aenderung > 0 ? "+" : ""}${zahlDE(aenderung * 100, 0)} %). Umgelegt werden darf nur die Grundsteuer laut aktuellem Bescheid.`,
+        naechsterSchritt: "Verlangen Sie Einsicht in den Grundsteuerbescheid für 2025.",
+        beleg: { jetzt, vorher, aenderung: runde(aenderung * 100) },
+      },
+    ];
+  },
+};
+
 export const INHALTLICHE_REGELN = [
   I01_NichtUmlagefaehig,
   I02_SonstigeKosten,
@@ -472,4 +574,7 @@ export const INHALTLICHE_REGELN = [
   I09_WasserNachVerbrauch,
   I10_Rauchwarnmelder,
   I11_Hauswart,
+  I12_Gewerbe,
+  I13_Leerstand,
+  I14_Grundsteuer2025,
 ];

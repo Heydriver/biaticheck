@@ -1,4 +1,4 @@
-# Regelkatalog v0.2 (Entwurf)
+# Regelkatalog v0.4 (Entwurf)
 
 Alle Regeln haben den Stand **Entwurf** und müssen vom Expertenteam bestätigt werden.
 Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
@@ -15,6 +15,8 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | R-03 | Saldo = Kosten − Vorauszahlungen | Rechnerisch | Abweichung | Rückfrage Vorauszahlungen |
 | R-04 | Einheitliche Wohn-, Gesamt- und Heizflächen | § 556a BGB | Auffälligkeit | – |
 | R-05 | Angerechnete Vorauszahlungen passen zu den tatsächlichen Zahlungen | § 556 Abs. 2 BGB | ohne Beleg: **Prüfbedarf** (Betrag zählt nicht zum Potenzial); mit belegtem Verlauf: Fehler mit Betrag | Vorjahresabrechnung oder Kontoauszüge |
+| R-06 | Ein- oder Auszug im Abrechnungsjahr berücksichtigt (Mietbeginn/-ende laut Mietvertrag) | § 556a Abs. 1 BGB | Auffälligkeit mit „bis zu“-Betrag: zeitabhängige Kosten × Tage außerhalb der Mietzeit | Mietvertrag |
+| R-07 | Wohnfläche der Abrechnung passt zum Mietvertrag (Toleranz 3 %) | § 556a BGB; BGH VIII ZR 220/17 (tatsächliche Fläche maßgeblich) | Auffälligkeit mit „bis zu“-Betrag auf nach Fläche verteilte Kosten | Mietvertrag |
 | I-01 | Keine nicht umlagefähigen Kosten (Verwaltung, Instandhaltung, Rücklage, Bank) | § 1 Abs. 2 BetrKV | Abweichung mit Betrag | – |
 | I-02 | Sonstige Betriebskosten im Mietvertrag vereinbart | § 2 Nr. 17 BetrKV | Abweichung mit Betrag | Rückfrage Mietvertrag |
 | I-03 | Jede Position einer Kostenart zuordenbar | § 2 BetrKV | Auffälligkeit | – |
@@ -26,6 +28,9 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | I-09 | Wasser nach Verbrauch, wenn ein Wasserzähler vorhanden ist | § 556a Abs. 1 S. 2 BGB | ohne Angabe: Prüfbedarf (ohne Betrag); mit Zähler: Auffälligkeit | Rückfrage: eigener Wasserzähler? |
 | I-10 | Rauchwarnmelder: nur Wartung, keine Miete | BGH VIII ZR 379/20 | „Miete“: Abweichung mit Betrag; gemischt oder unklar: Auffälligkeit ohne Betrag | Rechnung mit getrennter Miete/Wartung |
 | I-11 | Hauswart ohne Reparatur-, Verwaltungs- oder Bereitschaftsanteil | § 2 Nr. 14, § 1 Abs. 2 BetrKV | Hinweis im Namen oder > 130 % des DMB-Werts (0,37 €/m²/Monat): Auffälligkeit ohne Betrag | Hauswartvertrag, Leistungsverzeichnis |
+| I-12 | Vorwegabzug bei Gewerbe im Haus | § 556a BGB; BGH VIII ZR 78/05 | Gewerbe ja, kein Vorwegabzug: Auffälligkeit ohne Betrag | Rückfrage: Gewerbe im Haus? |
+| I-13 | Leerstand trägt der Vermieter (gleiche Wohnungsanzahl bei nach Einheiten verteilten Kosten) | § 556a BGB; BGH VIII ZR 159/05 | Auffälligkeit mit „bis zu“-Betrag | – |
+| I-14 | Grundsteuer ab 2025: Änderung ≥ 20 % gegenüber Vorjahr belegt | § 2 Nr. 1 BetrKV; GrStG | Auffälligkeit, Grundsteuerbescheid anfordern | Vorjahresabrechnung |
 | P-01 | Vorjahresvergleich (> 10 % und > 25 €; neue Kostenarten) | Wirtschaftlichkeitsgebot | Auffälligkeit | Rückfrage Vorjahresabrechnung |
 | P-02 | Kalte Nebenkosten pro m² und Monat (Schwelle 2,50 € – **Entwurf**) | Betriebskostenspiegel | Auffälligkeit | Rückfrage Wohnfläche |
 | P-03 | Warmwasserkosten pro m³ (Schwelle 20 € – **Entwurf**) | Wirtschaftlichkeitsgebot | Auffälligkeit | – |
@@ -34,18 +39,12 @@ Hinweis F-03: Gerechnet wird vorsichtig „Zugang + 12 Monate“ (taggenau). Ob 
 
 ## Nächste Regelkandidaten (aus Musterprüfungen ergänzen)
 
-- Vorauszahlungen mit Mietvertrag/Kontoauszügen abgleichen
-- Leerstand: Kosten für leere Wohnungen trägt der Vermieter
-- Gewerbeanteil: Vorwegabzug bei gemischt genutzten Gebäuden
-- Hauswart: Anteil für Verwaltung/Reparaturen herausgerechnet? (G-001)
 - Gartenpflege/Reinigung: Doppelabrechnung mit Hauswart (G-001)
 - Kennwerte je Kostenart, z. B. Müll, Hauswart (G-001)
 - Plausibilität der Vorauszahlungsanpassung nach § 560 Abs. 4 BGB (G-001)
 - Öffentlich geförderter Wohnraum: Sonderregeln NMV 1970, Umlageausfallwagnis (G-001)
 - Versicherung: nur Gebäude-/Haftpflicht, keine Rechtsschutz- oder Mietausfallversicherung
-- Grundsteuer: Plausibilität nach Grundsteuerreform 2025
 - Zwischenablesung bei Mieterwechsel (Heizkosten)
-- Rauchwarnmelder: Wartung umlagefähig, Miete/Kauf nicht
 
 ## Ergebnisstufen und Prüfbedarf
 

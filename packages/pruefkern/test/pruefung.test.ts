@@ -265,4 +265,47 @@ describe("Neue Regeln: Wasser, Rauchwarnmelder, Hauswart", () => {
     const normal = mit((a) => a.kostenpositionen.push({ id: "h1", bezeichnung: "Hauswart", kategorie: "hauswart", anteilMieter: 250 }));
     expect(nur(normal.ergebnisse, "I-11").find((e) => e.positionId === "h1")!.status).toBe("ok");
   });
+
+  it("R-06: Einzug im Jahr ohne Zeitanteil → Auffälligkeit mit zeitanteiligem Betrag", () => {
+    // 01.07.–31.12.2025 = 184 von 365 Tagen; zeitabhängige Kosten 2.152 € → bis zu 1.067,16 € zu viel
+    const b = mit((a) => (a.mietvertrag = { mietbeginn: "2025-07-01" }));
+    expect(nur(b.ergebnisse, "R-06")[0]).toMatchObject({ status: "auffaelligkeit", betragZugunstenMieter: 1067.16, beleg: { tageMiete: 184, tageGesamt: 365 } });
+    const ok = mit((a) => {
+      a.mietvertrag = { mietbeginn: "2025-07-01" };
+      a.meta.nutzungszeitraum = { von: "2025-07-01", bis: "2025-12-31" };
+    });
+    expect(nur(ok.ergebnisse, "R-06")[0]!.status).toBe("ok");
+    expect(nur(mit((a) => (a.mietvertrag = { mietbeginn: "2019-03-01" })).ergebnisse, "R-06")).toEqual([]);
+  });
+
+  it("R-07: Abrechnung setzt mehr Fläche an als der Mietvertrag → Auffälligkeit mit Betrag", () => {
+    // 72 m² statt 68 m²; nach Fläche verteilt 1.212 € → 1.212 × 4/72 = 67,33 €
+    const b = mit((a) => (a.mietvertrag = { wohnflaeche: 68 }));
+    expect(nur(b.ergebnisse, "R-07")[0]).toMatchObject({ status: "auffaelligkeit", betragZugunstenMieter: 67.33 });
+    expect(nur(mit((a) => (a.mietvertrag = { wohnflaeche: 71 })).ergebnisse, "R-07")[0]!.status).toBe("ok");
+  });
+
+  it("I-12: Gewerbe im Haus ohne Vorwegabzug → Auffälligkeit, unbekannt → Rückfrage", () => {
+    expect(nur(mit((a) => (a.ausstattung = { gewerbeImHaus: true })).ergebnisse, "I-12")[0]!.status).toBe("auffaelligkeit");
+    const offen = nur(mit((a) => (a.ausstattung = {})).ergebnisse, "I-12")[0]!;
+    expect(offen).toMatchObject({ status: "nicht_pruefbar", rueckfrage: { feld: "ausstattung.gewerbeImHaus" } });
+    const mitAbzug = mit((a) => {
+      a.ausstattung = { gewerbeImHaus: true };
+      a.kostenpositionen[3]!.gesamtkostenVorVorwegabzug = 3400;
+    });
+    expect(nur(mitAbzug.ergebnisse, "I-12")[0]!.status).toBe("ok");
+  });
+
+  it("I-13: unterschiedliche Anzahl Wohnungen → Leerstand auf Mieter verteilt", () => {
+    const b = mit((a) => a.kostenpositionen.push({ id: "k1", bezeichnung: "Kabel", kategorie: "sonstige", umlageschluessel: { typ: "einheiten", anteilEinheit: 1, anteilGesamt: 10 }, anteilMieter: 60 }));
+    // 60 € × (1 − 10/12) = 10 €
+    expect(nur(b.ergebnisse, "I-13")[0]).toMatchObject({ status: "auffaelligkeit", betragZugunstenMieter: 10 });
+    expect(nur(pruefeAbrechnung(korrekteAbrechnung(), { heute: HEUTE }).ergebnisse, "I-13")).toEqual([]);
+  });
+
+  it("I-14: Grundsteuer ab 2025 stark verändert → Auffälligkeit, Bescheid anfordern", () => {
+    const b = mit((a) => (a.kostenpositionen[0]!.anteilMieter = 400));
+    expect(nur(b.ergebnisse, "I-14")[0]).toMatchObject({ status: "auffaelligkeit", beleg: { vorher: 288, jetzt: 400 } });
+    expect(nur(pruefeAbrechnung(korrekteAbrechnung(), { heute: HEUTE }).ergebnisse, "I-14")[0]!.status).toBe("ok");
+  });
 });
