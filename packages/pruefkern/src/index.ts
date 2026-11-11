@@ -8,3 +8,4 @@ export * from "./antworten";
 export * from "./vergleich";
 export * from "./stufen";
 export { MUSTERABRECHNUNG } from "./muster";
+export * from "./fehlerkatalog";
