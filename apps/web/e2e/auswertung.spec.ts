@@ -26,11 +26,15 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await expect(page.getByRole("note")).toContainText("Demo-Modus");
   // Einordnung: Vergleichswerte (Warmwasser, Kostenvergleich) und die zulässige Heizfläche zählen nicht als Fehler
   await expect(page.getByText("Wir haben einen Punkt mit begründetem Prüfbedarf gefunden.")).toBeVisible();
+  // Unterlage fehlt noch → Einstufung „Prüfbedarf“
+  await expect(page.getByText("Fehlerpotenzial:").locator("..")).toContainText("Prüfbedarf");
   // Prüfbedarf: die 1.222,87 € zählen erst, wenn sie belegt sind
   await expect(page.getByText(/Ein weiterer Punkt mit bis zu 1\.222,87\s€ prüfen wir, sobald Sie eine Unterlage nachreichen/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vorauszahlungen Heizkosten: Prüfbedarf" })).toBeVisible();
-  await expect(page.getByText(/Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto/)).toBeVisible();
+  await expect(page.getByText(/Bitte bereitlegen:.*Abrechnung des Vorjahres\./)).toBeVisible();
+  // Kontoauszüge und Mietkonto werden nicht mehr verlangt
+  await expect(page.getByText(/Kontoausz|Mietkonto/)).toHaveCount(0);
   await expect(page.getByText("Ihre Nachzahlung").locator("..")).toContainText("1.214,88 €");
   const vergleich = page.getByText("Vergleich mit dem Bundesdurchschnitt", { exact: true }).locator("..");
   await expect(vergleich).toContainText("45 % über Durchschnitt");
@@ -44,11 +48,13 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await zugangsdatum(page, "2025-11-28");
   await expect(page.getByText("Einspruch möglich").locator("..")).toContainText("bis 28.11.2026");
 
-  // Kontoauszug: 110 € im Monat gezahlt → 1.320 € statt angerechneter 1.176,41 € → sicherer Fehler 143,59 €
+  // Eigene Angabe: 110 € im Monat gezahlt → 1.320 € statt angerechneter 1.176,41 € → sicherer Fehler 143,59 €
   await page.getByLabel("gültig ab, Zeile 1").fill("2024-01-01");
   await page.getByLabel("Heizkosten je Monat, Zeile 1").fill("110");
   await page.getByRole("button", { name: "Prüfen", exact: true }).click();
   await expect(page.getByRole("heading", { name: /143,59\s€ müssen Sie nicht bezahlen/ })).toBeVisible();
+  // Belegter Fehler über 30 € → Einstufung „hoch“
+  await expect(page.getByText("Fehlerpotenzial:").locator("..")).toContainText("hoch");
   await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeHidden();
 
   // Modell B: Fehler sind kostenlos sichtbar, Schritte und Schreiben erst nach dem Erledigen-Paket (nicht einmal im Quelltext)
@@ -125,15 +131,15 @@ test("Möglicherweise verspätete Abrechnung: erst Prüfbedarf mit Vorjahresabre
   await zugangsdatum(page, "2026-01-15");
   await expect(page.getByRole("heading", { name: "Abrechnung möglicherweise zu spät" })).toBeVisible();
   await expect(page.getByText(/Dann müssten Sie 1\.214,88\s€ nicht zahlen\. Das bestätigen wir mit Ihrer Vorjahresabrechnung\./)).toBeVisible();
-  await expect(page.getByText(/Bitte bereitlegen:.*Abrechnung des Vorjahres\. Damit bestätigen wir den Abrechnungszeitraum/)).toBeVisible();
+  await expect(page.getByText(/Bitte bereitlegen:.*Abrechnung des Vorjahres\..*Damit bestätigen wir den Abrechnungszeitraum/)).toBeVisible();
   await expect(page.getByRole("heading", { name: /müssen Sie nicht bezahlen/ })).toHaveCount(0);
 });
 
 test("Prüfbedarf: Unterlage nachreichen – ohne KI-Zugang geht sie an einen Fachprüfer", async ({ page }) => {
   await hochladen(page);
   await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();
-  await page.getByRole("radio", { name: "Kontoauszüge oder Mietkonto" }).check();
-  await page.getByLabel("Unterlage hochladen").setInputFiles({ name: "kontoauszug.pdf", mimeType: "application/pdf", buffer: PDF });
+  await expect(page.getByRole("radio")).toHaveCount(0);
+  await page.getByLabel("Unterlage hochladen").setInputFiles({ name: "vorjahr.pdf", mimeType: "application/pdf", buffer: PDF });
   await expect(page.getByRole("status").filter({ hasText: "Ein Fachprüfer wertet sie aus" })).toBeVisible({ timeout: 15_000 });
   // Ergebnis bleibt unverändert, bis die Unterlage ausgewertet ist
   await expect(page.getByRole("heading", { name: "Prüfbedarf: Wir brauchen noch eine Unterlage" })).toBeVisible();

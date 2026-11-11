@@ -34,7 +34,7 @@ export const LOESUNGSVORSCHLAEGE: Readonly<Record<string, string>> = {
   "R-01:nicht_pruefbar":
     "Fordern Sie beim Vermieter eine Abrechnung an, die je Kostenart die Gesamtkosten und den Verteilerschlüssel ausweist. Nur dann ist Ihr Anteil nachvollziehbar.",
   "R-03:nicht_pruefbar":
-    "Gleichen Sie die Summe Ihrer Vorauszahlungen mit Ihren Kontoauszügen oder dem Mietkonto ab und tragen Sie sie ein.",
+    "Tragen Sie die Summe Ihrer Vorauszahlungen im Abrechnungszeitraum ein.",
   "I-02:nicht_pruefbar":
     "Sehen Sie in Ihrem Mietvertrag nach, ob diese Kostenart ausdrücklich als sonstige Betriebskosten vereinbart ist. Ist sie dort nicht genannt, fordern Sie die Streichung der Position.",
   "I-04:nicht_pruefbar":
@@ -44,7 +44,7 @@ export const LOESUNGSVORSCHLAEGE: Readonly<Record<string, string>> = {
   "P-01:nicht_pruefbar":
     "Legen Sie die Abrechnung des Vorjahres bereit. Mit ihr erkennen wir ungewöhnliche Kostensteigerungen einzelner Positionen.",
   "R-05:pruefbedarf":
-    "Laden Sie die Abrechnung des Vorjahres oder Ihre Kontoauszüge für den Abrechnungszeitraum hoch. Dann prüfen wir, ob wirklich Zahlungen fehlen.",
+    "Laden Sie die Abrechnung des Vorjahres hoch. Dann prüfen wir, ob wirklich Zahlungen fehlen.",
   "P-02:nicht_pruefbar": "Tragen Sie die Wohnfläche laut Mietvertrag ein, damit wir Ihre Kosten mit üblichen Werten vergleichen können.",
 };
 
@@ -55,17 +55,25 @@ export function loesungsvorschlag(e: Regelergebnis): string | undefined {
 
 // ---------- Stufe 1 ----------
 
-export type Fehlerstufe = "hoch" | "mittel" | "gering" | "keins";
+export type Fehlerstufe = "hoch" | "gering" | "pruefbedarf" | "keins";
+
+/** Anzeige der Einstufung für den Kunden. */
+export const FEHLERSTUFE_TEXT: Readonly<Record<Fehlerstufe, string>> = { hoch: "hoch", gering: "gering", pruefbedarf: "Prüfbedarf", keins: "kein Fehler erkannt" };
+
+/** Ab diesem sicher belegten Betrag gilt das Fehlerpotenzial als hoch (vom Expertenteam zu bestätigen). */
+export const FEHLERPOTENZIAL_HOCH_AB = 30;
 
 /**
- * Fehlerpotenzial als einfache Aussage: Anteil der Prüfregeln, die einen Fehler
- * oder eine Auffälligkeit melden. Ein sicher bezifferbarer Fehler ist immer „hoch“.
- * Schwellen sind vom Expertenteam zu bestätigen.
+ * Einstufung des Fehlerpotenzials:
+ * 1. Belegter Fehler gefunden → "hoch" (sicher ≥ 30 €) oder "gering".
+ * 2. Kein belegter Fehler, aber es fehlen noch Unterlagen → "pruefbedarf".
+ * 3. Nur Punkte zum Klären, keine Unterlage offen → "gering".
+ * 4. Nichts gefunden → "keins" (Anzeige: „kein Fehler erkannt“).
  */
-export function fehlerstufe(quote: number, sicher: number): Fehlerstufe {
-  if (sicher > 0 || quote >= 20) return "hoch";
-  if (quote >= 10) return "mittel";
-  if (quote > 0) return "gering";
+export function fehlerstufe(e: { fehler: number; sicher: number; klaeren: number; unterlagenOffen: number }): Fehlerstufe {
+  if (e.fehler > 0) return e.sicher >= FEHLERPOTENZIAL_HOCH_AB ? "hoch" : "gering";
+  if (e.unterlagenOffen > 0) return "pruefbedarf";
+  if (e.klaeren > 0) return "gering";
   return "keins";
 }
 
@@ -168,7 +176,7 @@ export function erstelleStufe1(
       quote,
       regelnAuffaellig,
       regelnGesamt: ALLE_REGELN.length,
-      stufe: fehlerstufe(quote, z.einsparpotenzial),
+      stufe: fehlerstufe({ fehler: z.anzahl.abweichung, sicher: z.einsparpotenzial, klaeren: z.anzahl.auffaelligkeit, unterlagenOffen: z.anzahl.pruefbedarf }),
       pruefbedarf: { anzahl: z.anzahl.pruefbedarf, betrag: z.pruefbedarfBetrag, ohneBetrag: z.pruefbedarfOhneBetrag },
     },
     widerspruchsfrist: { ...widerspruch, abrechnungsfrist },
@@ -459,7 +467,7 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "R-05": {
       const art = b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten";
       if (s === "pruefbedarf")
-        return k(`Vorauszahlungen ${art}: Prüfbedarf`, `Möglich sind bis zu ${euro(zahl(b.differenz) ?? 0)}. Dafür brauchen wir Ihre Vorjahresabrechnung oder Kontoauszüge.`);
+        return k(`Vorauszahlungen ${art}: Prüfbedarf`, `Möglich sind bis zu ${euro(zahl(b.differenz) ?? 0)}. Dafür brauchen wir Ihre Vorjahresabrechnung.`);
       if (s === "abweichung" && zahl(b.summe) !== undefined)
         return k(`Vorauszahlungen ${art} zu niedrig angerechnet`, `Gezahlt haben Sie ${euro(zahl(b.summe)!)}, angerechnet wurden nur ${euro(zahl(b.jahr) ?? 0)}.`);
       const jahr = zahl(b.jahr), erwartet = zahl(b.erwartet);
@@ -813,12 +821,14 @@ export function sammleUnterlagen(punkte: Auffaelligkeit[]): Unterlagenanforderun
   for (const p of punkte) {
     if (p.status !== "pruefbedarf" || !p.unterlagen?.length) continue;
     const schluessel = [...p.unterlagen].sort().join("|");
-    if (liste.has(schluessel)) continue;
-    liste.set(schluessel, {
-      arten: p.unterlagen,
-      titel: p.unterlagen.map((u) => UNTERLAGEN[u]).join(" oder "),
-      grund: GRUND[p.regelId] ?? "Damit können wir diesen Punkt sicher prüfen.",
-    });
+    const grund = GRUND[p.regelId] ?? "Damit können wir diesen Punkt sicher prüfen.";
+    const vorhanden = liste.get(schluessel);
+    if (vorhanden) {
+      // Dieselbe Unterlage klärt mehrere Punkte: Gründe zusammenführen
+      if (!vorhanden.grund.includes(grund)) vorhanden.grund = `${vorhanden.grund} ${grund}`;
+      continue;
+    }
+    liste.set(schluessel, { arten: p.unterlagen, titel: p.unterlagen.map((u) => UNTERLAGEN[u]).join(" oder "), grund });
   }
   return [...liste.values()];
 }
@@ -934,7 +944,7 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
     case "R-05": {
       add("Angerechnete Vorauszahlungen", eur(b.jahr));
       if (zahl(b.summe) !== undefined) {
-        add(b.quelle === "kontoauszug" ? "Gezahlt laut Kontoauszügen" : b.quelle === "vorjahresabrechnung" ? "Gezahlt laut Vorjahresabrechnung" : "Gezahlt laut Ihren Angaben", eur(b.summe));
+        add(b.quelle === "kontoauszug" ? "Gezahlt laut Ihren Zahlungsbelegen" : b.quelle === "vorjahresabrechnung" ? "Gezahlt laut Vorjahresabrechnung" : "Gezahlt laut Ihren Angaben", eur(b.summe));
         if ((zahl(b.differenz) ?? 0) > 0) add("Fehlt", eur(b.differenz), true);
       } else if (zahl(b.monatlich) !== undefined) {
         add("Laut Abrechnung pro Monat", eur(b.monatlich));

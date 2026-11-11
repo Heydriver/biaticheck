@@ -335,7 +335,7 @@ details[open] summary { margin-bottom: 12px; }
       : `<dd style="font-size:15px;font-weight:500">Wann kam die Abrechnung an?</dd>
          <div class="datum"><input type="date" id="zugang" aria-label="Eingangsdatum der Abrechnung" max="${HEUTE}"><button class="knopf neben" type="button" data-aktion="zugang">OK</button></div>
          ${z.fehlerZugang ? `<small class="meldung" role="alert">${esc(z.fehlerZugang)}</small>` : ""}`;
-    const STUFE = { hoch: "hoch", mittel: "mittel", gering: "gering", keins: "keins" };
+    const STUFE = { hoch: "hoch", gering: "gering", pruefbedarf: "Prüfbedarf", keins: "kein Fehler erkannt" };
     const fehler = `<div><dt>Fehlerpotenzial</dt><dd class="${f.stufe === "hoch" ? "dringend" : ""}">${STUFE[f.stufe]}</dd></div>`;
     const plzFrage = `<div class="datum"><input id="plz" inputmode="numeric" maxlength="5" placeholder="z. B. 80331" aria-label="Postleitzahl der Wohnung" style="width:9em"><button class="knopf neben" type="button" data-aktion="plz">OK</button></div>${z.fehlerPlz ? `<small class="meldung" role="alert">${esc(z.fehlerPlz)}</small>` : ""}`;
     let vergleich = "";
@@ -447,7 +447,7 @@ details[open] summary { margin-bottom: 12px; }
         <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="ja">Ja</button>
         <button class="knopf neben" type="button" data-aktion="janein" data-feld="${esc(p.rueckfrage.feld)}" data-wert="nein">Nein</button></div>`).join("")}
       ${r.s2.unterlagen.map((u) => `<p style="font-size:15px"><b>Bitte hochladen:</b> ${esc(u.titel)}. ${esc(u.grund)}</p>`).join("")}
-      ${r.s2.unterlagen.length ? `<div class="ablage"><input type="file" id="vz-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Vorjahresabrechnung oder Kontoauszüge auswählen"><strong>Unterlage auswählen</strong><span class="leise">PDF oder Fotos</span></div>` : ""}
+      ${r.s2.unterlagen.length ? `<div class="ablage"><input type="file" id="vz-datei" accept="application/pdf,image/jpeg,image/png,image/webp" multiple aria-label="Abrechnung des Vorjahres auswählen"><strong>Abrechnung des Vorjahres auswählen</strong><span class="leise">PDF oder Fotos</span></div>` : ""}
       <p class="leise" id="vz-status" aria-live="polite">${esc(z.vzStatus)}</p></section>`;
   }
 
@@ -463,7 +463,7 @@ details[open] summary { margin-bottom: 12px; }
       status("Seiten werden vorbereitet …");
       const limits = await sample.limits().catch(() => ({}));
       const seiten = await bereiteVor(liste);
-      await abschreiben(seiten, limits.images?.maxCount ?? 0, "Vorjahresabrechnung oder Kontoauszüge", status);
+      await abschreiben(seiten, limits.images?.maxCount ?? 0, "Vorjahresabrechnung", status);
       status("Vorauszahlungen werden ermittelt …");
       const text = seiten.map((s, i) => `--- Seite ${i + 1} ---\n${s.text}`).join("\n\n").slice(0, 150000);
       const antwort = await sample.json(`Das folgende Dokument ist eine Nebenkostenabrechnung des Vorjahres, Kontoauszüge oder ein Mietkonto eines Mieters. Ermittle die monatlichen Vorauszahlungen (Abschläge) für Betriebskosten und für Heizkosten, die im Zeitraum ${zr ? `${zr.von} bis ${zr.bis}` : "des Abrechnungsjahres"} galten, jeweils mit dem Datum, ab dem der Betrag galt. In einer Vorjahresabrechnung steht das meist als neue monatliche Vorauszahlung ab einem Datum. Übernimm nur Beträge, die ausdrücklich als Vorauszahlung oder Abschlag für Betriebs- oder Heizkosten erkennbar sind. Teile eine Gesamtmiete nicht selbst auf. Zahlen genau übernehmen, nicht runden.
@@ -479,7 +479,7 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
       const vjGueltig = vj && /^\d{4}-\d{2}-\d{2}$/.test(vj.von ?? "") && /^\d{4}-\d{2}-\d{2}$/.test(vj.bis ?? "");
       const zeitraumPasst = !!(antwort?.dokument === "vorjahresabrechnung" && vjGueltig && zr && P.schliesstAn(vj, zr));
       if (!verlauf.length && !zeitraumPasst) {
-        status(vjGueltig ? `Der Zeitraum dieser Abrechnung (${datumDE(vj.von)} bis ${datumDE(vj.bis)}) schließt nicht an Ihre aktuelle Abrechnung an. Bitte laden Sie die Abrechnung des direkt vorhergehenden Jahres hoch.` : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres oder Kontoauszüge hoch.");
+        status(vjGueltig ? `Der Zeitraum dieser Abrechnung (${datumDE(vj.von)} bis ${datumDE(vj.bis)}) schließt nicht an Ihre aktuelle Abrechnung an. Bitte laden Sie die Abrechnung des direkt vorhergehenden Jahres hoch.` : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres hoch.");
         $("vz-datei").disabled = false;
         return;
       }

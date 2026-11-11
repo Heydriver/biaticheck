@@ -15,6 +15,7 @@ import {
   Abrechnung,
   euro,
   fehlerstufe,
+  FEHLERSTUFE_TEXT,
   personalisiereAnschreiben,
   schliesstAn,
   type AbrechnungEingabe,
@@ -233,10 +234,10 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
     const r05 = s2.auffaelligkeiten.find((p) => p.regelId === "R-05")!;
     expect(r05.kurz).toEqual({
       titel: "Vorauszahlungen Heizkosten: Prüfbedarf",
-      satz: `Möglich sind bis zu ${euro(1222.87)}. Dafür brauchen wir Ihre Vorjahresabrechnung oder Kontoauszüge.`,
+      satz: `Möglich sind bis zu ${euro(1222.87)}. Dafür brauchen wir Ihre Vorjahresabrechnung.`,
     });
     expect(s2.unterlagen).toEqual([
-      { arten: ["vorjahresabrechnung", "kontoauszug"], titel: "Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto", grund: expect.stringContaining("wirklich Geld fehlt") },
+      { arten: ["vorjahresabrechnung"], titel: "Abrechnung des Vorjahres", grund: expect.stringContaining("wirklich Geld fehlt") },
     ]);
   });
 
@@ -284,17 +285,25 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
 });
 
 describe("Fehlerquote und persönliches Anschreiben", () => {
-  it("G-001: 1 Prüfregel auffällig (Prüfbedarf und Hinweise zählen nicht), Fehlerpotenzial gering", () => {
+  it("G-001: kein belegter Fehler, aber die Vorjahresabrechnung fehlt noch → Fehlerpotenzial „Prüfbedarf“", () => {
     const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));
-    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 1, regelnGesamt: ALLE_REGELN.length, quote: Math.round((1 / ALLE_REGELN.length) * 100), stufe: "gering" });
+    expect(s1.fehlerpotenzial).toMatchObject({ regelnAuffaellig: 1, regelnGesamt: ALLE_REGELN.length, quote: Math.round((1 / ALLE_REGELN.length) * 100), stufe: "pruefbedarf" });
   });
 
   it("Stufen nach Quote, sicherer Fehler immer hoch", () => {
-    expect(fehlerstufe(0, 0)).toBe("keins");
-    expect(fehlerstufe(5, 0)).toBe("gering");
-    expect(fehlerstufe(10, 0)).toBe("mittel");
-    expect(fehlerstufe(20, 0)).toBe("hoch");
-    expect(fehlerstufe(5, 10)).toBe("hoch");
+    const f = (fehler: number, sicher: number, klaeren = 0, unterlagenOffen = 0) => fehlerstufe({ fehler, sicher, klaeren, unterlagenOffen });
+    // Kein Fehler → „kein Fehler erkannt“
+    expect(f(0, 0)).toBe("keins");
+    expect(FEHLERSTUFE_TEXT.keins).toBe("kein Fehler erkannt");
+    // Unterlagen fehlen noch → Prüfbedarf (auch wenn es daneben Punkte zum Klären gibt)
+    expect(f(0, 0, 0, 1)).toBe("pruefbedarf");
+    expect(f(0, 0, 2, 1)).toBe("pruefbedarf");
+    // Fehler gefunden → hoch ab 30 €, sonst gering – auch wenn noch Unterlagen offen sind
+    expect(f(1, 12)).toBe("gering");
+    expect(f(1, 30)).toBe("hoch");
+    expect(f(2, 198, 0, 1)).toBe("hoch");
+    // Nur Punkte zum Klären, keine Unterlage offen
+    expect(f(0, 0, 1)).toBe("gering");
   });
 
   it("setzt Name, Anschriften, Mieternummer und Empfänger ein", () => {
@@ -328,7 +337,7 @@ describe("Fahrplan: konkrete Ergebnisse", () => {
     const f = s2.fahrplan;
     expect(f.zahlung).toEqual({ laut: 1214.88, hoechstens: 1214.88, entfaellt: false });
     expect(f.schritte.map((s) => s.titel)).toEqual([
-      "Abrechnung des Vorjahres oder Kontoauszüge oder Mietkonto hochladen",
+      "Abrechnung des Vorjahres hochladen",
       "Nachzahlung unter Vorbehalt zahlen",
       "Schreiben an die Hausverwaltung senden",
       "Belege einsehen",

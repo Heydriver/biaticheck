@@ -45,7 +45,7 @@ describe("G-001 – Großvermieter München 2024", () => {
     // Heizkostenvorauszahlungen: vermutlich im Jahr angepasst – Prüfbedarf, nicht im Potenzial
     expect(bericht.zusammenfassung.pruefbedarfBetrag).toBe(1222.87);
     const r05 = bericht.ergebnisse.find((e) => e.regelId === "R-05" && e.status === "pruefbedarf")!;
-    expect(r05.unterlagen).toEqual(["vorjahresabrechnung", "kontoauszug"]);
+    expect(r05.unterlagen).toEqual(["vorjahresabrechnung"]);
   });
 
   it("fragt gezielt beim Kunden nach", () => {

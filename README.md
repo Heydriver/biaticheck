@@ -90,7 +90,7 @@ DATABASE_URL=... UPLOAD_DIR=... DATEI_SCHLUESSEL=... pnpm --filter @biaticheck/w
 | Löschfrist (90 Tage) | ✅ Skript, Cron im Deployment einrichten |
 | Design von biati.de (Inter, Markenfarben, 3D-Startseite, Erklärvideo, Hell/Dunkel) | ✅ |
 | Ergebnisstufen, Anschreiben, Beratungsanfrage | ✅ (Freischaltung vorerst im Testmodus) |
-| Prüfbedarf: Unterlagen nachreichen (Vorjahresabrechnung, Kontoauszüge) mit automatischem Auslesen | ✅ – ohne API-Schlüssel an Fachprüfer |
+| Prüfbedarf: Unterlagen nachreichen (Vorjahresabrechnung) mit automatischem Auslesen | ✅ – ohne API-Schlüssel an Fachprüfer |
 | Bezahlung (Stripe) | ⏳ wartet auf Stripe-Konto |
 | Deployment biati.de | ⏳ Sprint 4 |
 

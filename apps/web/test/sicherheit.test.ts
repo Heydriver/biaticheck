@@ -172,7 +172,7 @@ describe("Kundenansicht", () => {
     expect(a.preis).toBeUndefined();
     expect(a.stufe2).toBeDefined();
     expect(a.pruefbedarf).toHaveLength(1);
-    expect(a.unterlagen?.[0]?.arten).toEqual(["vorjahresabrechnung", "kontoauszug"]);
+    expect(a.unterlagen?.[0]?.arten).toEqual(["vorjahresabrechnung"]);
   });
 
   it("nach der Freischaltung: Stufe 2 mit Lösungsvorschlägen und Anschreiben", () => {

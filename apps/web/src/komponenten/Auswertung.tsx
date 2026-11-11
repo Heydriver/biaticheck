@@ -1,6 +1,6 @@
 "use client";
 
-import type { Auffaelligkeit, Stufe1, Stufe2 } from "@biaticheck/pruefkern";
+import { FEHLERSTUFE_TEXT, type Auffaelligkeit, type Stufe1, type Stufe2 } from "@biaticheck/pruefkern";
 import { useState } from "react";
 import type { FallAnsicht } from "@/server/ansicht";
 import { Rueckfragen } from "./Rueckfragen";
@@ -78,6 +78,10 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
       <h1 id="ergebnis-titel" className="text-[clamp(24px,4.4vw,34px)] leading-tight font-bold tracking-tight">
         {titel}
       </h1>
+      <p>
+        <span className="text-sm text-gedaempft">Fehlerpotenzial: </span>
+        <strong>{FEHLERSTUFE_TEXT[f.stufe]}</strong>
+      </p>
       <p>{unter}</p>
       {f.pruefbedarf.anzahl > 0 && (
         <p className="text-[15px] text-gedaempft">
@@ -218,33 +222,21 @@ function Pruefbedarf({
         <Rueckfragen fragen={punkte.flatMap((p) => (p.rueckfrage ? [p.rueckfrage] : []))} beantworte={beantworte} ohneUeberschrift />
       )}
       {unterlagen.length > 0 && <UnterlageHochladen hochladen={hochladen} />}
-      {unterlagen.some((u) => u.arten.includes("kontoauszug")) && <VerlaufFormular beantworte={beantworte} />}
+      {punkte.some((p) => p.titel.startsWith("Vorauszahlungen")) && <VerlaufFormular beantworte={beantworte} />}
     </section>
   );
 }
 
 function UnterlageHochladen({ hochladen }: { hochladen: Aktionen["unterlageHochladen"] }) {
-  const [art, setArt] = useState<"vorjahr" | "kontoauszug">("vorjahr");
+  // Angefordert wird nur die Abrechnung des Vorjahres
+  const art = "vorjahr" as const;
   const [zustand, setZustand] = useState<"bereit" | "laedt">("bereit");
   const [meldung, setMeldung] = useState<string>();
   const [fehler, setFehler] = useState<string>();
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap gap-4 text-sm" role="radiogroup" aria-label="Art der Unterlage">
-        {(
-          [
-            ["vorjahr", "Abrechnung des Vorjahres"],
-            ["kontoauszug", "Kontoauszüge oder Mietkonto"],
-          ] as const
-        ).map(([wert, text]) => (
-          <label key={wert} className="flex items-center gap-2">
-            <input type="radio" name="unterlage-art" checked={art === wert} onChange={() => setArt(wert)} className="accent-[var(--gruen)]" />
-            {text}
-          </label>
-        ))}
-      </div>
       <label className="relative grid cursor-pointer justify-items-center gap-1 rounded-2xl border-2 border-dashed border-gruen/50 px-4 py-6 text-center">
-        <span className="font-semibold">{zustand === "laedt" ? "Wird gelesen und geprüft …" : "Unterlage hochladen (PDF oder Foto)"}</span>
+        <span className="font-semibold">{zustand === "laedt" ? "Wird gelesen und geprüft …" : "Abrechnung des Vorjahres hochladen (PDF oder Foto)"}</span>
         <span className="text-sm text-gedaempft">Das dauert etwa eine Minute.</span>
         <input
           type="file"
@@ -283,7 +275,7 @@ function UnterlageHochladen({ hochladen }: { hochladen: Aktionen["unterlageHochl
   );
 }
 
-/** Monatliche Vorauszahlungen aus Kontoauszug oder Vorjahresabrechnung eintragen (bis das Hochladen automatisch ausgewertet wird). */
+/** Monatliche Vorauszahlungen selbst eintragen (bis das Hochladen automatisch ausgewertet wird). */
 function VerlaufFormular({ beantworte }: { beantworte: Aktionen["beantworte"] }) {
   const [zeilen, setZeilen] = useState([{ ab: "", heizkosten: "", betriebskosten: "" }]);
   const [fehler, setFehler] = useState<string>();
@@ -311,7 +303,7 @@ function VerlaufFormular({ beantworte }: { beantworte: Aktionen["beantworte"] })
         }
       }}
     >
-      <p className="text-sm font-semibold">Oder tragen Sie Ihre monatlichen Vorauszahlungen laut Kontoauszug ein:</p>
+      <p className="text-sm font-semibold">Oder tragen Sie Ihre monatlichen Vorauszahlungen selbst ein:</p>
       {zeilen.map((z, i) => (
         <div key={i} className="grid gap-2 sm:grid-cols-3">
           <label className="grid gap-1 text-sm">

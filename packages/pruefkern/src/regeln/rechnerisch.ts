@@ -166,7 +166,7 @@ export const R03_Saldo: Regel = {
         status: "abweichung",
         titel: "Nachzahlung/Guthaben falsch berechnet",
         erklaerung: `Kosten ${euro(kosten)} abzüglich Vorauszahlungen ${euro(a.vorauszahlungen)} ergeben ${euro(erwartet)}, ausgewiesen sind ${euro(saldo)}.`,
-        naechsterSchritt: "Prüfen Sie die angerechneten Vorauszahlungen anhand Ihrer Kontoauszüge und fordern Sie eine Korrektur.",
+        naechsterSchritt: "Fordern Sie eine Korrektur des Abrechnungsergebnisses.",
         betragZugunstenMieter: differenz,
         beleg: { kosten, vorauszahlungen: a.vorauszahlungen, erwartet, ausgewiesen: saldo, differenz },
       },
@@ -284,7 +284,7 @@ function monatsanfaenge(von: string, bis: string): string[] {
 /**
  * Prüft die angerechneten Vorauszahlungen.
  * - Ohne Beleg (nur ein Monatsbetrag): Eine Differenz ist häufig eine Anpassung im Lauf des Jahres.
- *   Deshalb nur „Prüfbedarf“ mit Anforderung von Vorjahresabrechnung oder Kontoauszügen – kein Einsparpotenzial.
+ *   Deshalb nur „Prüfbedarf“ mit Anforderung der Vorjahresabrechnung – kein Einsparpotenzial.
  * - Mit belegtem Verlauf: Summe Monat für Monat; eine verbleibende Differenz zugunsten des Mieters ist ein Fehler.
  */
 export const R05_Vorauszahlungen: Regel = {
@@ -301,7 +301,7 @@ export const R05_Vorauszahlungen: Regel = {
     const monate = monatsanfaenge(zeitraum.von, zeitraum.bis);
     const toleranz = Math.max(einstellungen.toleranzEuro, 1);
     const verlauf = [...(d.verlauf ?? [])].sort((x, y) => x.ab.localeCompare(y.ab));
-    const quelle = d.verlaufQuelle === "kontoauszug" ? "Ihren Kontoauszügen" : d.verlaufQuelle === "vorjahresabrechnung" ? "der Vorjahresabrechnung" : "Ihren Angaben";
+    const quelle = d.verlaufQuelle === "kontoauszug" ? "Ihren Zahlungsbelegen" : d.verlaufQuelle === "vorjahresabrechnung" ? "der Vorjahresabrechnung" : "Ihren Angaben";
 
     const arten = [
       ["betriebskosten", "Betriebskosten"],
@@ -362,10 +362,10 @@ export const R05_Vorauszahlungen: Regel = {
         status: "pruefbedarf",
         titel: `Vorauszahlungen ${name} prüfen`,
         erklaerung: `Angerechnet sind ${euro(jahr)}. Mit ${euro(monatlich)} im Monat wären es ${euro(erwartet)} – bis zu ${euro(differenz)} mehr. Häufig wurde die Vorauszahlung aber im Lauf des Jahres angepasst. Ob wirklich Geld fehlt, zeigen die Vorjahresabrechnung oder Ihre Kontoauszüge.`,
-        naechsterSchritt: "Laden Sie die Abrechnung des Vorjahres oder Ihre Kontoauszüge für den Abrechnungszeitraum hoch.",
+        naechsterSchritt: "Laden Sie die Abrechnung des Vorjahres hoch.",
         betragZugunstenMieter: differenz,
         beleg: { art, jahr, monatlich, monate: monate.length, erwartet, differenz },
-        unterlagen: ["vorjahresabrechnung", "kontoauszug"],
+        unterlagen: ["vorjahresabrechnung"],
       });
     }
     return befunde;

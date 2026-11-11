@@ -14,7 +14,7 @@ Code: `packages/pruefkern/src/regeln/` · Tests: `packages/pruefkern/test/`
 | R-02 | Gesamtsumme der Positionen | Rechnerisch | Abweichung | – |
 | R-03 | Saldo = Kosten − Vorauszahlungen | Rechnerisch | Abweichung | Rückfrage Vorauszahlungen |
 | R-04 | Einheitliche Flächen; Flächennenner je Position = Gesamtfläche laut Abrechnung | § 556a BGB; § 7 Abs. 1 HeizkostenV | Kleinerer Nenner ohne Begründung: Fehler mit Betrag, wenn die Abrechnung selbst eine andere (beheizte) Gesamtfläche nennt; sonst Prüfbedarf mit „bis zu“-Betrag. Heizfläche ≠ Wohnfläche: nur Hinweis (beheizte Räume zulässig) | – |
-| R-05 | Angerechnete Vorauszahlungen passen zu den tatsächlichen Zahlungen | § 556 Abs. 2 BGB | ohne Beleg: **Prüfbedarf** (Betrag zählt nicht zum Potenzial); mit belegtem Verlauf: Fehler mit Betrag | Vorjahresabrechnung oder Kontoauszüge |
+| R-05 | Angerechnete Vorauszahlungen passen zu den tatsächlichen Zahlungen | § 556 Abs. 2 BGB | ohne Beleg: **Prüfbedarf** (Betrag zählt nicht zum Potenzial); mit belegtem Verlauf: Fehler mit Betrag | Vorjahresabrechnung |
 | R-06 | Ein- oder Auszug im Abrechnungsjahr berücksichtigt (Mietbeginn/-ende laut Mietvertrag) | § 556a Abs. 1 BGB | Auffälligkeit mit „bis zu“-Betrag: zeitabhängige Kosten × Tage außerhalb der Mietzeit | Mietvertrag |
 | R-07 | Wohnfläche der Abrechnung passt zum Mietvertrag (Toleranz 3 %) | § 556a BGB; BGH VIII ZR 220/17 (tatsächliche Fläche maßgeblich) | Auffälligkeit mit „bis zu“-Betrag auf nach Fläche verteilte Kosten | Mietvertrag |
 | I-01 | Keine nicht umlagefähigen Kosten (Verwaltung, Instandhaltung, Rücklage, Bank) | § 1 Abs. 2 BetrKV | Abweichung mit Betrag | – |
@@ -80,3 +80,15 @@ Rechtsgrundlagen geprüft am 09.11.2026 gegen gesetze-im-internet.de: § 1, § 2
 2. **KI-Kontrolle** (`packages/auslesen/src/kontrolle.ts`): Die KI vergleicht das Zeilenprotokoll mit dem Originaldokument: (a) jede Zeile richtig gelesen, (b) keine Zeile des Dokuments fehlt, (c) Auffälligkeiten, die keine Formel erfasst. Feste Regeln für die Auswertung: Eine Zeile gilt nur als bestätigt, wenn die KI sie ausdrücklich bestätigt; Auffälligkeiten ohne wörtliche Textstelle werden verworfen; die KI ändert keine Beträge und entscheidet nichts.
 
 Besteht die KI-Kontrolle nicht (Lesefehler, fehlende Zeile, zusätzliche Auffälligkeit) oder kann sie nicht ausgeführt werden, wird das Ergebnis nicht automatisch freigegeben, sondern geht mit den Meldungen an einen Fachprüfer.
+
+## Einstufung des Fehlerpotenzials (ab v0.7)
+
+| Lage | Einstufung |
+|---|---|
+| Belegter Fehler, sicherer Betrag ≥ 30 € | hoch |
+| Belegter Fehler, sicherer Betrag < 30 € | gering |
+| Kein belegter Fehler, aber eine Unterlage fehlt noch | Prüfbedarf |
+| Nur Punkte zum Klären, keine Unterlage offen | gering |
+| Nichts gefunden | kein Fehler erkannt |
+
+Kontoauszüge und Mietkonto werden nicht mehr angefordert. Für Vorauszahlungen und Abrechnungsfrist genügt die Abrechnung des Vorjahres; alternativ kann der Kunde seine monatlichen Vorauszahlungen selbst eintragen.

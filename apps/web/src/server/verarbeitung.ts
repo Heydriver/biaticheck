@@ -204,7 +204,7 @@ export type UnterlagenErgebnis =
   | { art: "nichts_gefunden" | "experte" | "fehler"; meldung: string };
 
 /**
- * Nachgereichte Unterlage (Vorjahresabrechnung oder Kontoauszüge) für den Prüfbedarf bei Vorauszahlungen:
+ * Nachgereichte Unterlage (Vorjahresabrechnung) für den Prüfbedarf bei Vorauszahlungen:
  * verschlüsselt ablegen, Vorauszahlungsverlauf auslesen und neu prüfen.
  * Ohne KI-Zugang geht die Unterlage an einen Fachprüfer.
  */
@@ -256,7 +256,7 @@ export async function verarbeiteUnterlage(
       art: "nichts_gefunden",
       meldung: vj
         ? `Der Zeitraum dieser Abrechnung (${datumDE(vj.von)} bis ${datumDE(vj.bis)}) schließt nicht an Ihre aktuelle Abrechnung an. Bitte laden Sie die Abrechnung des direkt vorhergehenden Jahres hoch.`
-        : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres oder Kontoauszüge hoch.",
+        : "In dieser Unterlage finden wir keine passenden Angaben. Bitte laden Sie die Abrechnung des Vorjahres hoch.",
     };
   }
 
