@@ -1,5 +1,5 @@
 import { antworttyp, type Antworttyp } from "./antworten";
-import { datumDE, euro, plusMonate, runde, tageInklusive, vergleiche, zahlDE } from "./hilfen";
+import { datumDE, euro, monateZwischen, plusMonate, runde, tageInklusive, vergleiche, zahlDE } from "./hilfen";
 import { ALLE_REGELN, type Pruefbericht } from "./pruefung";
 import { einordnung, istBeanstandet, UNTERLAGEN, type Einordnung, type Regelergebnis, type Status, type Unterlage } from "./regel";
 import { Abrechnung, KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG, type AbrechnungEingabe, type Kostenkategorie } from "./schema";
@@ -118,6 +118,11 @@ export interface Stufe1 {
     korrigierterSaldo?: number;
   };
   vergleich: KostenvergleichErgebnis;
+  /**
+   * Kurze Erklärung zu jedem berechneten Wert – erscheint, wenn der Kunde den Wert anklickt.
+   * Ein bis zwei einfache Sätze mit den Zahlen, aus denen der Wert entsteht.
+   */
+  erklaerungen: { betrag: string; stufe: string; saldo?: string; korrigiert?: string; frist?: string; vergleich?: string };
   /** Rückfragen, die Stufe 1 vervollständigen (z. B. Zugangsdatum, PLZ). */
   rueckfragen: { feld: string; frage: string; typ: Antworttyp }[];
 }
@@ -162,6 +167,52 @@ export function erstelleStufe1(
   const rueckfragen = z.rueckfragen.filter((r) => STUFE1_FELDER.has(r.feld));
   if (!a.meta.plz && !rueckfragen.some((r) => r.feld === FRAGE_PLZ.feld)) rueckfragen.push(FRAGE_PLZ);
 
+  // ---------- Erklärungen zu den berechneten Werten ----------
+  const liste = (status: Status) => {
+    const punkte = bericht.ergebnisse.filter((e) => e.status === status && e.betragZugunstenMieter && e.betragZugunstenMieter > 0).sort((x, y) => y.betragZugunstenMieter! - x.betragZugunstenMieter!);
+    const gezeigt = punkte.slice(0, 4).map((e) => `${kurzfassung(e, a).titel} ${euro(e.betragZugunstenMieter!)}`);
+    return gezeigt.join(" + ") + (punkte.length > 4 ? ` + ${punkte.length - 4} weitere` : "");
+  };
+  const stufe = fehlerstufe({ fehler: z.anzahl.abweichung, sicher: z.einsparpotenzial, klaeren: z.anzahl.auffaelligkeit, unterlagenOffen: z.anzahl.pruefbedarf });
+  const summe = a.ausgewiesen.summeKostenMieter;
+  const saldo = a.ausgewiesen.saldo;
+  const v = vergleicheKosten(a, optionen.regional);
+  const zeitraumV = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
+  const erklaerungen: Stufe1["erklaerungen"] = {
+    betrag:
+      z.einsparpotenzial > 0
+        ? `Das ist die Summe der belegten Fehler: ${liste("abweichung")} = ${euro(z.einsparpotenzial)}. Punkte mit Prüfbedarf zählen hier nicht mit.`
+        : z.klaerungspotenzial > 0
+          ? `Das ist die Summe der Beträge, die nach Klärung wegfallen können: ${liste("auffaelligkeit")} = ${euro(z.klaerungspotenzial)}. Sicher ist dieser Betrag noch nicht.`
+          : "Wir haben keinen Betrag gefunden, der falsch abgerechnet ist.",
+    stufe:
+      stufe === "hoch"
+        ? `Wir haben belegte Fehler über zusammen ${euro(z.einsparpotenzial)} gefunden. Ab ${euro(FEHLERPOTENZIAL_HOCH_AB)} stufen wir das Fehlerpotenzial als hoch ein.`
+        : stufe === "gering"
+          ? z.anzahl.abweichung > 0
+            ? `Wir haben belegte Fehler über zusammen ${euro(z.einsparpotenzial)} gefunden. Unter ${euro(FEHLERPOTENZIAL_HOCH_AB)} stufen wir das Fehlerpotenzial als gering ein.`
+            : "Wir haben keinen belegten Fehler gefunden, aber Punkte, die Sie klären sollten."
+          : stufe === "pruefbedarf"
+            ? `Wir haben keinen belegten Fehler gefunden. Für ${z.anzahl.pruefbedarf === 1 ? "einen Punkt" : `${z.anzahl.pruefbedarf} Punkte`} fehlt noch eine Unterlage. Erst damit können wir sicher prüfen.`
+            : `Alle ${ALLE_REGELN.length} Prüfregeln sind ohne Fehler durchgelaufen.`,
+    ...(saldo !== undefined && summe !== undefined && a.vorauszahlungen !== undefined
+      ? { saldo: `So steht es in Ihrer Abrechnung: Ihre Kosten ${euro(summe)} minus Ihre Vorauszahlungen ${euro(a.vorauszahlungen)} = ${euro(Math.abs(saldo))} ${saldo >= 0 ? "Nachzahlung" : "Guthaben"}.` }
+      : saldo !== undefined
+        ? { saldo: "Diesen Betrag weist Ihre Abrechnung als Ergebnis aus." }
+        : {}),
+    ...(saldo !== undefined && z.einsparpotenzial > 0
+      ? { korrigiert: `${saldo >= 0 ? "Nachzahlung" : "Guthaben"} laut Abrechnung ${euro(Math.abs(saldo))}, ${saldo >= 0 ? "minus" : "plus"} belegte Fehler ${euro(z.einsparpotenzial)} = ${runde(saldo - z.einsparpotenzial) === 0 ? "0,00 €. Es bleibt nichts zu zahlen" : `${euro(Math.abs(runde(saldo - z.einsparpotenzial)))} ${saldo - z.einsparpotenzial > 0 ? "Nachzahlung" : "Guthaben"}`}.` }
+      : {}),
+    ...(zugang ? { frist: `Einwände sind bis 12 Monate nach Erhalt der Abrechnung möglich. Sie haben sie am ${datumDE(zugang)} erhalten, also bis ${datumDE(plusMonate(zugang, 12))}.` } : {}),
+    ...(v.ok && v.vergleich.gesamt.durchschnitt !== undefined && a.flaechen.wohnflaecheMieter && zeitraumV
+      ? {
+          vergleich:
+            `Ihre Kosten ${euro(runde(betriebskosten + (heizkosten ?? 0)))} geteilt durch ${zahlDE(a.flaechen.wohnflaecheMieter)} m² und ${zahlDE(monateZwischen(zeitraumV.von, zeitraumV.bis), 1)} Monate = ${zahlDE(v.vergleich.gesamt.ihr)} € je m² im Monat. ` +
+            `Der Durchschnitt liegt bei ${zahlDE(v.vergleich.gesamt.durchschnitt)} €. Das ist ein Unterschied von ${Math.abs(v.vergleich.gesamt.abweichungProzent ?? 0)} %.`,
+        }
+      : {}),
+  };
+
   const regelnAuffaellig = new Set(bericht.ergebnisse.filter((e) => e.status === "abweichung" || e.status === "auffaelligkeit").map((e) => e.regelId)).size;
   const quote = Math.round((regelnAuffaellig / ALLE_REGELN.length) * 100);
 
@@ -176,7 +227,7 @@ export function erstelleStufe1(
       quote,
       regelnAuffaellig,
       regelnGesamt: ALLE_REGELN.length,
-      stufe: fehlerstufe({ fehler: z.anzahl.abweichung, sicher: z.einsparpotenzial, klaeren: z.anzahl.auffaelligkeit, unterlagenOffen: z.anzahl.pruefbedarf }),
+      stufe,
       pruefbedarf: { anzahl: z.anzahl.pruefbedarf, betrag: z.pruefbedarfBetrag, ohneBetrag: z.pruefbedarfOhneBetrag },
     },
     widerspruchsfrist: { ...widerspruch, abrechnungsfrist },
@@ -187,7 +238,8 @@ export function erstelleStufe1(
       saldo: a.ausgewiesen.saldo,
       ...(a.ausgewiesen.saldo !== undefined && z.einsparpotenzial > 0 ? { korrigierterSaldo: runde(a.ausgewiesen.saldo - z.einsparpotenzial) } : {}),
     },
-    vergleich: vergleicheKosten(a, optionen.regional),
+    vergleich: v,
+    erklaerungen,
     rueckfragen: rueckfragen.map((r) => {
       const typ = antworttyp(r.feld);
       if (!typ) throw new Error(`Rückfrage-Feld nicht registriert: ${r.feld}`);

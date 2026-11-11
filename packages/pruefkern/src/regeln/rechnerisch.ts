@@ -391,7 +391,7 @@ export const R05_Vorauszahlungen: Regel = {
       befunde.push({
         status: "pruefbedarf",
         titel: `Vorauszahlungen ${name} prüfen`,
-        erklaerung: `Angerechnet sind ${euro(jahr)}. Mit ${euro(monatlich)} im Monat wären es ${euro(erwartet)} – bis zu ${euro(differenz)} mehr. Häufig wurde die Vorauszahlung aber im Lauf des Jahres angepasst. Ob wirklich Geld fehlt, zeigen die Vorjahresabrechnung oder Ihre Kontoauszüge.`,
+        erklaerung: `Angerechnet sind ${euro(jahr)}. Mit ${euro(monatlich)} im Monat wären es ${euro(erwartet)} – bis zu ${euro(differenz)} mehr. Häufig wurde die Vorauszahlung aber im Lauf des Jahres angepasst. Ob wirklich Geld fehlt, zeigt die Vorjahresabrechnung.`,
         naechsterSchritt: "Laden Sie die Abrechnung des Vorjahres hoch.",
         betragZugunstenMieter: differenz,
         beleg: { art, jahr, monatlich, monate: monate.length, erwartet, differenz },

@@ -13,7 +13,7 @@ import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.10.0";
+export const REGELWERK_VERSION = "0.11.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,

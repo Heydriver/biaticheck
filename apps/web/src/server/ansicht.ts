@@ -17,6 +17,8 @@ export interface FehlerKurz {
   einordnung: Auffaelligkeit["einordnung"];
   titel: string;
   satz: string;
+  /** Kurze Erklärung mit Zahlen – erscheint beim Antippen des Betrags. */
+  erklaerung: string;
   betrag?: number;
   /** Bei Prüfbedarf: Frage an den Kunden, die den Punkt klärt. */
   rueckfrage?: { feld: string; frage: string; typ: Stufe1["rueckfragen"][number]["typ"] };
@@ -26,10 +28,20 @@ export interface FehlerKurz {
   grundlage?: string;
 }
 
-const kurz = (p: Auffaelligkeit): FehlerKurz => ({
+/**
+ * Erklärung beim Antippen eines Befundbetrags. Kostenlos: der Rechenweg aus den sichtbaren Zahlen
+ * (hervorgehobene Zeilen). Die ausführliche Erklärung gehört zum Erledigen-Paket.
+ */
+const rechenweg = (p: Auffaelligkeit): string => {
+  const zeilen = p.fakten.filter((f) => f.betont).map((f) => `${f.label}: ${f.wert}`);
+  return zeilen.length ? `So kommt der Betrag zustande: ${zeilen.join("; ")}.` : p.kurz.satz;
+};
+
+const kurz = (p: Auffaelligkeit, ausfuehrlich: boolean): FehlerKurz => ({
   einordnung: p.einordnung,
   titel: p.kurz.titel,
   satz: p.kurz.satz,
+  erklaerung: ausfuehrlich ? p.befund : rechenweg(p),
   ...(p.betrag !== undefined ? { betrag: p.betrag } : {}),
   ...(p.rueckfrage ? { rueckfrage: p.rueckfrage } : {}),
   fakten: p.fakten,
@@ -69,13 +81,13 @@ export function erstelleFallAnsicht(
   const lohnt = stufe1 ? stufe1.fehlerpotenzial.sicher + stufe1.fehlerpotenzial.zuKlaeren >= MINDESTERSPARNIS : false;
   const fehler = stufe2?.auffaelligkeiten
     .filter((p) => istBeanstandet(p.status))
-    .map(kurz);
+    .map((p) => kurz(p, bezahlt || !lohnt));
   const pruefbedarf = stufe2?.auffaelligkeiten
     .filter((p) => p.status === "pruefbedarf")
-    .map(kurz);
+    .map((p) => kurz(p, bezahlt || !lohnt));
   const hinweise = stufe2?.auffaelligkeiten
     .filter((p) => p.status === "hinweis")
-    .map(kurz);
+    .map((p) => kurz(p, bezahlt || !lohnt));
   return {
     id: fall.id,
     status: fall.status,

@@ -154,6 +154,9 @@ describe("Kundenansicht", () => {
     expect(a.stufe1?.fehlerpotenzial.sicher).toBe(1214.88);
     expect(a.preis).toBe(9.9);
     expect(a.stufe2).toBeUndefined();
+    // Erklärung beim Antippen: kostenlos nur der Rechenweg aus den sichtbaren Zahlen
+    expect(a.fehler![0]!.erklaerung).toMatch(/^So kommt der Betrag zustande: Nachzahlung entfällt: 1\.214,88\s€\.$/);
+    expect(a.stufe1!.erklaerungen.betrag).toContain("Summe der belegten Fehler");
     const json = JSON.stringify(a);
     expect(json).not.toContain("geheim");
     expect(json).not.toContain("kostenpositionen");

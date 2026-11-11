@@ -42,6 +42,18 @@ test("Ergebnis → Lösung ansehen → Empfehlung → Schreiben oder Experte", a
   await expect(vergleich).toContainText("kein Nachweis eines Fehlers");
   await expect(page.getByText(/Gut zu wissen: (ein|\d+) Hinweise? ohne Fehlerverdacht/)).toBeVisible();
 
+  // Berechnete Werte sind anklickbar und erklären sich kurz
+  await page.getByRole("button", { name: ERGEBNIS }).click();
+  await expect(page.getByRole("note").filter({ hasText: /Summe der Beträge, die nach Klärung wegfallen können: .*13,57/ })).toBeVisible();
+  await page.getByRole("button", { name: ERGEBNIS }).click();
+  await expect(page.getByRole("note").filter({ hasText: /Summe der Beträge/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "1.214,88 €", exact: true }).click();
+  await expect(page.getByText(/Ihre Kosten 3\.917,21\s€ minus Ihre Vorauszahlungen 2\.702,33\s€ = 1\.214,88\s€ Nachzahlung\./)).toBeVisible();
+  await page.getByRole("button", { name: "45 % über Durchschnitt" }).click();
+  await expect(page.getByText(/geteilt durch 84,28 m² und 12 Monate = 3,87 € je m² im Monat/)).toBeVisible();
+  await page.getByRole("button", { name: /^13,57\s€$/ }).click();
+  await expect(page.getByText(/Zeitanteilig entfielen bis zu 13,57\s€ auf die Zeit danach\./)).toBeVisible();
+
   // Eingangsdatum: unmögliches Datum wird verständlich abgewiesen, gültiges ergibt die Frist
   await zugangsdatum(page, "2025-11-20");
   await expect(page.getByRole("alert").filter({ hasText: "vor dem Datum der Abrechnung" })).toBeVisible();

@@ -284,6 +284,34 @@ describe("Einfache Darstellung: Kurzfassung und eine Empfehlung", () => {
   });
 });
 
+describe("Erklärungen zu den berechneten Werten (erscheinen beim Anklicken)", () => {
+  it("fehlerhafte Abrechnung: Betrag, Einstufung, Ergebnis und korrigiertes Ergebnis werden mit den Zahlen erklärt", () => {
+    const { s1 } = stufen(fehlerhafteAbrechnung());
+    const e = s1.erklaerungen;
+    expect(e.betrag).toMatch(/^Das ist die Summe der belegten Fehler: .+ = 198,00\s€\. Punkte mit Prüfbedarf zählen hier nicht mit\.$/);
+    expect(e.betrag).toContain("144,00");
+    expect(e.stufe).toMatch(/belegte Fehler über zusammen 198,00\s€ gefunden\. Ab 30,00\s€ .* hoch/);
+    expect(e.saldo).toMatch(/Ihre Kosten .* minus Ihre Vorauszahlungen .* = .* (Nachzahlung|Guthaben)\./);
+    expect(e.korrigiert).toMatch(/belegte Fehler 198,00\s€ = /);
+    expect(e.frist).toMatch(/12 Monate nach Erhalt .* also bis \d{2}\.\d{2}\.\d{4}\./);
+  });
+
+  it("G-001: Vergleich mit Rechenweg; ohne Fehler eine klare Aussage; alle Texte kurz und ohne Sonderzeichen", () => {
+    const { s1 } = stufen(G001);
+    expect(s1.erklaerungen.vergleich).toMatch(/^Ihre Kosten 3\.917,21\s€ geteilt durch 84,28 m² und 12 Monate = 3,87 € je m² im Monat\. Der Durchschnitt liegt bei 2,67 €\. Das ist ein Unterschied von 45 %\.$/);
+    expect(s1.erklaerungen.stufe).toContain("fehlt noch eine Unterlage");
+    expect(s1.erklaerungen.frist).toBeUndefined();
+    const ohne = stufen(korrekteAbrechnung()).s1.erklaerungen;
+    expect(ohne.betrag).toBe("Wir haben keinen Betrag gefunden, der falsch abgerechnet ist.");
+    for (const fall of [korrekteAbrechnung(), fehlerhafteAbrechnung(), G001]) {
+      for (const text of Object.values(stufen(fall).s1.erklaerungen)) {
+        expect(text.length, text).toBeLessThanOrEqual(330);
+        expect(text).not.toMatch(/\*\*|\p{Extended_Pictographic}|undefined|NaN/u);
+      }
+    }
+  });
+});
+
 describe("Fehlerquote und persönliches Anschreiben", () => {
   it("G-001: kein belegter Fehler, aber die Vorjahresabrechnung fehlt noch → Fehlerpotenzial „Prüfbedarf“", () => {
     const { s1 } = stufen(wendeAntwortAn(G001, "meta.zugangAm", "2025-11-28"));

@@ -117,3 +117,7 @@ Beigefügte Rechnungen, Gutschriften und Geräteprotokolle werden ausgelesen und
   - Gutschrift nicht abgezogen: belegt, wenn die Rechnungen ohne Gutschrift genau die abgerechneten Gesamtkosten ergeben oder die Abrechnung sie erkennbar übergeht; sonst Prüfbedarf.
 - **R-08 Wärmezähler:** gemessener Verbrauch = (Endstand − Anfangsstand) × Faktor laut Geräteprotokoll. Rechnet die Abrechnung mit einem anderen Faktor oder Verbrauch: Verbrauchskosten × Mehrverbrauch / abgerechneter Verbrauch.
 - **Mehrere Fehler an einer Position:** Teilbeträge werden addiert, zusammen nie mehr als der Anteil der Position.
+
+## Anklickbare Werte (v0.11)
+
+Jeder berechnete Wert ist anklickbar und zeigt eine kurze Erklärung mit den Zahlen, aus denen er entsteht: Gesamtbetrag, Einstufung des Fehlerpotenzials, Nachzahlung oder Guthaben, korrigiertes Ergebnis, Einspruchsfrist, Kostenvergleich und der Betrag jedes Befunds. Die Texte entstehen im Prüfkern (`Stufe1.erklaerungen`). In der kostenlosen Ansicht der Web-App zeigt der Befundbetrag nur den Rechenweg aus den sichtbaren Zahlen; die ausführliche Erklärung gehört zum Erledigen-Paket.

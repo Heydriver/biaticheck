@@ -71,16 +71,27 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
   const { titel, unter } = ergebnisText(s1);
   const saldo = s1.kosten.saldo;
   const korrigiert = s1.kosten.korrigierterSaldo;
+  const e = s1.erklaerungen;
+  const [titelOffen, setTitelOffen] = useState(false);
 
   return (
     <section className={KARTE} aria-labelledby="ergebnis-titel">
       <p className="text-sm text-gedaempft">Ihre Abrechnung{s1.abrechnungsjahr ? ` ${s1.abrechnungsjahr}` : ""}</p>
       <h1 id="ergebnis-titel" className="text-[clamp(24px,4.4vw,34px)] leading-tight font-bold tracking-tight">
-        {titel}
+        <button type="button" aria-expanded={titelOffen} aria-controls="ergebnis-erklaerung" onClick={() => setTitelOffen(!titelOffen)} className={`text-left ${ANKLICKBAR}`}>
+          {titel}
+        </button>
       </h1>
+      {titelOffen && (
+        <p id="ergebnis-erklaerung" role="note" className={ERKLAERUNG}>
+          {e.betrag}
+        </p>
+      )}
       <p>
         <span className="text-sm text-gedaempft">Fehlerpotenzial: </span>
-        <strong>{FEHLERSTUFE_TEXT[f.stufe]}</strong>
+        <Wert erklaerung={e.stufe}>
+          <strong>{FEHLERSTUFE_TEXT[f.stufe]}</strong>
+        </Wert>
       </p>
       <p>{unter}</p>
       {f.pruefbedarf.anzahl > 0 && (
@@ -93,10 +104,12 @@ function Ergebnis({ s1, beantworte, children }: { s1: Stufe1; beantworte: Aktion
       <dl className="grid border-t border-linie sm:grid-cols-3 sm:border-b">
         {saldo !== undefined && (
           <Fakt titel={saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}>
-            <dd className="text-xl font-bold tabular-nums">{euro(Math.abs(saldo))}</dd>
+            <dd className="text-xl font-bold tabular-nums">
+              <Wert erklaerung={e.saldo}>{euro(Math.abs(saldo))}</Wert>
+            </dd>
             {korrigiert !== undefined && (
               <dd className="text-[13px] text-gedaempft">
-                Nach Korrektur der belegten Fehler: {korrigiert > 0 ? `Nachzahlung ${euro(korrigiert)}` : `Guthaben ${euro(Math.abs(korrigiert))}`}
+                Nach Korrektur der belegten Fehler: <Wert erklaerung={e.korrigiert}>{korrigiert > 0 ? `Nachzahlung ${euro(korrigiert)}` : `Guthaben ${euro(Math.abs(korrigiert))}`}</Wert>
               </dd>
             )}
           </Fakt>
@@ -132,6 +145,27 @@ function ergebnisText(s1: Stufe1): { titel: string; unter: string } {
   return { titel, unter };
 }
 
+/** Berechnete Werte sind anklickbar: gepunktete Linie, darunter erscheint die kurze Erklärung. */
+const ANKLICKBAR = "cursor-pointer underline decoration-dotted decoration-1 underline-offset-4 hover:decoration-solid";
+const ERKLAERUNG = "rounded-lg bg-grund-alt px-3 py-2 text-sm leading-normal font-normal tracking-normal text-text";
+
+function Wert({ erklaerung, children }: { erklaerung?: string; children: React.ReactNode }) {
+  const [offen, setOffen] = useState(false);
+  if (!erklaerung) return <>{children}</>;
+  return (
+    <>
+      <button type="button" aria-expanded={offen} onClick={() => setOffen(!offen)} title="Antippen für die Erklärung" className={`text-left [font:inherit] ${ANKLICKBAR}`}>
+        {children}
+      </button>
+      {offen && (
+        <span role="note" className={`mt-1 block ${ERKLAERUNG}`}>
+          {erklaerung}
+        </span>
+      )}
+    </>
+  );
+}
+
 function Fakt({ titel, children }: { titel: string; children: React.ReactNode }) {
   return (
     <div className="grid content-start gap-0.5 border-b border-linie py-3.5 sm:border-0 sm:py-4 sm:pr-4">
@@ -148,7 +182,9 @@ function Frist({ s1, beantworte }: { s1: Stufe1; beantworte: Aktionen["beantwort
     <Fakt titel="Einspruch möglich">
       {w.status === "offen" && w.bis && (
         <>
-          <dd className={`text-xl font-bold tabular-nums ${(w.tageVerbleibend ?? 99) <= 30 ? "text-warn-text" : ""}`}>bis {datum(w.bis)}</dd>
+          <dd className={`text-xl font-bold tabular-nums ${(w.tageVerbleibend ?? 99) <= 30 ? "text-warn-text" : ""}`}>
+            <Wert erklaerung={s1.erklaerungen.frist}>bis {datum(w.bis)}</Wert>
+          </dd>
           <dd className="text-[13px] text-gedaempft">
             {w.tageVerbleibend === 0 ? "heute letzter Tag" : `noch ${w.tageVerbleibend} ${w.tageVerbleibend === 1 ? "Tag" : "Tage"}`}
           </dd>
@@ -175,7 +211,9 @@ function Vergleich({ s1 }: { s1: Stufe1 }) {
   const v = s1.vergleich.vergleich;
   return (
     <Fakt titel={v.bezeichnung}>
-      <dd className="text-xl font-bold">{a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</dd>
+      <dd className="text-xl font-bold">
+        <Wert erklaerung={s1.erklaerungen.vergleich}>{a > 0 ? `${a} % über` : a < 0 ? `${-a} % unter` : "genau im"} Durchschnitt</Wert>
+      </dd>
       <dd className="text-[13px] text-gedaempft">
         {zahl(g.ihr)} € statt {zahl(g.durchschnitt)} € je m² im Monat
       </dd>
@@ -376,6 +414,7 @@ const EINORDNUNG: Record<string, string> = { fehler: "Belegter Fehler", pruefbed
 
 /** Ein Befund mit Kurzsatz, konkreten Zahlen, Fundstelle und Rechtsgrundlage – zum Nachvollziehen. */
 function Befundzeile({ punkt, betragPraefix = "" }: { punkt: NonNullable<FallAnsicht["fehler"]>[number]; betragPraefix?: string }) {
+  const [offen, setOffen] = useState(false);
   return (
     <div className="grid gap-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -385,12 +424,17 @@ function Befundzeile({ punkt, betragPraefix = "" }: { punkt: NonNullable<FallAns
           <p className="text-[15px] text-gedaempft">{punkt.satz}</p>
         </div>
         {punkt.betrag !== undefined && (
-          <span className="font-bold whitespace-nowrap tabular-nums">
+          <button type="button" aria-expanded={offen} onClick={() => setOffen(!offen)} title="Antippen für die Erklärung" className={`font-bold whitespace-nowrap tabular-nums ${ANKLICKBAR}`}>
             {betragPraefix}
             {euro(punkt.betrag)}
-          </span>
+          </button>
         )}
       </div>
+      {offen && (
+        <p role="note" className={ERKLAERUNG}>
+          {punkt.erklaerung}
+        </p>
+      )}
       {punkt.fakten.length > 0 && (
         <dl className="grid gap-1 rounded-xl bg-grund-alt px-3.5 py-2.5 text-sm">
           {punkt.fakten.map((f, k) => (
