@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ALLE_REGELN, FEHLERKATALOG, NICHT_BERECHENBAR, pruefeAbrechnung, type AbrechnungEingabe, type Fehlerart } from "../src/index";
+import { ALLE_REGELN, erstelleZeilenprotokoll, FEHLERKATALOG, NICHT_BERECHENBAR, pruefeAbrechnung, type AbrechnungEingabe, type Fehlerart } from "../src/index";
 
 /**
  * Nachweis für den Fehlerkatalog.
@@ -309,6 +309,20 @@ describe(`Keine Fehlalarme: ${KORREKTE} zufällige korrekte Abrechnungen`, () =>
       expect(bericht.zusammenfassung.einsparpotenzial + bericht.zusammenfassung.klaerungspotenzial + bericht.zusammenfassung.pruefbedarfBetrag).toBe(0);
     }
   });
+
+  it("Zeilenprotokoll: jede Zeile geprüft, alle ok, Summe der Zeilen geht auf", () => {
+    for (let i = 0; i < 50; i++) {
+      const a = korrekt(zufall(5000 + i));
+      const protokoll = erstelleZeilenprotokoll(pruefeAbrechnung(a, { heute: HEUTE }), a);
+      const positionen = protokoll.zeilen.filter((x) => x.art === "position");
+      expect(positionen.map((x) => x.positionId)).toEqual(a.kostenpositionen.map((x) => x.id));
+      // Jede Kostenposition durchläuft mindestens: Angaben vollständig, Anteil nachgerechnet, Kostenart umlagefähig
+      for (const zeile of positionen) expect(zeile.pruefungen.length, zeile.bezeichnung).toBeGreaterThanOrEqual(3);
+      expect(protokoll.zeilen.filter((x) => x.ergebnis !== "ok").map((x) => `${x.bezeichnung}: ${x.ergebnis}`)).toEqual([]);
+      expect(protokoll.vollstaendigkeit.ok).toBe(true);
+      expect(protokoll.zeilen.map((x) => x.nr)).toEqual(protokoll.zeilen.map((_, k) => k + 1));
+    }
+  });
 });
 
 describe(`Vollständige Erkennung: jede Fehlerart in ${VARIANTEN} Zufallsvarianten`, () => {
@@ -331,6 +345,15 @@ describe(`Vollständige Erkennung: jede Fehlerart in ${VARIANTEN} Zufallsvariant
       }
       // Belegte Fehler zählen exakt zum sicheren Potenzial, alles andere nie
       if (art.ergebnis === "abweichung" && art.betrag === "exakt") expect(bericht.zusammenfassung.einsparpotenzial).toBeGreaterThanOrEqual(erwartet.betrag!);
+      // Zeilenprotokoll: kein Regelergebnis geht verloren, der Fehler steht an seiner Zeile
+      const protokoll = erstelleZeilenprotokoll(bericht, a);
+      const imProtokoll = protokoll.zeilen.flatMap((x) => x.pruefungen.map((q) => ({ zeile: x, q })));
+      for (const e of bericht.ergebnisse.filter((x) => x.status !== "ok"))
+        expect(imProtokoll.some(({ q }) => q.regelId === e.regelId && q.ergebnis !== "ok"), `${art.id}: ${e.regelId} fehlt im Zeilenprotokoll`).toBe(true);
+      const ERWARTET = { abweichung: "fehler", auffaelligkeit: "pruefbedarf", pruefbedarf: "pruefbedarf", hinweis: "hinweis" } as const;
+      const stellen = imProtokoll.filter(({ q }) => q.regelId === art.regelId && q.ergebnis === ERWARTET[art.ergebnis]);
+      expect(stellen.length, `${art.id}: nicht im Zeilenprotokoll`).toBeGreaterThan(0);
+      if (erwartet.positionId) expect(stellen.some(({ zeile }) => zeile.positionId === erwartet.positionId), `${art.id}: an der falschen Zeile`).toBe(true);
       statistik.erkannt++;
     }
   });

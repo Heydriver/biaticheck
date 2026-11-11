@@ -108,7 +108,7 @@ export async function verarbeiteFall(fallId: string, deps: Abhaengigkeiten): Pro
 
     let auslesung: Auslesung;
     try {
-      auslesung = deps.client ? await leseAus(deps.client, geladen) : demoAuslesung();
+      auslesung = deps.client ? await leseAus(deps.client, geladen, { heute: deps.heute?.() }) : demoAuslesung();
     } catch (fehler) {
       if (!(fehler instanceof AuslesenFehler)) throw fehler;
       await setzeStatus(db, fallId, fehler.wiederholbar ? "fehler" : "expertenpruefung", fehler.message);
@@ -143,6 +143,17 @@ export async function verarbeiteFall(fallId: string, deps: Abhaengigkeiten): Pro
       regelwerk: bericht.regelwerkVersion,
       modell: meta.modell,
       tokens: meta.nutzung,
+      // KI-Kontrolle (Unterschritt 2): bestätigte Zeilen und Meldungen
+      kontrolle: meta.kontrolle
+        ? {
+            durchgefuehrt: meta.kontrolle.durchgefuehrt,
+            bestanden: meta.kontrolle.bestanden,
+            zeilen: `${meta.kontrolle.zeilenBestaetigt}/${meta.kontrolle.zeilenGesamt}`,
+            lesefehler: meta.kontrolle.lesefehler.length,
+            fehlendeZeilen: meta.kontrolle.fehlendeZeilen.length,
+            auffaelligkeiten: meta.kontrolle.auffaelligkeiten.length,
+          }
+        : null,
     });
   } catch (fehler) {
     // Unerwarteter Fehler: Fall nie im Status "wird_ausgelesen" hängen lassen.

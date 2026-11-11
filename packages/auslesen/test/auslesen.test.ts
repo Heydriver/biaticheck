@@ -3,17 +3,38 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { pruefeAbrechnung } from "@biaticheck/pruefkern";
 import { describe, expect, it, vi } from "vitest";
 import { G001 } from "../../pruefkern/test/golden/G-001";
-import { AuslesenFehler, erkenneDokumenttyp, leseAus, pruefeKonsistenz, Rohdaten, vergleiche, wandleUm } from "../src/index";
+import { erstelleZeilenprotokoll } from "@biaticheck/pruefkern";
+import { AuslesenFehler, erkenneDokumenttyp, KONTROLL_PROMPT, KontrolleRoh, leseAus, pruefeKonsistenz, Rohdaten, vergleiche, wandleUm, werteKontrolleAus } from "../src/index";
 import { G001_ROH } from "./G-001.roh";
 
 const roh = (): Rohdaten => structuredClone(G001_ROH);
 const PDF = { daten: new TextEncoder().encode("%PDF-1.7 ..."), mimeType: "application/pdf" as const };
 
-/** Attrappe für den Anthropic-Client mit vorgegebener Antwort. */
-function client(antwort: Partial<{ stop_reason: string; parsed_output: unknown; stop_details: unknown }> | Error) {
-  const parse = vi.fn(async () => {
+type Antwort = Partial<{ stop_reason: string; parsed_output: unknown; stop_details: unknown }> | Error;
+type Anfrage = { system: { text: string }[]; messages: { content: { type: string; text?: string }[] }[] };
+
+/** Zeilennummern aus der Kontrollanfrage – für eine Antwort, die jede Zeile bestätigt. */
+function zeilenAus(anfrage: Anfrage): number[] {
+  const text = anfrage.messages[0]!.content.find((b) => b.type === "text")!.text!;
+  return (JSON.parse(text.slice(text.indexOf("["), text.lastIndexOf("]") + 1)) as { nr: number }[]).map((x) => x.nr);
+}
+
+/**
+ * Attrappe für den Anthropic-Client mit vorgegebener Antwort.
+ * Die KI-Kontrolle (zweiter Aufruf) bestätigt ohne eigene Vorgabe jede Zeile.
+ */
+function client(antwort: Antwort, kontrolle?: Antwort | ((nrn: number[]) => KontrolleRoh)) {
+  const parse = vi.fn(async (anfrage: Anfrage) => {
+    const basis = { model: "claude-opus-5-5", usage: { input_tokens: 1000, output_tokens: 500 }, stop_reason: "end_turn", parsed_output: null };
+    if (anfrage.system[0]!.text === KONTROLL_PROMPT) {
+      if (kontrolle instanceof Error) throw kontrolle;
+      const nrn = zeilenAus(anfrage);
+      const alleRichtig: KontrolleRoh = { zeilen: nrn.map((nr) => ({ nr, gelesen: "richtig", abweichung: null })), fehlendeZeilen: [], auffaelligkeiten: [] };
+      if (typeof kontrolle === "function") return { ...basis, parsed_output: kontrolle(nrn) };
+      return { ...basis, parsed_output: alleRichtig, ...kontrolle };
+    }
     if (antwort instanceof Error) throw antwort;
-    return { model: "claude-opus-5-5", usage: { input_tokens: 1000, output_tokens: 500 }, stop_reason: "end_turn", parsed_output: null, ...antwort };
+    return { ...basis, ...antwort };
   });
   return { c: { beta: { messages: { parse } } } as unknown as Anthropic, parse };
 }
@@ -118,7 +139,12 @@ describe("Modellaufruf", () => {
     const { c, parse } = client({ parsed_output: roh() });
     const a = await leseAus(c, [PDF]);
     expect(a.konsistenz.konsistent).toBe(true);
-    expect(a.nutzung).toEqual({ eingabeTokens: 1000, ausgabeTokens: 500 });
+    // Zwei Aufrufe: Auslesen und KI-Kontrolle
+    expect(parse).toHaveBeenCalledTimes(2);
+    expect(a.nutzung).toEqual({ eingabeTokens: 2000, ausgabeTokens: 1000 });
+    expect(a.kontrolle).toMatchObject({ durchgefuehrt: true, bestanden: true, lesefehler: [], fehlendeZeilen: [], auffaelligkeiten: [] });
+    expect(a.kontrolle!.zeilenBestaetigt).toBe(a.kontrolle!.zeilenGesamt);
+    expect(a.kontrolle!.zeilenGesamt).toBeGreaterThan(20);
     const anfrage = (parse.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
     expect(anfrage.model).toBe("claude-opus-5-5");
     expect(anfrage.fallbacks).toBe("default");
@@ -138,6 +164,13 @@ describe("Modellaufruf", () => {
   ])("Fehlerfall %j → %s", async (antwort, code) => {
     const { c } = client(antwort);
     await expect(leseAus(c, [PDF])).rejects.toMatchObject({ code });
+  });
+
+  it("ohne KI-Kontrolle nur ein Aufruf", async () => {
+    const { c, parse } = client({ parsed_output: roh() });
+    const a = await leseAus(c, [PDF], { kontrolle: false });
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(a.kontrolle).toBeUndefined();
   });
 
   it("lehnt leere Dokumentliste ab", async () => {
@@ -177,5 +210,72 @@ describe("Postleitzahl", () => {
     const r = roh();
     r.plz = eingabe;
     expect(wandleUm(r).abrechnung.meta.plz).toBe(erwartet);
+  });
+});
+
+describe("KI-Kontrolle (Unterschritt 2)", () => {
+  const alle = (nrn: number[]): KontrolleRoh => ({ zeilen: nrn.map((nr) => ({ nr, gelesen: "richtig", abweichung: null })), fehlendeZeilen: [], auffaelligkeiten: [] });
+
+  it("Lesefehler in einer Zeile → nicht konsistent, Fall geht an den Fachprüfer", async () => {
+    const { c } = client({ parsed_output: roh() }, (nrn) => ({ ...alle(nrn), zeilen: alle(nrn).zeilen.map((z) => (z.nr === 3 ? { nr: 3, gelesen: "abweichend", abweichung: "Betrag im Dokument 317,25 statt 307,25" } : z)) }));
+    const a = await leseAus(c, [PDF]);
+    expect(a.kontrolle!.bestanden).toBe(false);
+    expect(a.kontrolle!.lesefehler).toEqual([{ nr: 3, bezeichnung: "Müllentsorgung", abweichung: "Betrag im Dokument 317,25 statt 307,25" }]);
+    expect(a.konsistenz.konsistent).toBe(false);
+    expect(a.konsistenz.gruende.join(" ")).toContain("Zeile 3 „Müllentsorgung“");
+  });
+
+  it("Zeile, zu der die KI nichts sagt, gilt als nicht bestätigt", async () => {
+    const { c } = client({ parsed_output: roh() }, (nrn) => ({ ...alle(nrn), zeilen: alle(nrn).zeilen.filter((z) => z.nr !== 5) }));
+    const a = await leseAus(c, [PDF]);
+    expect(a.kontrolle!.lesefehler).toEqual([expect.objectContaining({ nr: 5, abweichung: "von der Kontrolle nicht bestätigt" })]);
+    expect(a.kontrolle!.zeilenBestaetigt).toBe(a.kontrolle!.zeilenGesamt - 1);
+    expect(a.konsistenz.konsistent).toBe(false);
+  });
+
+  it("fehlende Zeile im Protokoll → nicht konsistent", async () => {
+    const { c } = client({ parsed_output: roh() }, (nrn) => ({ ...alle(nrn), fehlendeZeilen: [{ bezeichnung: "Winterdienst", betrag: 41.2, seite: 5 }] }));
+    const a = await leseAus(c, [PDF]);
+    expect(a.kontrolle!.fehlendeZeilen).toEqual([{ bezeichnung: "Winterdienst", betrag: 41.2, seite: 5 }]);
+    expect(a.konsistenz.gruende.join(" ")).toContain("Zeile fehlt – „Winterdienst“");
+  });
+
+  it("Auffälligkeit mit Textstelle → an den Fachprüfer; ohne Textstelle verworfen", async () => {
+    const { c } = client({ parsed_output: roh() }, (nrn) => ({
+      ...alle(nrn),
+      auffaelligkeiten: [
+        { zeileNr: 1, beschreibung: "Fußnote nennt eine Nachberechnung für 2022 in der Grundsteuer.", textstelle: "inkl. Nachberechnung 2022", seite: 5 },
+        { zeileNr: null, beschreibung: "Die Kosten wirken hoch.", textstelle: "", seite: null },
+      ],
+    }));
+    const a = await leseAus(c, [PDF]);
+    expect(a.kontrolle!.auffaelligkeiten).toEqual([{ zeileNr: 1, bezeichnung: "Grundsteuer", beschreibung: "Fußnote nennt eine Nachberechnung für 2022 in der Grundsteuer.", textstelle: "inkl. Nachberechnung 2022", seite: 5 }]);
+    expect(a.konsistenz.konsistent).toBe(false);
+  });
+
+  it("Auffälligkeit zu einer Zeile, die die Formelprüfung schon beanstandet, ist kein neuer Punkt", () => {
+    const { abrechnung } = wandleUm(roh());
+    const protokoll = erstelleZeilenprotokoll(pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }), abrechnung);
+    const beanstandet = protokoll.zeilen.find((z) => z.ergebnis === "pruefbedarf")!;
+    const k = werteKontrolleAus(
+      { zeilen: protokoll.zeilen.map((z) => ({ nr: z.nr, gelesen: "richtig" as const, abweichung: null })), fehlendeZeilen: [], auffaelligkeiten: [{ zeileNr: beanstandet.nr, beschreibung: "Kabelkosten nach Juni 2024.", textstelle: beanstandet.bezeichnung, seite: null }] },
+      protokoll,
+    );
+    expect(k.auffaelligkeiten).toEqual([]);
+    expect(k.bestanden).toBe(true);
+  });
+
+  it("Kontrolle nicht erreichbar oder ungültig → nicht bestanden, aber kein Abbruch", async () => {
+    const ausfall = await leseAus(client({ parsed_output: roh() }, new Error("Zeitüberschreitung")).c, [PDF]);
+    expect(ausfall.abrechnung).toBeDefined();
+    expect(ausfall.kontrolle).toMatchObject({ durchgefuehrt: false, bestanden: false });
+    expect(ausfall.konsistenz.gruende.join(" ")).toContain("KI-Kontrolle nicht durchgeführt: Zeitüberschreitung");
+    const ungueltig = await leseAus(client({ parsed_output: roh() }, { parsed_output: { unsinn: true } }).c, [PDF]);
+    expect(ungueltig.kontrolle!.durchgefuehrt).toBe(false);
+    expect(ungueltig.konsistenz.konsistent).toBe(false);
+  });
+
+  it("das Kontrollformat lässt sich für strukturierte Ausgabe umwandeln", () => {
+    expect(() => betaZodOutputFormat(KontrolleRoh)).not.toThrow();
   });
 });

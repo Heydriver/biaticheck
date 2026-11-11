@@ -73,3 +73,10 @@ Beträge werden getrennt: abgerechneter Anteil (Fakt „Ihr Anteil“), möglich
 Kostenvergleich: ausdrücklich „Vergleich mit dem Bundesdurchschnitt“, solange keine regionalen Daten genutzt werden; Quelle, Jahr und Kostenarten werden angezeigt. Ohne Heizkosten in der Abrechnung wird nur kalt mit kalt verglichen. Regionale Werte erst bei ≥ 10 Abrechnungen desselben Jahres mit Heizkosten und Streuung ≤ 50 %. Monate kalendergenau (ein Kalenderjahr = 12), Rundung erst bei der Ausgabe.
 
 Rechtsgrundlagen geprüft am 09.11.2026 gegen gesetze-im-internet.de: § 1, § 2 BetrKV; § 556, § 556a BGB; § 7 HeizkostenV.
+
+## Zwei Unterschritte der Prüfung (ab v0.6)
+
+1. **Formelprüfung Zeile für Zeile** (`packages/pruefkern/src/zeilenprotokoll.ts`): Jede Kostenposition, die Heizkosten, Summe, Vorauszahlungen, Saldo und Fristen bilden je eine Zeile. Zu jeder Zeile steht, welche Formeln angewendet wurden und mit welchem Ergebnis. Jede Position durchläuft mindestens „Angaben vollständig“, „Anteil nachgerechnet“ und „Kostenart umlagefähig“. Die Vollständigkeitsformel prüft, dass die Summe aller Zeilen die ausgewiesene Gesamtsumme ergibt. Fehlerarten und Formeln: `docs/FORMELKATALOG.md`.
+2. **KI-Kontrolle** (`packages/auslesen/src/kontrolle.ts`): Die KI vergleicht das Zeilenprotokoll mit dem Originaldokument: (a) jede Zeile richtig gelesen, (b) keine Zeile des Dokuments fehlt, (c) Auffälligkeiten, die keine Formel erfasst. Feste Regeln für die Auswertung: Eine Zeile gilt nur als bestätigt, wenn die KI sie ausdrücklich bestätigt; Auffälligkeiten ohne wörtliche Textstelle werden verworfen; die KI ändert keine Beträge und entscheidet nichts.
+
+Besteht die KI-Kontrolle nicht (Lesefehler, fehlende Zeile, zusätzliche Auffälligkeit) oder kann sie nicht ausgeführt werden, wird das Ergebnis nicht automatisch freigegeben, sondern geht mit den Meldungen an einen Fachprüfer.

@@ -3,12 +3,37 @@ import { Rohdaten } from "../../packages/auslesen/src/rohdaten";
 import { SYSTEM_PROMPT } from "../../packages/auslesen/src/prompt";
 import { wandleUm } from "../../packages/auslesen/src/umwandlung";
 import { pruefeKonsistenz } from "../../packages/auslesen/src/konsistenz";
-import { ALLE_REGELN, schliesstAn, erstelleStufe1, erstelleStufe2, pruefeAbrechnung, wendeAntwortAn, AntwortFehler, personalisiereAnschreiben } from "../../packages/pruefkern/src/index";
+import { KEINE_KONTROLLE, KONTROLL_PROMPT, KontrolleRoh, protokollFuerKontrolle, werteKontrolleAus } from "../../packages/auslesen/src/kontrolle";
+import { erstelleZeilenprotokoll, ALLE_REGELN, schliesstAn, erstelleStufe1, erstelleStufe2, pruefeAbrechnung, wendeAntwortAn, AntwortFehler, personalisiereAnschreiben } from "../../packages/pruefkern/src/index";
 
 export { personalisiereAnschreiben, schliesstAn };
 export const REGELN_ANZAHL = ALLE_REGELN.length;
 export const ANWEISUNG = SYSTEM_PROMPT;
 export const SCHEMA = JSON.stringify(z.toJSONSchema(Rohdaten));
+export const KONTROLL_ANWEISUNG = KONTROLL_PROMPT;
+export const KONTROLL_SCHEMA = JSON.stringify(z.toJSONSchema(KontrolleRoh));
+
+/** Zeilenprotokoll der unveränderten Auslesung (ohne Kundenantworten) – Grundlage der KI-Kontrolle. */
+function protokollVon(rohJson: unknown, heute: string) {
+  const roh = Rohdaten.safeParse(ergaenze(rohJson));
+  if (!roh.success || !roh.data.istNebenkostenabrechnung) return undefined;
+  const { abrechnung } = wandleUm(roh.data);
+  return erstelleZeilenprotokoll(pruefeAbrechnung(abrechnung, { heute }), abrechnung);
+}
+
+/** Unterschritt 2: Text des Protokolls für die Kontrollanfrage. */
+export function kontrollProtokoll(rohJson: unknown, heute: string): string | undefined {
+  const protokoll = protokollVon(rohJson, heute);
+  return protokoll ? protokollFuerKontrolle(protokoll) : undefined;
+}
+
+/** Unterschritt 2: Antwort der KI nach festen Regeln auswerten. */
+export function werteKontrolle(antwort: unknown, rohJson: unknown, heute: string) {
+  const protokoll = protokollVon(rohJson, heute);
+  if (!protokoll) return KEINE_KONTROLLE("keine Abrechnung");
+  const gueltig = KontrolleRoh.safeParse(antwort);
+  return gueltig.success ? werteKontrolleAus(gueltig.data, protokoll) : KEINE_KONTROLLE("keine gültige Antwort", protokoll.zeilen.length);
+}
 
 /** Ältere Antworten (und das Beispiel) kennen die neuen Felder noch nicht – mit leeren Werten ergänzen. */
 function ergaenze(roh: unknown): unknown {
@@ -48,5 +73,6 @@ export function werteAus(
   const bericht = pruefeAbrechnung(abrechnung, { heute });
   const s1 = erstelleStufe1(bericht, abrechnung, { heute });
   const s2 = erstelleStufe2(bericht, abrechnung, s1);
-  return { s1, s2, konsistenz, hinweise, positionen: abrechnung.kostenpositionen.map((p) => ({ name: p.bezeichnung, betrag: p.anteilMieter })), heizkosten: abrechnung.heizkosten?.anteilMieter ?? null, plz: abrechnung.meta.plz ?? null, zeitraum: abrechnung.meta.abrechnungszeitraum ?? null };
+  const protokoll = erstelleZeilenprotokoll(bericht, abrechnung);
+  return { s1, s2, konsistenz, hinweise, protokoll, positionen: abrechnung.kostenpositionen.map((p) => ({ name: p.bezeichnung, betrag: p.anteilMieter })), heizkosten: abrechnung.heizkosten?.anteilMieter ?? null, plz: abrechnung.meta.plz ?? null, zeitraum: abrechnung.meta.abrechnungszeitraum ?? null };
 }

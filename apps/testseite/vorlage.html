@@ -194,6 +194,26 @@ details[open] summary { margin-bottom: 12px; }
       const kontakt = {};
       for (const [k, v] of Object.entries(antwort?.kontakt ?? {})) if (typeof v === "string" && v.trim()) kontakt[k] = v.trim();
       z = neuerZustand(antwort?.abrechnung ?? antwort, false, kontakt);
+      // Unterschritt 2: Die KI vergleicht das Zeilenprotokoll der Formelprüfung mit dem Dokument
+      const protokoll = P.kontrollProtokoll(z.roh, HEUTE);
+      if (protokoll) {
+        $("laden-titel").textContent = "Zweite Kontrolle";
+        $("laden-text").textContent = "Jede Zeile wird noch einmal mit Ihrem Dokument verglichen …";
+        try {
+          const kontrolle = await sample.json([
+            P.KONTROLL_ANWEISUNG,
+            "Antworte ausschließlich mit einem JSON-Objekt nach diesem JSON-Schema:",
+            P.KONTROLL_SCHEMA,
+            `Inhalt des Dokuments, Seite für Seite:\n${text.slice(0, 150000)}`,
+            `Zeilenprotokoll der Formelprüfung:\n${protokoll}`,
+            "Kontrolliere das Protokoll Zeile für Zeile gegen das Dokument.",
+          ].join("\n\n"), { modelTier: "complex", signal: ctl.signal });
+          z.kontrolle = P.werteKontrolle(kontrolle, z.roh, HEUTE);
+        } catch (e) {
+          if (e?.name === "AbortError") throw e;
+          z.kontrolle = P.werteKontrolle(null, z.roh, HEUTE);
+        }
+      }
       zeige();
     } catch (e) {
       $("ergebnis").innerHTML = "";
@@ -336,6 +356,7 @@ details[open] summary { margin-bottom: 12px; }
       <p>${unter}</p>
       ${f.pruefbedarf.anzahl ? `<p class="leise" style="font-size:15px">${f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`}${f.pruefbedarf.betrag > 0 ? ` mit bis zu ${euro(f.pruefbedarf.betrag)}` : ""} prüfen wir, sobald Sie eine Unterlage nachreichen.${f.pruefbedarf.ohneBetrag ? ` ${f.pruefbedarf.betrag > 0 ? "Teilweise ist die" : "Die"} Auswirkung ist noch nicht bezifferbar.` : ""}</p>` : ""}
       ${!r.konsistenz.konsistent ? `<p class="hinweis">Einige Zahlen konnten wir nicht sicher lesen. Bitte prüfen Sie unten die ausgelesenen Beträge.</p>` : ""}
+      ${z.kontrolle && !z.kontrolle.bestanden ? `<p class="hinweis">Die zweite Kontrolle hat etwas gemeldet. Ein Fachprüfer sollte dieses Ergebnis ansehen. Einzelheiten stehen unten unter „So haben wir geprüft“.</p>` : ""}
       <dl class="fakten">
         ${fehler}
         ${saldo !== undefined ? `<div><dt>${saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}</dt><dd>${euro(Math.abs(saldo))}</dd>${k.korrigierterSaldo !== undefined ? `<small>Nach Korrektur der belegten Fehler: ${k.korrigierterSaldo > 0 ? `Nachzahlung ${euro(k.korrigierterSaldo)}` : `Guthaben ${euro(Math.abs(k.korrigierterSaldo))}`}</small>` : ""}</div>` : ""}
@@ -561,7 +582,30 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
   function gelesen(r) {
     const zeilen = r.positionen.map((p) => `<tr><td>${esc(p.name)}</td><td>${euro(p.betrag)}</td></tr>`).join("") +
       (r.heizkosten !== null ? `<tr><td>Heiz- und Warmwasserkosten</td><td>${euro(r.heizkosten)}</td></tr>` : "");
-    return `<details class="karte"><summary>Ausgelesene Beträge ansehen</summary><table class="tabelle"><tbody>${zeilen}</tbody></table></details>`;
+    return `<details class="karte"><summary>Ausgelesene Beträge ansehen</summary><table class="tabelle"><tbody>${zeilen}</tbody></table></details>` + pruefweg(r);
+  }
+
+  // Zwei Unterschritte: 1. Formelprüfung Zeile für Zeile, 2. KI-Kontrolle gegen das Dokument
+  function pruefweg(r) {
+    const p = r.protokoll, k = z.kontrolle;
+    const TEXT = { ok: "in Ordnung", fehler: "Fehler", pruefbedarf: "Prüfbedarf", hinweis: "Hinweis", offen: "offene Frage" };
+    const zeilen = p.zeilen.map((x) => `<tr><td>${x.nr}. ${esc(x.bezeichnung)}<br><small class="leise">${x.pruefungen.length} ${x.pruefungen.length === 1 ? "Prüfung" : "Prüfungen"}</small></td><td>${x.ergebnis === "ok" ? "" : "<b>"}${TEXT[x.ergebnis]}${x.ergebnis === "ok" ? "" : "</b>"}</td></tr>`).join("");
+    let kontrolle;
+    if (!k) kontrolle = `<p class="leise">Im Beispiel wird die zweite Kontrolle nicht ausgeführt.</p>`;
+    else if (!k.durchgefuehrt) kontrolle = `<p>Die zweite Kontrolle konnte nicht ausgeführt werden. Das Ergebnis ist deshalb nicht bestätigt.</p>`;
+    else {
+      const punkte = [
+        ...k.lesefehler.map((x) => `Zeile ${x.nr} „${esc(x.bezeichnung)}“: ${esc(x.abweichung)}`),
+        ...k.fehlendeZeilen.map((x) => `Zeile fehlt: „${esc(x.bezeichnung)}“${x.betrag !== undefined ? ` (${euro(x.betrag)})` : ""}`),
+        ...k.auffaelligkeiten.map((x) => `${esc(x.beschreibung)} Textstelle: „${esc(x.textstelle)}“`),
+      ];
+      kontrolle = `<p>${k.zeilenBestaetigt} von ${k.zeilenGesamt} Zeilen stimmen mit Ihrem Dokument überein.${k.bestanden ? " Keine Zeile fehlt, nichts Zusätzliches aufgefallen." : ""}</p>${punkte.length ? `<ul class="belege" style="display:grid;gap:4px">${punkte.map((t) => `<li>${t}</li>`).join("")}</ul>` : ""}`;
+    }
+    return `<details class="karte"><summary>So haben wir geprüft</summary>
+      <h3 style="margin:12px 0 4px">1. Formelprüfung</h3>
+      <p>${p.zeilen.length} Zeilen, ${p.anzahlPruefungen} Prüfungen. ${p.vollstaendigkeit.ok ? "Die Summe aller Zeilen ergibt die ausgewiesene Gesamtsumme." : "Die Summe der Zeilen ergibt nicht die ausgewiesene Gesamtsumme."}</p>
+      <table class="tabelle"><tbody>${zeilen}</tbody></table>
+      <h3 style="margin:16px 0 4px">2. Kontrolle durch die KI</h3>${kontrolle}</details>`;
   }
 
   // ---------- Bedienung ----------

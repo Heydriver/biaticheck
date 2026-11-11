@@ -30,6 +30,19 @@ export default async function FallIntern({ params }: { params: Promise<{ id: str
                 Auslesung: <strong>{fall.auslesung.konsistenz.konsistent ? "stimmig" : "unstimmig"}</strong> · {fall.auslesung.modell} ·{" "}
                 {fall.auslesung.nutzung.eingabeTokens.toLocaleString("de-DE")} / {fall.auslesung.nutzung.ausgabeTokens.toLocaleString("de-DE")} Tokens
               </p>
+              {fall.auslesung.kontrolle && (
+                <p>
+                  KI-Kontrolle:{" "}
+                  <strong>
+                    {!fall.auslesung.kontrolle.durchgefuehrt
+                      ? "nicht durchgeführt"
+                      : fall.auslesung.kontrolle.bestanden
+                        ? "bestanden"
+                        : "Meldungen – bitte prüfen"}
+                  </strong>{" "}
+                  · {fall.auslesung.kontrolle.zeilenBestaetigt} von {fall.auslesung.kontrolle.zeilenGesamt} Zeilen bestätigt
+                </p>
+              )}
               <ul className="list-disc pl-5 text-stone-700">
                 {fall.auslesung.konsistenz.gruende.map((g, i) => (
                   <li key={`g${i}`} className="text-red-800">

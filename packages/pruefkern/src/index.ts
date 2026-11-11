@@ -9,3 +9,4 @@ export * from "./vergleich";
 export * from "./stufen";
 export { MUSTERABRECHNUNG } from "./muster";
 export * from "./fehlerkatalog";
+export * from "./zeilenprotokoll";

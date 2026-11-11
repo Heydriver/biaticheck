@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { KONTROLL_PROMPT } from "@biaticheck/auslesen";
 import { G001_ROH } from "../../../packages/auslesen/test/G-001.roh";
 import { erstelleDb } from "@/server/db";
 import { antworten, dokumente, faelle, protokoll } from "@/server/db/schema";
@@ -32,9 +33,25 @@ async function neuerFall() {
   return fall!.id;
 }
 
-function fakeClient(antwort: () => unknown) {
-  const parse = vi.fn(async () => antwort());
-  return { client: { beta: { messages: { parse } } } as unknown as Anthropic, parse };
+type Anfrage = { system: { text: string }[]; messages: { content: { type: string; text?: string }[] }[] };
+type Kontrollzeile = { nr: number; gelesen: "richtig" | "abweichend" | "nicht_gefunden"; abweichung: string | null };
+
+/**
+ * Attrappe für den Anthropic-Client. Der zweite Aufruf je Fall ist die KI-Kontrolle; ohne eigene Vorgabe
+ * bestätigt sie jede Zeile. `auslesen` zählt nur die Ausleseaufrufe.
+ */
+function fakeClient(antwort: () => unknown, kontrolle: (zeilen: Kontrollzeile[]) => unknown = (zeilen) => ({ zeilen, fehlendeZeilen: [], auffaelligkeiten: [] })) {
+  const auslesen = vi.fn();
+  const parse = vi.fn(async (anfrage: Anfrage) => {
+    if (anfrage.system[0]!.text !== KONTROLL_PROMPT) {
+      auslesen();
+      return antwort();
+    }
+    const text = anfrage.messages[0]!.content.find((b) => b.type === "text")!.text!;
+    const zeilen = (JSON.parse(text.slice(text.indexOf("["), text.lastIndexOf("]") + 1)) as { nr: number }[]).map((x) => ({ nr: x.nr, gelesen: "richtig" as const, abweichung: null }));
+    return { model: "claude-opus-5-5", usage: { input_tokens: 21000, output_tokens: 1500 }, stop_reason: "end_turn", parsed_output: kontrolle(zeilen) };
+  });
+  return { client: { beta: { messages: { parse } } } as unknown as Anthropic, parse, auslesen };
 }
 const ok = () => ({ model: "claude-opus-5-5", usage: { input_tokens: 20000, output_tokens: 3000 }, stop_reason: "end_turn", parsed_output: structuredClone(G001_ROH) });
 
@@ -54,7 +71,8 @@ describe("Verarbeitung eines Falls", () => {
     expect(fall.status).toBe("fertig");
     expect(fall.bericht?.zusammenfassung.klaerungspotenzial).toBe(13.57);
     expect(fall.auslesung?.konsistenz.konsistent).toBe(true);
-    expect(fall.auslesung?.nutzung.eingabeTokens).toBe(20000);
+    // Auslesen (20.000) + KI-Kontrolle (21.000)
+    expect(fall.auslesung?.nutzung.eingabeTokens).toBe(41000);
     expect(await aktionen(id)).toEqual(["ausgelesen_und_geprueft"]);
   });
 
@@ -72,6 +90,33 @@ describe("Verarbeitung eines Falls", () => {
     const fall = await lade(id);
     expect(fall.status).toBe("expertenpruefung");
     expect(fall.auslesung?.konsistenz.gruende[0]).toMatch(/Positionen ergeben/);
+  });
+
+  it("KI-Kontrolle bestätigt jede Zeile → Ergebnis wird freigegeben und die Kontrolle gespeichert", async () => {
+    const id = await neuerFall();
+    await verarbeiteFall(id, deps({ client: fakeClient(ok).client }));
+    const fall = await lade(id);
+    expect(fall.status).toBe("fertig");
+    expect(fall.auslesung?.kontrolle).toMatchObject({ durchgefuehrt: true, bestanden: true });
+    expect(fall.auslesung!.kontrolle!.zeilenBestaetigt).toBe(fall.auslesung!.kontrolle!.zeilenGesamt);
+  });
+
+  it("KI-Kontrolle meldet Lesefehler, fehlende Zeile oder Auffälligkeit → Fall geht an den Fachprüfer", async () => {
+    const faelleMitMeldung: ((z: Kontrollzeile[]) => unknown)[] = [
+      (zeilen) => ({ zeilen: zeilen.map((z) => (z.nr === 2 ? { nr: 2, gelesen: "abweichend", abweichung: "Betrag im Dokument 64,28" } : z)), fehlendeZeilen: [], auffaelligkeiten: [] }),
+      (zeilen) => ({ zeilen, fehlendeZeilen: [{ bezeichnung: "Winterdienst", betrag: 41.2, seite: 5 }], auffaelligkeiten: [] }),
+      (zeilen) => ({ zeilen, fehlendeZeilen: [], auffaelligkeiten: [{ zeileNr: 1, beschreibung: "Fußnote nennt eine Nachberechnung für 2022.", textstelle: "inkl. Nachberechnung 2022", seite: 5 }] }),
+      () => ({ unsinn: true }),
+    ];
+    for (const kontrolle of faelleMitMeldung) {
+      const id = await neuerFall();
+      await verarbeiteFall(id, deps({ client: fakeClient(ok, kontrolle).client }));
+      const fall = await lade(id);
+      expect(fall.status).toBe("expertenpruefung");
+      expect(fall.auslesung!.konsistenz.gruende.join(" ")).toContain("KI-Kontrolle");
+      // Das Formelergebnis bleibt erhalten – der Fachprüfer baut darauf auf
+      expect(fall.bericht).toBeTruthy();
+    }
   });
 
   it("Demo-Modus ohne API-Schlüssel: Musterabrechnung, klar als Demo gekennzeichnet", async () => {
@@ -106,17 +151,20 @@ describe("Verarbeitung eines Falls", () => {
 
   it("gleichzeitiger Start liest nur einmal aus (keine doppelten API-Kosten)", async () => {
     const id = await neuerFall();
-    const { client, parse } = fakeClient(ok);
+    const { client, parse, auslesen } = fakeClient(ok);
     await Promise.all([verarbeiteFall(id, deps({ client })), verarbeiteFall(id, deps({ client })), verarbeiteFall(id, deps({ client }))]);
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(auslesen).toHaveBeenCalledTimes(1);
+    expect(parse).toHaveBeenCalledTimes(2);
   });
 
   it("ein fertiger Fall wird nicht erneut ausgelesen", async () => {
     const id = await neuerFall();
-    const { client, parse } = fakeClient(ok);
+    const { client, parse, auslesen } = fakeClient(ok);
     await verarbeiteFall(id, deps({ client }));
     await verarbeiteFall(id, deps({ client }));
-    expect(parse).toHaveBeenCalledTimes(1);
+    expect(auslesen).toHaveBeenCalledTimes(1);
+    // ein Auslesen und eine KI-Kontrolle
+    expect(parse).toHaveBeenCalledTimes(2);
   });
 });
 
