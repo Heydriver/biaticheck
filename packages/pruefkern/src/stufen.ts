@@ -499,7 +499,15 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return k(`Versicherung: „${name}“`, "Enthält eine nicht umlagefähige Versicherung. Auswirkung noch nicht bezifferbar.");
     case "I-16":
       return s === "abweichung" ? k("Leistung doppelt berechnet", "Zwei Positionen beziehen sich auf dieselbe Rechnung. Eine davon ist zu streichen.") : k("Leistung doppelt berechnet?", "Zwei Positionen derselben Kostenart haben genau dieselben Beträge.");
+    case "R-09":
+      if (b.art === "fremdes_objekt") return k("Rechnung eines anderen Hauses umgelegt", "Der Beleg betrifft ein anderes Objekt und darf nicht umgelegt werden.");
+      if (b.art === "gutschrift") return s === "abweichung" ? k("Gutschrift nicht abgezogen", `Eine Gutschrift über ${euro(zahl(b.belegBetrag) ?? 0)} für das Haus fehlt in der Abrechnung.`) : k("Gutschrift abgezogen?", "Ob die Gutschrift berücksichtigt wurde, ist nicht erkennbar.");
+      return zahl(b.umsatzsteuerProzent) !== undefined
+        ? k("Umsatzsteuer doppelt aufgeschlagen", `Rechnung ${euro(zahl(b.belegBetrag) ?? 0)}, übernommen ${euro(zahl(b.uebernommen) ?? 0)}.`)
+        : k("Mehr übernommen als im Beleg", `Rechnung ${euro(zahl(b.belegBetrag) ?? 0)}, übernommen ${euro(zahl(b.uebernommen) ?? 0)}.`);
     case "R-08":
+      if (zahl(b.faktorLautProtokoll) !== undefined || !e.positionId || e.titel.includes("Wärme"))
+        return k(e.titel, `Gemessen ${zahlDE(zahl(b.verbrauchZaehler) ?? 0)}, abgerechnet ${zahlDE(zahl(b.verbrauchAbgerechnet) ?? 0)}.`);
       return k(`Verbrauch falsch übertragen: ${name}`, `Laut Zähler ${zahlDE(zahl(b.verbrauchZaehler) ?? 0)} m³, abgerechnet ${zahlDE(zahl(b.verbrauchAbgerechnet) ?? 0)} m³.`);
     case "I-07":
       if (s === "abweichung" && b.ganzePosition === true) return k(`Reparaturkosten umgelegt: ${name}`, "Laut Leistungsnachweis sind das Reparaturen. Sie dürfen nicht umgelegt werden.");
@@ -608,7 +616,10 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
       return e.status === "abweichung"
         ? `${e.titel.replace("Doppelt berechnet: ", "")}: Beide Positionen beziehen sich auf dieselbe Rechnung (${String(b.belegnummer ?? "")}). Bitte streichen Sie eine der beiden Positionen${betrag}.`
         : `${e.titel.replace("Doppelt berechnet: ", "")}: Beide Positionen weisen identische Beträge aus. Bitte legen Sie die Rechnungen zu beiden Positionen vor.`;
+    case "R-09":
+      return `${e.textstelle ?? e.titel}: ${b.art === "fremdes_objekt" ? "Der Beleg betrifft ein anderes Objekt. Bitte nehmen Sie ihn aus der Abrechnung" : b.art === "gutschrift" ? "Bitte ziehen Sie die Gutschrift von den umgelegten Kosten ab" : "Bitte korrigieren Sie die umgelegten Kosten auf den Betrag laut Beleg"}${betrag}.`;
     case "R-08":
+      if (e.titel.includes("Wärme") && e.textstelle) return `${e.textstelle}. Bitte rechnen Sie nach dem gemessenen Verbrauch ab${betrag}.`;
       if (name && zahl(b.verbrauchZaehler) !== undefined)
         return `${name}: Die Zählerstände ergeben ${zahlDE(zahl(b.verbrauchZaehler)!)} m³, abgerechnet wurden ${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³. Bitte rechnen Sie nach dem Verbrauch laut Zählerständen ab${betrag}.`;
       break;
@@ -766,6 +777,7 @@ function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
     case "R-07": return "Wohnflächenberechnung für Ihre Wohnung";
     case "I-12": return "Aufstellung des Vorwegabzugs für Gewerbe";
     case "I-16": return "Rechnungen zu beiden Positionen";
+    case "R-09": return "Originalbelege zu den beanstandeten Rechnungen";
     case "I-17": return name ? `Versicherungsscheine und Beitragsrechnungen zu „${name}“` : undefined;
     case "R-08": return "Ableseprotokoll mit Zählerständen";
     case "I-13": return "Liste der Wohnungen mit Leerstandszeiten";
@@ -1018,11 +1030,22 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       if (typeof b.ausschlussImDokument === "string") add("Erklärung in der Abrechnung", `„${b.ausschlussImDokument}“`);
       if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
       break;
-    case "R-08":
+    case "R-08": {
+      const eh = b.einheit === "" ? "" : " m³";
       position();
-      add("Verbrauch laut Zählerständen", zahl(b.verbrauchZaehler) !== undefined ? `${zahlDE(zahl(b.verbrauchZaehler)!)} m³` : undefined);
-      add("Abgerechneter Verbrauch", zahl(b.verbrauchAbgerechnet) !== undefined ? `${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³` : undefined, true);
-      if (e.betragZugunstenMieter && zahl(b.zuViel) !== undefined) add(`Zu viel berechnet (${eur(b.anteilMieter)} × ${zahlDE(zahl(b.zuViel)!)} / ${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³)`, euro(e.betragZugunstenMieter), true);
+      if (zahl(b.faktorLautProtokoll) !== undefined) add("Faktor laut Geräteprotokoll", zahlDE(zahl(b.faktorLautProtokoll)!));
+      if (zahl(b.faktor) !== undefined) add("Faktor in der Abrechnung", zahlDE(zahl(b.faktor)!), zahl(b.faktor) !== zahl(b.faktorLautProtokoll));
+      add("Verbrauch laut Zähler", zahl(b.verbrauchZaehler) !== undefined ? `${zahlDE(zahl(b.verbrauchZaehler)!)}${eh}` : undefined);
+      add("Abgerechneter Verbrauch", zahl(b.verbrauchAbgerechnet) !== undefined ? `${zahlDE(zahl(b.verbrauchAbgerechnet)!)}${eh}` : undefined, true);
+      if (e.betragZugunstenMieter && zahl(b.zuViel) !== undefined) add(`Zu viel berechnet (${eur(b.anteilMieter)} × ${zahlDE(zahl(b.zuViel)!)} / ${zahlDE(zahl(b.verbrauchAbgerechnet)!)}${eh})`, euro(e.betragZugunstenMieter), true);
+      break;
+    }
+    case "R-09":
+      add("Betrag laut Beleg", eur(b.belegBetrag));
+      if (b.art !== "gutschrift") add("In die Abrechnung übernommen", eur(b.uebernommen), true);
+      if (typeof b.objekt === "string") add("Beleg ausgestellt für", b.objekt);
+      add("Zu viel für das ganze Haus", eur(b.zuVielHaus));
+      if (e.betragZugunstenMieter) add(e.status === "abweichung" ? "Davon Ihr Anteil" : "Möglicher Anteil", e.status === "abweichung" ? euro(e.betragZugunstenMieter) : `bis zu ${euro(e.betragZugunstenMieter)}`, true);
       break;
     case "I-16":
     case "I-15":

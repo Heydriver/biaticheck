@@ -61,6 +61,10 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("R-07.a", "Mehr Wohnfläche als im Mietvertrag", "(Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung)", "auffaelligkeit", "bis_zu", "Mietvertrag (Wohnfläche)"),
 
   f("R-08.a", "Verbrauch weicht von den Zählerständen ab", "Verbrauch laut Zähler = Σ (Endstand − Anfangsstand); Betrag je Position = Anteil × (abgerechneter Verbrauch − Verbrauch laut Zähler) / abgerechneter Verbrauch", "abweichung", "exakt", "Zählerstände in der Abrechnung"),
+  f("R-08.b", "Falscher Faktor oder Verbrauch beim Wärmezähler", "gemessen = (Endstand − Anfangsstand) × Faktor laut Geräteprotokoll; Betrag = Verbrauchskosten der Wohnung × (abgerechnet − gemessen) / abgerechnet", "abweichung", "exakt", "Zählerstände, Geräteprotokoll, Verbrauchskosten"),
+  f("R-09.a", "Rechnung eines anderen Hauses umgelegt", "Beleg ist für ein anderes Objekt ausgestellt → Betrag = Belegbetrag × Anteil / Gesamtkosten der Position", "abweichung", "exakt", "Beleg mit Objektangabe"),
+  f("R-09.b", "Mehr übernommen als im Beleg (z. B. Umsatzsteuer doppelt)", "übernommener Betrag − Betrag laut Beleg > 0,05 € → Betrag = Differenz × Anteil / Gesamtkosten der Position", "abweichung", "exakt", "Beleg und übernommener Betrag"),
+  f("R-09.c", "Gutschrift nicht abgezogen", "Σ Rechnungen = abgerechnete Gesamtkosten (Gutschrift fehlt) → Betrag = Gutschrift × Anteil / Gesamtkosten", "abweichung", "exakt", "Rechnungen und Gutschrift"),
 
   // ---------- Inhaltlich ----------
   f("I-01.a", "Verwaltungskosten umgelegt", "Kategorie = Verwaltung → Betrag = Anteil", "abweichung", "exakt", "Kostenpositionen"),

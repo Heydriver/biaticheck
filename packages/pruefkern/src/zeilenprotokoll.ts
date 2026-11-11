@@ -61,6 +61,8 @@ const ZEILE_DER_REGEL: Record<string, Zeile["art"]> = {
   "I-04": "heizkosten",
   "I-08": "heizkosten",
   "P-03": "heizkosten",
+  "R-08": "heizkosten",
+  "R-09": "heizkosten",
 };
 
 const ausBericht = (e: Regelergebnis): Zeilenpruefung => ({

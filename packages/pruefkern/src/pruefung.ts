@@ -13,7 +13,7 @@ import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.9.0";
+export const REGELWERK_VERSION = "0.10.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,
@@ -78,8 +78,10 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
 
   const anzahl: Record<Status, number> = { ok: 0, abweichung: 0, auffaelligkeit: 0, pruefbedarf: 0, hinweis: 0, nicht_pruefbar: 0 };
   let einzeln = 0;
-  // Mehrere Regeln können dieselbe Position beanstanden – je Position zählt nur der höchste Betrag (keine Doppelzählung)
+  // Mehrere Regeln können dieselbe Position beanstanden. Ganze-Position-Befunde (Betrag = Anteil) zählen einmal,
+  // Teilbeträge werden addiert – zusammen nie mehr, als die Position die Wohnung kostet (keine Doppelzählung).
   const jePosition = new Map<string, number>();
+  const anteilDer = new Map(abrechnung.kostenpositionen.map((p) => [p.id, p.anteilMieter]));
   let gesamt = 0;
   let klaerung = 0;
   let pruefbedarf = 0;
@@ -90,7 +92,12 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     anzahl[e.status]++;
     if (e.status === "abweichung" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
       if (GESAMTREGELN.has(e.regelId)) gesamt = Math.max(gesamt, e.betragZugunstenMieter);
-      else if (e.positionId) jePosition.set(e.positionId, Math.max(jePosition.get(e.positionId) ?? 0, e.betragZugunstenMieter));
+      else if (e.positionId) {
+        const grenze = anteilDer.get(e.positionId) ?? Infinity;
+        const bisher = jePosition.get(e.positionId) ?? 0;
+        // Ein Befund über die ganze Position ersetzt die Summe, sonst addieren und auf den Anteil begrenzen
+        jePosition.set(e.positionId, e.betragZugunstenMieter >= grenze ? Math.max(bisher, e.betragZugunstenMieter) : Math.min(Math.max(grenze, bisher), bisher + e.betragZugunstenMieter));
+      }
       else einzeln += e.betragZugunstenMieter;
     }
     if (e.status === "auffaelligkeit" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {

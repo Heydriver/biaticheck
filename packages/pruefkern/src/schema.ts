@@ -116,6 +116,9 @@ export const Heizkosten = z.object({
   anteilMieter: betrag,
   /** Ist der Heizkostenanteil bereits als Kostenposition in `kostenpositionen` enthalten? */
   inKostenpositionenEnthalten: z.boolean().default(false),
+  /** Abgerechneter Wärmeverbrauch der Wohnung (z. B. kWh) und die darauf entfallenden Verbrauchskosten. */
+  verbrauchMieter: z.number().nonnegative().optional(),
+  verbrauchskostenMieter: betrag.optional(),
   /** Beheizte Fläche der Wohnung bzw. des Hauses laut Heizkostenabrechnung. */
   flaecheMieter: z.number().positive().optional(),
   gesamtflaeche: z.number().positive().optional(),
@@ -215,6 +218,35 @@ export const Abrechnung = z.object({
         ende: z.number().nonnegative(),
         /** Verbrauch, den die Abrechnung für diesen Zähler übernommen hat (falls ausgewiesen). */
         verbrauchUebernommen: z.number().nonnegative().optional(),
+        /** Umrechnungsfaktor, mit dem die Abrechnung rechnet (z. B. 2). */
+        faktor: z.number().positive().optional(),
+        /** Umrechnungsfaktor laut Geräte- oder Ableseprotokoll (z. B. 1). */
+        faktorLautProtokoll: z.number().positive().optional(),
+        seite: z.number().int().positive().optional(),
+      }),
+    )
+    .default([]),
+  /**
+   * Belege, die der Abrechnung beiliegen oder in ihr aufgeführt sind (Rechnungen, Gutschriften).
+   * Sie werden mit den übernommenen Kosten abgeglichen.
+   */
+  belege: z
+    .array(
+      z.object({
+        /** ID der Kostenposition oder "heizkosten". */
+        zuPosition: z.string(),
+        bezeichnung: z.string(),
+        art: z.enum(["rechnung", "gutschrift"]).default("rechnung"),
+        /** Betrag laut Beleg (brutto, positiv – auch bei Gutschriften). */
+        betrag: z.number().nonnegative(),
+        /** Betrag, den die Abrechnung aus diesem Beleg übernommen hat (falls erkennbar). */
+        uebernommen: z.number().nonnegative().optional(),
+        /** Objekt/Adresse, für die der Beleg ausgestellt ist (ohne Namen). */
+        objekt: z.string().optional(),
+        /** Der Beleg betrifft erkennbar ein anderes Haus als das abgerechnete. */
+        fremdesObjekt: z.boolean().optional(),
+        /** Bei Gutschriften: in den abgerechneten Kosten abgezogen? */
+        beruecksichtigt: z.boolean().optional(),
         seite: z.number().int().positive().optional(),
       }),
     )

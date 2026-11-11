@@ -62,6 +62,8 @@ export const G001_ROH: Rohdaten = {
     pos("Mietservice Kaltwasserzähler", "wasser", 1106.7, 51.74, kw),
   ],
   heizkosten: {
+    verbrauchMieter: null,
+    verbrauchskostenMieter: null,
     gesamtkosten: 53979.37,
     verbrauchsanteilProzent: 70,
     verbrauchErfasst: true,
@@ -84,6 +86,7 @@ export const G001_ROH: Rohdaten = {
   summeKostenMieter: 3917.21,
   saldo: 1214.88,
   zaehler: [],
+  belege: [],
   erlaeuterungen: [],
   gezahlteVorauszahlungenBetriebskosten: null,
   gezahlteVorauszahlungenHeizkosten: null,

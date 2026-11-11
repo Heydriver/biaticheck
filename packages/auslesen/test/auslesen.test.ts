@@ -91,7 +91,7 @@ describe("Umwandlung", () => {
 
   it("übernimmt Zählerstände, Rechnungsnummern und Leistungsnachweise bis in die Prüfung", () => {
     const r = roh();
-    r.zaehler = [{ art: "kaltwasser", bezeichnung: "Bad", anfang: 100, ende: 140, verbrauchUebernommen: 48, seite: 3 }];
+    r.zaehler = [{ art: "kaltwasser", bezeichnung: "Bad", anfang: 100, ende: 140, verbrauchUebernommen: 48, faktor: null, faktorLautProtokoll: null, seite: 3 }];
     const garten = r.kostenpositionen.filter((p) => p.kategorie === "gartenpflege");
     garten[0]!.belegnummer = "RE 2024-118";
     garten[1]!.belegnummer = "RE 2024-118";
@@ -101,6 +101,25 @@ describe("Umwandlung", () => {
     expect(abrechnung.zaehler).toEqual([{ art: "kaltwasser", bezeichnung: "Bad", anfang: 100, ende: 140, verbrauchUebernommen: 48, seite: 3 }]);
     const fehler = pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }).ergebnisse.filter((e) => e.status === "abweichung").map((e) => e.regelId);
     expect(fehler).toEqual(expect.arrayContaining(["I-16", "I-07"]));
+  });
+
+  it("übernimmt Belege, Zählerfaktor und Gutschriften bis in die Prüfung", () => {
+    const r = roh();
+    const garten = r.kostenpositionen.find((p) => p.kategorie === "gartenpflege")!;
+    r.belege = [
+      { positionBezeichnung: garten.bezeichnung, bezeichnung: "Rechnung Gartenpflege", art: "rechnung", betrag: 800, uebernommen: 952, objekt: null, fremdesObjekt: false, beruecksichtigt: null, seite: 5 },
+      { positionBezeichnung: "Müllentsorgung", bezeichnung: "Rechnung Containerdienst", art: "rechnung", betrag: 500, uebernommen: null, objekt: "anderes Objekt in Leipzig", fremdesObjekt: true, beruecksichtigt: null, seite: 6 },
+      { positionBezeichnung: "Heizkosten", bezeichnung: "Gutschrift Preiskorrektur", art: "gutschrift", betrag: 600, uebernommen: null, objekt: null, fremdesObjekt: false, beruecksichtigt: false, seite: 7 },
+      { positionBezeichnung: "Gibt es nicht", bezeichnung: "Rechnung unbekannt", art: "rechnung", betrag: 10, uebernommen: null, objekt: null, fremdesObjekt: false, beruecksichtigt: null, seite: null },
+    ];
+    r.zaehler = [{ art: "heizung", bezeichnung: "Wärmezähler", anfang: 12000, ende: 16800, verbrauchUebernommen: 9600, faktor: 2, faktorLautProtokoll: 1, seite: 6 }];
+    r.heizkosten!.verbrauchMieter = 9600;
+    r.heizkosten!.verbrauchskostenMieter = 1260;
+    const { abrechnung, hinweise } = wandleUm(r);
+    expect(abrechnung.belege!.map((b) => b.zuPosition)).toEqual([expect.stringMatching(/^p\d+$/), expect.stringMatching(/^p\d+$/), "heizkosten"]);
+    expect(hinweise.join(" ")).toContain("Rechnung unbekannt");
+    const fehler = pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }).ergebnisse.filter((e) => e.status === "abweichung").map((e) => e.titel.split(":")[0]);
+    expect(fehler).toEqual(expect.arrayContaining(["Umsatzsteuer doppelt aufgeschlagen", "Rechnung eines anderen Hauses umgelegt", "Gutschrift nicht abgezogen", "Falscher Faktor beim Wärmezähler"]));
   });
 
   it("verwirft ungültige Datumsangaben mit Hinweis", () => {

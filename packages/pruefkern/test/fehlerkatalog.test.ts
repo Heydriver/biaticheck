@@ -279,6 +279,41 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
   },
   "I-17.b": (a, z) => ((x) => ({ betrag: x.anteilMieter, positionId: x.id }))(neu(a, z, z.ganz(0, 1) ? "Rechtsschutzversicherung Vermieter" : "Mietausfallversicherung", "versicherung")),
   "I-17.c": (a) => ((a.erlaeuterungen = [{ text: "Das Versicherungspaket umfasst auch den Vermieter-Rechtsschutz." }]), { positionId: "k09" }),
+  "R-08.b": (a, z) => {
+    const kwh = z.ganz(2000, 9000);
+    const faktor = z.ganz(2, 4);
+    const anfang = z.ganz(1000, 50000);
+    a.zaehler!.push({ art: "heizung", bezeichnung: "Wärmezähler", anfang, ende: anfang + kwh, faktor, faktorLautProtokoll: 1, verbrauchUebernommen: kwh * faktor });
+    a.heizkosten!.verbrauchMieter = kwh * faktor;
+    a.heizkosten!.verbrauchskostenMieter = z.euro(300, 1500);
+    return { betrag: runde((a.heizkosten!.verbrauchskostenMieter * (kwh * faktor - kwh)) / (kwh * faktor)) };
+  },
+  "R-09.a": (a, z) => {
+    const pos = p(a, "k06");
+    const fremd = z.euro(50, pos.gesamtkosten! * 0.5);
+    a.belege = [{ zuPosition: "k06", bezeichnung: "Rechnung Treppenhausreinigung", betrag: fremd, fremdesObjekt: true, objekt: "anderes Objekt in Leipzig", seite: 6 }];
+    return { betrag: runde((pos.anteilMieter * fremd) / pos.gesamtkosten!), positionId: "k06" };
+  },
+  "R-09.b": (a, z) => {
+    const pos = p(a, "k07");
+    const brutto = z.euro(200, 2000);
+    const satz = z.ganz(0, 2);
+    // doppelte Umsatzsteuer (19 % oder 7 %) oder ein beliebiger Übertragungsfehler
+    const uebernommen = runde(satz === 0 ? brutto * 1.19 : satz === 1 ? brutto * 1.07 : brutto + z.euro(1, 300));
+    pos.gesamtkosten = uebernommen;
+    pos.anteilMieter = runde((uebernommen * w(a)) / g(a));
+    a.belege = [{ zuPosition: "k07", bezeichnung: "Rechnung Gartenpflege", betrag: brutto, uebernommen, seite: 5 }];
+    return { betrag: runde((pos.anteilMieter * runde(uebernommen - brutto)) / uebernommen), positionId: "k07" };
+  },
+  "R-09.c": (a, z) => {
+    const h = a.heizkosten!;
+    const gutschrift = z.euro(50, 1500);
+    a.belege = [
+      { zuPosition: "heizkosten", bezeichnung: "Jahresrechnung Heizstrom", betrag: h.gesamtkosten! },
+      { zuPosition: "heizkosten", bezeichnung: "Gutschrift Preiskorrektur", art: "gutschrift", betrag: gutschrift, seite: 7 },
+    ];
+    return { betrag: runde((h.anteilMieter * gutschrift) / h.gesamtkosten!) };
+  },
   "I-08.a": (a, z) => {
     const kosten = z.euro(300, 3000);
     // 30 kg CO₂ je m² → Vermieter trägt 40 %

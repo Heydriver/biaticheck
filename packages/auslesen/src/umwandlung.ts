@@ -28,6 +28,7 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
     return undefined;
   };
   const positiv = (v: number | null): number | undefined => (v !== null && v > 0 ? v : undefined);
+  const normal = (s: string) => s.toLowerCase().replace(/[^a-zäöüß0-9]/g, "");
 
   const zeitraum = (vonRoh: string | null, bisRoh: string | null, feld: string) => {
     const von = datum(vonRoh, `${feld}.von`);
@@ -98,7 +99,17 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
     kostenpositionen,
     zaehler: roh.zaehler
       .filter((x) => x.anfang >= 0 && x.ende >= x.anfang)
-      .map((x) => ({ art: x.art, bezeichnung: x.bezeichnung ?? undefined, anfang: x.anfang, ende: x.ende, verbrauchUebernommen: x.verbrauchUebernommen !== null && x.verbrauchUebernommen >= 0 ? x.verbrauchUebernommen : undefined, seite: x.seite !== null && x.seite > 0 ? x.seite : undefined })),
+      .map((x) => ({ art: x.art, bezeichnung: x.bezeichnung ?? undefined, anfang: x.anfang, ende: x.ende, verbrauchUebernommen: x.verbrauchUebernommen !== null && x.verbrauchUebernommen >= 0 ? x.verbrauchUebernommen : undefined, faktor: positiv(x.faktor), faktorLautProtokoll: positiv(x.faktorLautProtokoll), seite: x.seite !== null && x.seite > 0 ? x.seite : undefined })),
+    belege: roh.belege.flatMap((b) => {
+      const name = normal(b.positionBezeichnung);
+      const position = kostenpositionen.find((p) => normal(p.bezeichnung) === name) ?? kostenpositionen.find((p) => name.length >= 4 && (normal(p.bezeichnung).includes(name) || name.includes(normal(p.bezeichnung))));
+      const zuPosition = position?.id ?? (/heiz|wärme|waerme|warmwasser/.test(name) ? "heizkosten" : undefined);
+      if (!zuPosition || !(b.betrag >= 0)) {
+        hinweise.push(`Beleg „${b.bezeichnung}“ konnte keiner Position zugeordnet werden (${b.positionBezeichnung})`);
+        return [];
+      }
+      return [{ zuPosition, bezeichnung: b.bezeichnung, art: b.art, betrag: b.betrag, uebernommen: b.uebernommen !== null && b.uebernommen >= 0 ? b.uebernommen : undefined, objekt: b.objekt?.trim() || undefined, fremdesObjekt: b.fremdesObjekt || undefined, beruecksichtigt: b.beruecksichtigt ?? undefined, seite: b.seite !== null && b.seite > 0 ? b.seite : undefined }];
+    }),
     erlaeuterungen: roh.erlaeuterungen.map((e) => ({ text: e.text.trim(), ...(e.seite !== null && e.seite > 0 ? { seite: e.seite } : {}) })).filter((e) => e.text),
     heizkosten: h
       ? {
@@ -107,6 +118,8 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
           verbrauchErfasst: wert(h.verbrauchErfasst),
           anteilMieter: h.anteilMieter,
           inKostenpositionenEnthalten: false,
+          verbrauchMieter: h.verbrauchMieter !== null && h.verbrauchMieter >= 0 ? h.verbrauchMieter : undefined,
+          verbrauchskostenMieter: wert(h.verbrauchskostenMieter),
           flaecheMieter: positiv(h.flaecheMieter),
           gesamtflaeche: positiv(h.gesamtflaeche),
           warmwasser:

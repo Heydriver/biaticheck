@@ -504,8 +504,9 @@ export const R08_Zaehlerstaende: Regel = {
   grundlage: "§ 556a Abs. 1 Satz 2 BGB; rechnerische Richtigkeit",
   stand: "entwurf",
   pruefe(a, { einstellungen }) {
+    const waerme = waermezaehler(a, einstellungen.toleranzEuro);
     const wasser = a.zaehler.filter((z) => z.art === "kaltwasser" || z.art === "warmwasser");
-    if (wasser.length === 0) return [];
+    if (wasser.length === 0) return waerme;
     const laut = (liste: typeof wasser) => runde(liste.reduce((s, z) => s + (z.ende - z.anfang), 0));
     const uebernommen = (liste: typeof wasser) => (liste.every((z) => z.verbrauchUebernommen !== undefined) ? runde(liste.reduce((s, z) => s + z.verbrauchUebernommen!, 0)) : undefined);
     const kalt = wasser.filter((z) => z.art === "kaltwasser");
@@ -537,10 +538,147 @@ export const R08_Zaehlerstaende: Regel = {
       });
     }
     if (befunde.length === 0 && positionen.length > 0) {
-      return [{ status: "ok", titel: "Verbrauch stimmt mit den Zählerständen überein", erklaerung: `Die Zählerstände ergeben ${zahlDE(laut(wasser))} m³ – wie abgerechnet.` }];
+      return [...waerme, { status: "ok", titel: "Verbrauch stimmt mit den Zählerständen überein", erklaerung: `Die Zählerstände ergeben ${zahlDE(laut(wasser))} m³ – wie abgerechnet.` }];
     }
+    return [...waerme, ...befunde];
+  },
+};
+
+/**
+ * Wärmezähler: Verbrauch = (Endstand − Anfangsstand) × Faktor laut Geräteprotokoll. Rechnet die Abrechnung mit
+ * einem anderen Faktor oder einem anderen Verbrauch, sind die Verbrauchskosten im selben Verhältnis zu hoch:
+ * Betrag = Verbrauchskosten der Wohnung × (abgerechnet − gemessen) / abgerechnet.
+ */
+function waermezaehler(a: Abrechnung, toleranzEuro: number): Befund[] {
+  const befunde: Befund[] = [];
+  for (const z of a.zaehler.filter((x) => x.art === "heizung")) {
+    const differenz = z.ende - z.anfang;
+    const gemessen = runde(differenz * (z.faktorLautProtokoll ?? z.faktor ?? 1));
+    const abgerechnet = z.verbrauchUebernommen ?? runde(differenz * (z.faktor ?? 1));
+    const zuViel = runde(abgerechnet - gemessen);
+    if (Math.abs(zuViel) < 0.005 || abgerechnet <= 0) {
+      befunde.push({ status: "ok", titel: "Wärmeverbrauch stimmt mit dem Zähler überein", erklaerung: `Der Wärmezähler ergibt ${zahlDE(gemessen)} – wie abgerechnet.` });
+      continue;
+    }
+    // Verbrauchskosten der Wohnung: Heizposition nach Verbrauch mit diesem Verbrauch, sonst Angabe der Heizkostenabrechnung
+    const position = a.kostenpositionen.find((p) => ["heizung", "warmwasser", "verbundene_anlagen"].includes(p.kategorie) && p.umlageschluessel?.typ === "verbrauch" && p.umlageschluessel.anteilEinheit !== undefined && Math.abs(p.umlageschluessel.anteilEinheit - abgerechnet) < 0.5);
+    const kosten = position?.anteilMieter ?? (a.heizkosten?.verbrauchskostenMieter !== undefined && (a.heizkosten.verbrauchMieter === undefined || Math.abs(a.heizkosten.verbrauchMieter - abgerechnet) < 0.5) ? a.heizkosten.verbrauchskostenMieter : undefined);
+    const betrag = kosten !== undefined ? runde((kosten * zuViel) / abgerechnet) : undefined;
+    const faktorFalsch = z.faktor !== undefined && z.faktorLautProtokoll !== undefined && z.faktor !== z.faktorLautProtokoll;
+    const rechnung = `${zahlDE(z.ende)} − ${zahlDE(z.anfang)} = ${zahlDE(runde(differenz))}${(z.faktorLautProtokoll ?? z.faktor ?? 1) !== 1 ? ` × ${zahlDE(z.faktorLautProtokoll ?? z.faktor!)}` : ""} = ${zahlDE(gemessen)}`;
+    if (betrag !== undefined && Math.abs(betrag) <= toleranzEuro) continue;
+    befunde.push({
+      status: betrag !== undefined ? "abweichung" : "auffaelligkeit",
+      titel: faktorFalsch ? "Falscher Faktor beim Wärmezähler" : "Wärmeverbrauch falsch übertragen",
+      erklaerung:
+        `Der Wärmezähler${z.bezeichnung ? ` (${z.bezeichnung})` : ""} ergibt ${rechnung}. Abgerechnet wurden ${zahlDE(abgerechnet)}` +
+        (faktorFalsch ? `, weil mit Faktor ${zahlDE(z.faktor!)} gerechnet wurde. Das Geräteprotokoll nennt Faktor ${zahlDE(z.faktorLautProtokoll!)}.` : ".") +
+        (betrag !== undefined ? ` Bei Verbrauchskosten von ${euro(kosten!)} sind das ${euro(betrag)} zu viel.` : " Die Auswirkung lässt sich ohne die Verbrauchskosten der Wohnung nicht beziffern."),
+      naechsterSchritt: betrag !== undefined ? `Fordern Sie die Abrechnung nach dem gemessenen Verbrauch (${euro(betrag)} weniger).` : "Fordern Sie die Abrechnung nach dem gemessenen Verbrauch.",
+      betragZugunstenMieter: betrag,
+      positionId: position?.id,
+      textstelle: `Wärmezähler: ${rechnung}; abgerechnet ${zahlDE(abgerechnet)}${faktorFalsch ? `; Faktor laut Protokoll ${zahlDE(z.faktorLautProtokoll!)}, angewendet ${zahlDE(z.faktor!)}` : ""}`,
+      beleg: { verbrauchZaehler: gemessen, verbrauchAbgerechnet: abgerechnet, zuViel, anteilMieter: kosten, faktor: z.faktor, faktorLautProtokoll: z.faktorLautProtokoll, einheit: "" },
+    });
+  }
+  return befunde;
+}
+
+/**
+ * Belegabgleich: Die Abrechnung darf aus jedem Beleg nur den Betrag übernehmen, der dort steht, und nur Belege des
+ * abgerechneten Hauses. Gutschriften müssen abgezogen sein.
+ * Betrag für die Wohnung = Hausbetrag × Anteil der Wohnung an der Position (Anteil / Gesamtkosten).
+ */
+export const R09_Belegabgleich: Regel = {
+  id: "R-09",
+  version: "1.0.0",
+  titel: "Übernommene Kosten stimmen mit den Belegen überein",
+  bereich: "rechnerisch",
+  grundlage: "§ 556 Abs. 1, 3 BGB; § 1 Abs. 1 BetrKV (nur tatsächlich entstandene Kosten des Gebäudes)",
+  stand: "entwurf",
+  pruefe(a, { einstellungen }) {
+    if (a.belege.length === 0) return [];
+    const befunde: Befund[] = [];
+    const anteil = (zuPosition: string, hausbetrag: number): { betrag?: number; name: string; positionId?: string } => {
+      if (zuPosition === "heizkosten") {
+        const h = a.heizkosten;
+        return { name: "Heizkosten", betrag: h?.gesamtkosten ? runde((h.anteilMieter * hausbetrag) / h.gesamtkosten) : undefined };
+      }
+      const p = a.kostenpositionen.find((x) => x.id === zuPosition);
+      if (!p) return { name: zuPosition };
+      const wert = p.gesamtkosten && p.gesamtkosten > 0 ? (p.anteilMieter * hausbetrag) / p.gesamtkosten : p.umlageschluessel?.anteilEinheit !== undefined && p.umlageschluessel.anteilGesamt ? (hausbetrag * p.umlageschluessel.anteilEinheit) / p.umlageschluessel.anteilGesamt : undefined;
+      return { name: p.bezeichnung, positionId: p.id, betrag: wert !== undefined ? runde(wert) : undefined };
+    };
+    const stelle = (b: (typeof a.belege)[number]) => (b.seite ? ` (Seite ${b.seite})` : "");
+    for (const b of a.belege) {
+      // 1. Beleg eines anderen Hauses
+      if (b.fremdesObjekt === true && b.art === "rechnung") {
+        const haus = b.uebernommen ?? b.betrag;
+        const x = anteil(b.zuPosition, haus);
+        befunde.push({
+          status: x.betrag !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: `Rechnung eines anderen Hauses umgelegt: ${x.name}`,
+          erklaerung: `„${b.bezeichnung}“${stelle(b)} über ${euro(haus)} betrifft ein anderes Objekt${b.objekt ? ` (${b.objekt})` : ""}. Umgelegt werden dürfen nur Kosten des abgerechneten Hauses.${x.betrag !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(x.betrag)}.` : ""}`,
+          naechsterSchritt: x.betrag !== undefined ? `Fordern Sie den Abzug dieser Rechnung (${euro(x.betrag)}).` : "Fordern Sie den Abzug dieser Rechnung.",
+          betragZugunstenMieter: x.betrag,
+          positionId: x.positionId,
+          textstelle: `${b.bezeichnung}${b.objekt ? `, Objekt: ${b.objekt}` : ""}${stelle(b)}`,
+          beleg: { art: "fremdes_objekt", belegBetrag: b.betrag, uebernommen: haus, objekt: b.objekt },
+        });
+        continue;
+      }
+      // 2. Mehr übernommen, als im Beleg steht (z. B. Umsatzsteuer doppelt aufgeschlagen)
+      if (b.art === "rechnung" && b.uebernommen !== undefined && b.uebernommen - b.betrag > einstellungen.toleranzEuro) {
+        const zuViel = runde(b.uebernommen - b.betrag);
+        const x = anteil(b.zuPosition, zuViel);
+        const ust = Math.abs(zuViel - b.betrag * 0.19) <= 0.02 ? 19 : Math.abs(zuViel - b.betrag * 0.07) <= 0.02 ? 7 : undefined;
+        befunde.push({
+          status: x.betrag !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: ust ? `Umsatzsteuer doppelt aufgeschlagen: ${x.name}` : `Mehr übernommen als im Beleg: ${x.name}`,
+          erklaerung:
+            `„${b.bezeichnung}“${stelle(b)} lautet über ${euro(b.betrag)}. In die Abrechnung übernommen wurden ${euro(b.uebernommen)}, also ${euro(zuViel)} zu viel.` +
+            (ust ? ` Das sind genau ${ust} % Umsatzsteuer, die im Rechnungsbetrag bereits enthalten sind.` : "") +
+            (x.betrag !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(x.betrag)}.` : ""),
+          naechsterSchritt: x.betrag !== undefined ? `Fordern Sie die Korrektur auf den Rechnungsbetrag (${euro(x.betrag)} weniger).` : "Fordern Sie die Korrektur auf den Rechnungsbetrag.",
+          betragZugunstenMieter: x.betrag,
+          positionId: x.positionId,
+          textstelle: `${b.bezeichnung}: ${euro(b.betrag)} laut Beleg, ${euro(b.uebernommen)} übernommen${stelle(b)}`,
+          beleg: { art: "zu_viel_uebernommen", belegBetrag: b.betrag, uebernommen: b.uebernommen, zuVielHaus: zuViel, umsatzsteuerProzent: ust },
+        });
+        continue;
+      }
+      // 3. Gutschrift nicht abgezogen
+      if (b.art === "gutschrift" && b.betrag > einstellungen.toleranzEuro) {
+        const rechnungen = a.belege.filter((r) => r.zuPosition === b.zuPosition && r.art === "rechnung");
+        const summe = runde(rechnungen.reduce((s, r) => s + (r.uebernommen ?? r.betrag), 0));
+        const gesamt = b.zuPosition === "heizkosten" ? a.heizkosten?.gesamtkosten : a.kostenpositionen.find((p) => p.id === b.zuPosition)?.gesamtkosten;
+        // Rechnerischer Nachweis: Die Rechnungen ohne Gutschrift ergeben genau die abgerechneten Gesamtkosten
+        const rechnerisch = rechnungen.length > 0 && gesamt !== undefined && Math.abs(summe - gesamt) <= einstellungen.toleranzEuro;
+        const abgezogen = rechnungen.length > 0 && gesamt !== undefined && Math.abs(summe - b.betrag - gesamt) <= einstellungen.toleranzEuro;
+        if (abgezogen || (b.beruecksichtigt === true && !rechnerisch)) {
+          befunde.push({ status: "ok", titel: `Gutschrift berücksichtigt: ${b.bezeichnung}`, erklaerung: `Die Gutschrift über ${euro(b.betrag)} ist abgezogen.`, positionId: b.zuPosition === "heizkosten" ? undefined : b.zuPosition });
+          continue;
+        }
+        const sicher = rechnerisch || b.beruecksichtigt === false;
+        const x = anteil(b.zuPosition, b.betrag);
+        befunde.push({
+          status: sicher && x.betrag !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: `Gutschrift nicht abgezogen: ${x.name}`,
+          erklaerung:
+            `„${b.bezeichnung}“${stelle(b)} senkt die Kosten des Hauses um ${euro(b.betrag)}. ` +
+            (sicher ? "Die Abrechnung berücksichtigt diese Gutschrift nicht." : "Ob die Abrechnung sie berücksichtigt, ist nicht erkennbar.") +
+            (x.betrag !== undefined ? ` Auf Ihre Wohnung entfallen ${euro(x.betrag)}.` : ""),
+          naechsterSchritt: sicher && x.betrag !== undefined ? `Fordern Sie den Abzug der Gutschrift (${euro(x.betrag)}).` : "Fragen Sie, ob die Gutschrift abgezogen wurde.",
+          betragZugunstenMieter: x.betrag,
+          positionId: x.positionId,
+          textstelle: `${b.bezeichnung}: ${euro(b.betrag)}${stelle(b)}`,
+          beleg: { art: "gutschrift", belegBetrag: b.betrag, summeRechnungen: rechnungen.length ? summe : undefined, gesamtkosten: gesamt },
+        });
+      }
+    }
+    if (befunde.length === 0) return [{ status: "ok", titel: "Belege stimmen mit der Abrechnung überein", erklaerung: `${a.belege.length} ${a.belege.length === 1 ? "Beleg" : "Belege"} geprüft: Beträge, Objekt und Gutschriften passen.` }];
     return befunde;
   },
 };
 
-export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen, R06_EinAuszug, R07_WohnflaecheMietvertrag, R08_Zaehlerstaende];
+export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen, R06_EinAuszug, R07_WohnflaecheMietvertrag, R08_Zaehlerstaende, R09_Belegabgleich];

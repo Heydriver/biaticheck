@@ -58,6 +58,8 @@ export const Rohdaten = z.object({
       verbrauchsanteilProzent: zahl.describe("Anteil der Heizkosten, der nach Verbrauch verteilt wird, z. B. 70"),
       verbrauchErfasst: z.boolean().nullable(),
       anteilMieter: z.number().describe("Heiz- und Warmwasserkosten der Wohnung OHNE Kaltwasser und ohne Positionen, die bereits in kostenpositionen stehen"),
+      verbrauchMieter: zahl.describe("Abgerechneter Wärmeverbrauch der Wohnung, z. B. in kWh oder Einheiten"),
+      verbrauchskostenMieter: zahl.describe("Verbrauchskostenanteil der Wohnung für Heizung in Euro (ohne Grundkosten)"),
       flaecheMieter: zahl.describe("Beheizte Fläche der Wohnung laut Heizkostenabrechnung"),
       gesamtflaeche: zahl.describe("Beheizte Gesamtfläche laut Heizkostenabrechnung"),
       warmwasserKostenGesamt: zahl,
@@ -88,10 +90,27 @@ export const Rohdaten = z.object({
         anfang: z.number().describe("Anfangsstand"),
         ende: z.number().describe("Endstand"),
         verbrauchUebernommen: z.number().nullable().describe("Verbrauch, den die Abrechnung für diesen Zähler ansetzt – so wie er dort steht, auch wenn er nicht Endstand minus Anfangsstand entspricht; sonst null"),
+        faktor: z.number().nullable().describe("Umrechnungsfaktor, mit dem die Abrechnung rechnet; sonst null"),
+        faktorLautProtokoll: z.number().nullable().describe("Umrechnungsfaktor laut Geräte- oder Ableseprotokoll; sonst null"),
         seite: z.number().int().nullable(),
       }),
     )
     .describe("Zählerstände der Wohnung laut Abrechnung oder Ableseprotokoll; sonst leere Liste"),
+  belege: z
+    .array(
+      z.object({
+        positionBezeichnung: z.string().describe("Bezeichnung der Kostenposition genau wie in kostenpositionen, oder \"Heizkosten\""),
+        bezeichnung: z.string().describe("Art des Belegs und Leistung, z. B. \"Rechnung Gartenpflege\" – ohne Namen"),
+        art: z.enum(["rechnung", "gutschrift"]),
+        betrag: z.number().describe("Bruttobetrag laut Beleg, positiv (auch bei Gutschriften)"),
+        uebernommen: z.number().nullable().describe("Betrag, den die Abrechnung aus diesem Beleg ansetzt, falls erkennbar – so wie er dort steht; sonst null"),
+        objekt: z.string().nullable().describe("Objekt oder Ort, für den der Beleg ausgestellt ist, ohne Namen; sonst null"),
+        fremdesObjekt: z.boolean().describe("true nur, wenn der Beleg ausdrücklich ein anderes Haus oder Objekt betrifft als das abgerechnete"),
+        beruecksichtigt: z.boolean().nullable().describe("Nur bei Gutschriften: true, wenn die Abrechnung sie erkennbar abzieht; false, wenn erkennbar nicht; sonst null"),
+        seite: z.number().int().nullable(),
+      }),
+    )
+    .describe("Beigefügte oder aufgelistete Rechnungen und Gutschriften (Belegliste, Anlagen); sonst leere Liste"),
   erlaeuterungen: z
     .array(z.object({ text: z.string().describe("Wörtlich, ohne Namen oder Adressen"), seite: z.number().int().nullable() }))
     .describe("Erläuterungen, Fußnoten und Anmerkungen der Abrechnung und ihrer Anlagen, die mehrere Positionen oder die ganze Abrechnung betreffen (z. B. „Hauswart und Aufzug enthalten keine Reparaturkosten.“), wörtlich"),

@@ -38,7 +38,10 @@ export function werteKontrolle(antwort: unknown, rohJson: unknown, heute: string
 /** Ältere Antworten (und das Beispiel) kennen die neuen Felder noch nicht – mit leeren Werten ergänzen. */
 function ergaenze(roh: unknown): unknown {
   if (!roh || typeof roh !== "object") return roh;
-  const r = { zaehler: [], erlaeuterungen: [], gezahlteVorauszahlungenBetriebskosten: null, gezahlteVorauszahlungenHeizkosten: null, gezahlteVorauszahlungenGesamt: null, gezahlteVorauszahlungenSeite: null, ...(roh as Record<string, unknown>) };
+  const r = { zaehler: [], belege: [], erlaeuterungen: [], gezahlteVorauszahlungenBetriebskosten: null, gezahlteVorauszahlungenHeizkosten: null, gezahlteVorauszahlungenGesamt: null, gezahlteVorauszahlungenSeite: null, ...(roh as Record<string, unknown>) };
+  if (Array.isArray(r.zaehler)) r.zaehler = r.zaehler.map((x: unknown) => (x && typeof x === "object" ? { bezeichnung: null, verbrauchUebernommen: null, faktor: null, faktorLautProtokoll: null, seite: null, ...(x as object) } : x));
+  if (Array.isArray(r.belege)) r.belege = r.belege.map((x: unknown) => (x && typeof x === "object" ? { art: "rechnung", uebernommen: null, objekt: null, fremdesObjekt: false, beruecksichtigt: null, seite: null, ...(x as object) } : x));
+  if (r.heizkosten && typeof r.heizkosten === "object") r.heizkosten = { verbrauchMieter: null, verbrauchskostenMieter: null, ...(r.heizkosten as object) };
   if (Array.isArray(r.kostenpositionen))
     r.kostenpositionen = r.kostenpositionen.map((p: unknown) => (p && typeof p === "object" ? { unterart: null, bestandteile: [], hinweise: [], belegnummer: null, ...(p as object) } : p));
   return r;

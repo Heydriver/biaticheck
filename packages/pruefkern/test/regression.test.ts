@@ -408,6 +408,82 @@ describe("Abrechnung 06 – Rechtsschutz im Versicherungspaket, nur in der Erlä
   });
 });
 
+describe("Familie Yilmaz – vier Fehler, die nur die Belege zeigen (80 von 800 m²)", () => {
+  const yilmaz = (): AbrechnungEingabe => {
+    const f = { typ: "wohnflaeche" as const, anteilEinheit: 80, anteilGesamt: 800 };
+    return {
+      meta: { abrechnungszeitraum: { von: "2024-01-01", bis: "2024-12-31" }, erstelltAm: "2025-06-16", zugangAm: "2025-06-20" },
+      flaechen: { wohnflaecheMieter: 80, gesamtflaeche: 800 },
+      ausstattung: { wasserzaehler: false, gewerbeImHaus: false },
+      kostenpositionen: [
+        { id: "y1", bezeichnung: "Grundsteuer", kategorie: "grundsteuer", gesamtkosten: 3000, umlageschluessel: f, anteilMieter: 300 },
+        // enthält eine Reinigungsrechnung über 1.800 € für ein anderes Objekt
+        { id: "y2", bezeichnung: "Hausreinigung", kategorie: "gebaeudereinigung_ungeziefer", gesamtkosten: 4800, umlageschluessel: f, anteilMieter: 480 },
+        // Rechnung 800 € brutto, übernommen 952 €
+        { id: "y3", bezeichnung: "Gartenpflege", kategorie: "gartenpflege", gesamtkosten: 952, umlageschluessel: f, anteilMieter: 95.2 },
+      ],
+      // Wärmezähler: 4.800 kWh gemessen, mit Faktor 2 als 9.600 kWh abgerechnet; Protokoll nennt Faktor 1
+      zaehler: [{ art: "heizung", bezeichnung: "Wärmezähler", anfang: 12000, ende: 16800, faktor: 2, faktorLautProtokoll: 1, verbrauchUebernommen: 9600, seite: 6 }],
+      heizkosten: { gesamtkosten: 20000, verbrauchsanteilProzent: 70, verbrauchErfasst: true, anteilMieter: 2210, verbrauchMieter: 9600, verbrauchskostenMieter: 1260, flaecheMieter: 80, gesamtflaeche: 800 },
+      belege: [
+        { zuPosition: "y2", bezeichnung: "Rechnung Treppenhausreinigung", betrag: 1800, fremdesObjekt: true, objekt: "separates Objekt in Leipzig", seite: 5 },
+        { zuPosition: "y3", bezeichnung: "Rechnung Gartenpflege", betrag: 800, uebernommen: 952, seite: 5 },
+        { zuPosition: "heizkosten", bezeichnung: "Gutschrift Preiskorrektur Heizstrom", art: "gutschrift", betrag: 600, beruecksichtigt: false, seite: 7 },
+      ],
+      vorauszahlungen: 3000,
+      ausgewiesen: { summeKostenMieter: 3085.2, saldo: 85.2 },
+    };
+  };
+  const { bericht, s1, s2 } = stufen(yilmaz());
+  const fehler = bericht.ergebnisse.filter((e) => e.status === "abweichung");
+  const titel = (t: string) => fehler.find((e) => e.titel.startsWith(t))!;
+
+  it("Rechnung eines anderen Hauses: 1.800 € × 10 % = 180,00 €", () => {
+    expect(titel("Rechnung eines anderen Hauses umgelegt")).toMatchObject({ regelId: "R-09", positionId: "y2", betragZugunstenMieter: 180 });
+  });
+
+  it("Umsatzsteuer doppelt: 952 € statt 800 € → 152 € × 10 % = 15,20 €", () => {
+    const e = titel("Umsatzsteuer doppelt aufgeschlagen");
+    expect(e).toMatchObject({ regelId: "R-09", positionId: "y3", betragZugunstenMieter: 15.2, beleg: { umsatzsteuerProzent: 19, zuVielHaus: 152 } });
+  });
+
+  it("Falscher Faktor beim Wärmezähler: 9.600 statt 4.800 kWh → 1.260 € × 4.800 / 9.600 = 630,00 €", () => {
+    expect(titel("Falscher Faktor beim Wärmezähler")).toMatchObject({ regelId: "R-08", betragZugunstenMieter: 630, beleg: { verbrauchZaehler: 4800, verbrauchAbgerechnet: 9600, faktor: 2, faktorLautProtokoll: 1 } });
+  });
+
+  it("Gutschrift übergangen: 600 € × 2.210 / 20.000 = 66,30 €", () => {
+    expect(titel("Gutschrift nicht abgezogen")).toMatchObject({ regelId: "R-09", betragZugunstenMieter: 66.3 });
+  });
+
+  it("zusammen 891,50 € – aus 85,20 € Nachzahlung werden 806,30 € Guthaben; alle vier Punkte stehen im Schreiben", () => {
+    expect(fehler).toHaveLength(4);
+    expect(bericht.zusammenfassung.einsparpotenzial).toBe(891.5);
+    expect(s1.fehlerpotenzial.stufe).toBe("hoch");
+    expect(s1.kosten.korrigierterSaldo).toBe(-806.3);
+    for (const wort of ["Treppenhausreinigung", "Rechnung Gartenpflege", "Wärmezähler", "Gutschrift"]) expect(s2.anschreiben.text, wort).toContain(wort);
+  });
+
+  it("Gegenproben: richtiger Faktor, Beleg des eigenen Hauses, Betrag wie im Beleg, abgezogene Gutschrift → kein Befund", () => {
+    const a = yilmaz();
+    a.zaehler![0] = { art: "heizung", anfang: 12000, ende: 16800, faktor: 1, faktorLautProtokoll: 1, verbrauchUebernommen: 4800 };
+    a.heizkosten!.verbrauchMieter = 4800;
+    a.belege = [
+      { zuPosition: "y2", bezeichnung: "Rechnung Treppenhausreinigung", betrag: 1800, fremdesObjekt: false },
+      { zuPosition: "y3", bezeichnung: "Rechnung Gartenpflege", betrag: 952, uebernommen: 952 },
+      { zuPosition: "heizkosten", bezeichnung: "Jahresrechnung Heizstrom", betrag: 20600 },
+      { zuPosition: "heizkosten", bezeichnung: "Gutschrift Preiskorrektur Heizstrom", art: "gutschrift", betrag: 600 },
+    ];
+    expect(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse.filter((e) => ["R-08", "R-09"].includes(e.regelId) && e.status !== "ok")).toEqual([]);
+  });
+
+  it("zwei Teilfehler an derselben Position werden addiert, aber nie über den Anteil der Position hinaus", () => {
+    const a = yilmaz();
+    a.belege!.push({ zuPosition: "y2", bezeichnung: "Rechnung Sonderreinigung", betrag: 1000, uebernommen: 1190 });
+    // 180,00 € (fremdes Objekt) + 19,00 € (Umsatzsteuer doppelt) an der Hausreinigung
+    expect(pruefeAbrechnung(a, { heute: HEUTE }).zusammenfassung.einsparpotenzial).toBe(910.5);
+  });
+});
+
 function wf() {
   return { typ: "wohnflaeche" as const, anteilEinheit: 75, anteilGesamt: 750 };
 }

@@ -3,8 +3,8 @@
 Automatisch erzeugt aus `packages/pruefkern/src/fehlerkatalog.ts`. Nicht von Hand ändern:
 `UPDATE_FORMELKATALOG=1 pnpm --filter @biaticheck/pruefkern test`.
 
-Der Prüfkern erkennt 56 Fehlerarten in 33 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
-Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1400 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
+Der Prüfkern erkennt 60 Fehlerarten in 34 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
+Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1500 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
 
 | ID | Fehlerart | Formel | Ergebnis | Betrag | Braucht |
 |---|---|---|---|---|---|
@@ -29,6 +29,10 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | R-06.a | Ein- oder Auszug nicht berücksichtigt | möglicher Betrag = zeitabhängige Kosten × (1 − Miettage / Tage des Zeitraums) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Mietbeginn/-ende) |
 | R-07.a | Mehr Wohnfläche als im Mietvertrag | (Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Wohnfläche) |
 | R-08.a | Verbrauch weicht von den Zählerständen ab | Verbrauch laut Zähler = Σ (Endstand − Anfangsstand); Betrag je Position = Anteil × (abgerechneter Verbrauch − Verbrauch laut Zähler) / abgerechneter Verbrauch | Belegter Fehler | exakt | Zählerstände in der Abrechnung |
+| R-08.b | Falscher Faktor oder Verbrauch beim Wärmezähler | gemessen = (Endstand − Anfangsstand) × Faktor laut Geräteprotokoll; Betrag = Verbrauchskosten der Wohnung × (abgerechnet − gemessen) / abgerechnet | Belegter Fehler | exakt | Zählerstände, Geräteprotokoll, Verbrauchskosten |
+| R-09.a | Rechnung eines anderen Hauses umgelegt | Beleg ist für ein anderes Objekt ausgestellt → Betrag = Belegbetrag × Anteil / Gesamtkosten der Position | Belegter Fehler | exakt | Beleg mit Objektangabe |
+| R-09.b | Mehr übernommen als im Beleg (z. B. Umsatzsteuer doppelt) | übernommener Betrag − Betrag laut Beleg > 0,05 € → Betrag = Differenz × Anteil / Gesamtkosten der Position | Belegter Fehler | exakt | Beleg und übernommener Betrag |
+| R-09.c | Gutschrift nicht abgezogen | Σ Rechnungen = abgerechnete Gesamtkosten (Gutschrift fehlt) → Betrag = Gutschrift × Anteil / Gesamtkosten | Belegter Fehler | exakt | Rechnungen und Gutschrift |
 | I-01.a | Verwaltungskosten umgelegt | Kategorie = Verwaltung → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
 | I-01.b | Reparaturen/Instandhaltung umgelegt | Kategorie = Instandhaltung → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
 | I-01.c | Rücklage umgelegt | Kategorie = Rücklage → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |

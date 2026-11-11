@@ -106,3 +106,14 @@ Kontoauszüge und Mietkonto werden nicht mehr angefordert. Für Vorauszahlungen 
 - **R-08 Zählerstände (neu):** Verbrauch laut Zähler = Endstand − Anfangsstand. Weicht der abgerechnete Verbrauch ab, ist jede danach verteilte Wasserposition anteilig falsch: Anteil × Mehrverbrauch / abgerechneter Verbrauch.
 - **Keine Doppelzählung:** Beanstanden mehrere Regeln dieselbe Position, zählt für das Einsparpotenzial nur der höchste Betrag.
 - **I-17 Versicherungen (neu, aus „Abrechnung 06“):** Umlagefähig sind nur Sach- und Haftpflichtversicherungen für das Gebäude (§ 2 Nr. 13 BetrKV). Nennt die Abrechnung – auch nur in einer Erläuterung – einen Betrag für Rechtsschutz, Mietausfall, Hausrat oder Ähnliches, ist genau dieser Anteil ein belegter Fehler. Reine Positionen dieser Art sind ganz zu streichen. Ohne Betrag: Prüfbedarf. Erläuterungen werden jetzt über alle Kennwörter der Bezeichnung zugeordnet (z. B. „Hauspaket“).
+
+## Belegabgleich (v0.10, aus dem Test „Familie Yilmaz“)
+
+Beigefügte Rechnungen, Gutschriften und Geräteprotokolle werden ausgelesen und mit der Abrechnung abgeglichen. Betrag für die Wohnung = Hausbetrag × Anteil / Gesamtkosten der Position.
+
+- **R-09 Belegabgleich (neu):**
+  - Beleg betrifft ein anderes Haus → ganzer Beleg nicht umlagefähig.
+  - Übernommener Betrag größer als der Betrag laut Beleg → Differenz ist ein belegter Fehler. Entspricht die Differenz 19 % oder 7 % des Belegs, wird sie als doppelt aufgeschlagene Umsatzsteuer benannt.
+  - Gutschrift nicht abgezogen: belegt, wenn die Rechnungen ohne Gutschrift genau die abgerechneten Gesamtkosten ergeben oder die Abrechnung sie erkennbar übergeht; sonst Prüfbedarf.
+- **R-08 Wärmezähler:** gemessener Verbrauch = (Endstand − Anfangsstand) × Faktor laut Geräteprotokoll. Rechnet die Abrechnung mit einem anderen Faktor oder Verbrauch: Verbrauchskosten × Mehrverbrauch / abgerechneter Verbrauch.
+- **Mehrere Fehler an einer Position:** Teilbeträge werden addiert, zusammen nie mehr als der Anteil der Position.
