@@ -13,7 +13,7 @@ import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.8.0";
+export const REGELWERK_VERSION = "0.9.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,
@@ -78,6 +78,8 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
 
   const anzahl: Record<Status, number> = { ok: 0, abweichung: 0, auffaelligkeit: 0, pruefbedarf: 0, hinweis: 0, nicht_pruefbar: 0 };
   let einzeln = 0;
+  // Mehrere Regeln können dieselbe Position beanstanden – je Position zählt nur der höchste Betrag (keine Doppelzählung)
+  const jePosition = new Map<string, number>();
   let gesamt = 0;
   let klaerung = 0;
   let pruefbedarf = 0;
@@ -88,6 +90,7 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     anzahl[e.status]++;
     if (e.status === "abweichung" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
       if (GESAMTREGELN.has(e.regelId)) gesamt = Math.max(gesamt, e.betragZugunstenMieter);
+      else if (e.positionId) jePosition.set(e.positionId, Math.max(jePosition.get(e.positionId) ?? 0, e.betragZugunstenMieter));
       else einzeln += e.betragZugunstenMieter;
     }
     if (e.status === "auffaelligkeit" && e.betragZugunstenMieter && e.betragZugunstenMieter > 0) {
@@ -106,7 +109,7 @@ export function pruefeAbrechnung(eingabe: AbrechnungEingabe, optionen: Pruefopti
     ergebnisse,
     zusammenfassung: {
       anzahl,
-      einsparpotenzial: runde(Math.max(einzeln, gesamt)),
+      einsparpotenzial: runde(Math.max(einzeln + [...jePosition.values()].reduce((s, x) => s + x, 0), gesamt)),
       klaerungspotenzial: runde(klaerung),
       pruefbedarfBetrag: runde(pruefbedarf),
       pruefbedarfOhneBetrag,

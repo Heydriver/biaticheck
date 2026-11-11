@@ -494,7 +494,15 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return s === "abweichung" ? k(`Kabelfernsehen: ${name}`, "Seit Juli 2024 nicht mehr umlagefähig.") : k(`Kabelfernsehen: ${name}`, "Erlaubt sind nur Kosten bis Juni 2024.");
     case "I-06":
       return s === "abweichung" ? k("Aufzug trotz Erdgeschoss", "Ihr Mietvertrag nimmt Sie davon aus.") : k("Aufzug im Erdgeschoss", "Nur unzulässig, wenn Ihr Mietvertrag das so regelt.");
+    case "I-17":
+      if (s === "abweichung") return b.ganzePosition === true ? k(`Versicherung nicht umlagefähig: ${name}`, "Nur Sach- und Haftpflichtversicherungen für das Gebäude dürfen umgelegt werden.") : k(`Rechtsschutz oder Ähnliches in „${name}“`, "Dieser Versicherungsanteil darf nicht umgelegt werden.");
+      return k(`Versicherung: „${name}“`, "Enthält eine nicht umlagefähige Versicherung. Auswirkung noch nicht bezifferbar.");
+    case "I-16":
+      return s === "abweichung" ? k("Leistung doppelt berechnet", "Zwei Positionen beziehen sich auf dieselbe Rechnung. Eine davon ist zu streichen.") : k("Leistung doppelt berechnet?", "Zwei Positionen derselben Kostenart haben genau dieselben Beträge.");
+    case "R-08":
+      return k(`Verbrauch falsch übertragen: ${name}`, `Laut Zähler ${zahlDE(zahl(b.verbrauchZaehler) ?? 0)} m³, abgerechnet ${zahlDE(zahl(b.verbrauchAbgerechnet) ?? 0)} m³.`);
     case "I-07":
+      if (s === "abweichung" && b.ganzePosition === true) return k(`Reparaturkosten umgelegt: ${name}`, "Laut Leistungsnachweis sind das Reparaturen. Sie dürfen nicht umgelegt werden.");
       if (s === "abweichung") return k(`Reparaturen in „${name}“`, "Der ausgewiesene Reparaturanteil darf nicht umgelegt werden.");
       return e.titel.startsWith("Vollwartung")
         ? k(`Vollwartung: „${name}“`, "Der Reparaturanteil ist nicht ausgewiesen. Auswirkung noch nicht bezifferbar.")
@@ -592,7 +600,20 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
     case "I-06":
       if (e.status === "abweichung") return `Aufzugskosten${betrag}: Nach meinem Mietvertrag sind Erdgeschosswohnungen davon ausgenommen.`;
       break;
+    case "I-17":
+      if (e.status === "abweichung" && name) return `${name}${betrag}: Darin ist eine nicht umlagefähige Versicherung enthalten (${e.textstelle ?? ""}). Nach § 2 Nr. 13 BetrKV sind nur Sach- und Haftpflichtversicherungen für das Gebäude umlagefähig. Bitte ziehen Sie den Betrag ab.`;
+      if (name) return `${name}: Bitte legen Sie die Versicherungsscheine und Beitragsrechnungen vor und weisen Sie Anteile für Rechtsschutz-, Mietausfall- oder Hausratversicherung aus.`;
+      break;
+    case "I-16":
+      return e.status === "abweichung"
+        ? `${e.titel.replace("Doppelt berechnet: ", "")}: Beide Positionen beziehen sich auf dieselbe Rechnung (${String(b.belegnummer ?? "")}). Bitte streichen Sie eine der beiden Positionen${betrag}.`
+        : `${e.titel.replace("Doppelt berechnet: ", "")}: Beide Positionen weisen identische Beträge aus. Bitte legen Sie die Rechnungen zu beiden Positionen vor.`;
+    case "R-08":
+      if (name && zahl(b.verbrauchZaehler) !== undefined)
+        return `${name}: Die Zählerstände ergeben ${zahlDE(zahl(b.verbrauchZaehler)!)} m³, abgerechnet wurden ${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³. Bitte rechnen Sie nach dem Verbrauch laut Zählerständen ab${betrag}.`;
+      break;
     case "I-07":
+      if (e.status === "abweichung" && b.ganzePosition === true && name) return `${name}${betrag}: Laut Leistungsnachweis handelt es sich um Reparaturen („${e.textstelle ?? ""}“). Diese sind nach § 1 Abs. 2 Nr. 2 BetrKV keine Betriebskosten. Bitte streichen Sie die Position.`;
       if (e.status === "abweichung" && name) return `${name}${betrag}: Der ausgewiesene Reparaturanteil (${e.textstelle ?? "laut Aufstellung"}) ist nach § 1 Abs. 2 Nr. 2 BetrKV nicht umlagefähig. Bitte ziehen Sie ihn ab.`;
       if (name) return `${name}: Bitte legen Sie den Wartungsvertrag und die Rechnungen vor und weisen Sie einen enthaltenen Reparaturanteil aus.`;
       break;
@@ -744,6 +765,9 @@ function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
     case "I-11": return name ? `Hauswartvertrag und Leistungsverzeichnis zu „${name}“` : undefined;
     case "R-07": return "Wohnflächenberechnung für Ihre Wohnung";
     case "I-12": return "Aufstellung des Vorwegabzugs für Gewerbe";
+    case "I-16": return "Rechnungen zu beiden Positionen";
+    case "I-17": return name ? `Versicherungsscheine und Beitragsrechnungen zu „${name}“` : undefined;
+    case "R-08": return "Ableseprotokoll mit Zählerständen";
     case "I-13": return "Liste der Wohnungen mit Leerstandszeiten";
     case "I-14": return "Grundsteuerbescheid 2025";
     case "P-01": return name && e.status !== "nicht_pruefbar" ? `Rechnungen zu „${name}“` : undefined;
@@ -994,10 +1018,21 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       if (typeof b.ausschlussImDokument === "string") add("Erklärung in der Abrechnung", `„${b.ausschlussImDokument}“`);
       if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
       break;
+    case "R-08":
+      position();
+      add("Verbrauch laut Zählerständen", zahl(b.verbrauchZaehler) !== undefined ? `${zahlDE(zahl(b.verbrauchZaehler)!)} m³` : undefined);
+      add("Abgerechneter Verbrauch", zahl(b.verbrauchAbgerechnet) !== undefined ? `${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³` : undefined, true);
+      if (e.betragZugunstenMieter && zahl(b.zuViel) !== undefined) add(`Zu viel berechnet (${eur(b.anteilMieter)} × ${zahlDE(zahl(b.zuViel)!)} / ${zahlDE(zahl(b.verbrauchAbgerechnet)!)} m³)`, euro(e.betragZugunstenMieter), true);
+      break;
+    case "I-16":
     case "I-15":
       for (const id of (b.positionen as string[] | undefined) ?? []) {
         const x = a.kostenpositionen.find((q) => q.id === id);
         if (x) add(x.bezeichnung, euro(x.anteilMieter));
+      }
+      if (e.regelId === "I-16") {
+        add("Rechnung", typeof b.belegnummer === "string" ? b.belegnummer : undefined);
+        if (e.betragZugunstenMieter) add(e.status === "abweichung" ? "Einmal zu streichen" : "Möglicherweise doppelt", e.status === "abweichung" ? euro(e.betragZugunstenMieter) : `bis zu ${euro(e.betragZugunstenMieter)}`, true);
       }
       break;
     case "I-08":
@@ -1020,6 +1055,7 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       add("Miete laut Aufstellung (Haus)", eur(b.mieteHaus));
       if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
       break;
+    case "I-17":
     case "I-11":
       position();
       add("Nicht umlagefähig laut Abrechnung (Haus)", eur(b.nichtUmlagefaehigHaus));

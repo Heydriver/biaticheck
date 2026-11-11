@@ -65,6 +65,7 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
       unterart: p.unterart ?? undefined,
       bestandteile: p.bestandteile.length ? p.bestandteile.filter((b) => Number.isFinite(b.betrag) && b.bezeichnung.trim()) : undefined,
       hinweise: p.hinweise.length ? p.hinweise.map((t) => t.trim()).filter(Boolean) : undefined,
+      belegnummer: p.belegnummer?.trim() || undefined,
     };
   });
 
@@ -95,6 +96,9 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
     },
     flaechen: { wohnflaecheMieter: positiv(roh.wohnflaecheMieter), gesamtflaeche: positiv(roh.gesamtflaeche) },
     kostenpositionen,
+    zaehler: roh.zaehler
+      .filter((x) => x.anfang >= 0 && x.ende >= x.anfang)
+      .map((x) => ({ art: x.art, bezeichnung: x.bezeichnung ?? undefined, anfang: x.anfang, ende: x.ende, verbrauchUebernommen: x.verbrauchUebernommen !== null && x.verbrauchUebernommen >= 0 ? x.verbrauchUebernommen : undefined, seite: x.seite !== null && x.seite > 0 ? x.seite : undefined })),
     erlaeuterungen: roh.erlaeuterungen.map((e) => ({ text: e.text.trim(), ...(e.seite !== null && e.seite > 0 ? { seite: e.seite } : {}) })).filter((e) => e.text),
     heizkosten: h
       ? {

@@ -305,6 +305,109 @@ describe("Abrechnung 04 – drei zuvor nicht erkannte Fehler (68 von 680 m²)", 
   });
 });
 
+describe("Musterabrechnung 05 – Reparatur als Gebäudeunterhaltung, doppelte Gartenpflege, falscher Wasserverbrauch (Anteil 10 %)", () => {
+  const a05 = (): AbrechnungEingabe => {
+    const f = { typ: "wohnflaeche" as const, anteilEinheit: 70, anteilGesamt: 700 };
+    const m3 = { typ: "verbrauch" as const, anteilEinheit: 68, anteilGesamt: 680 };
+    return {
+      meta: { abrechnungszeitraum: { von: "2024-01-01", bis: "2024-12-31" }, erstelltAm: "2025-06-16", zugangAm: "2025-06-20" },
+      flaechen: { wohnflaecheMieter: 70, gesamtflaeche: 700 },
+      ausstattung: { wasserzaehler: true, gewerbeImHaus: false },
+      // Kaltwasser 140 − 100 = 40 m³ (übernommen 48), Warmwasser 70 − 50 = 20 m³ → richtig 60 statt 68 m³
+      zaehler: [
+        { art: "kaltwasser", anfang: 100, ende: 140, verbrauchUebernommen: 48, seite: 3 },
+        { art: "warmwasser", anfang: 50, ende: 70, verbrauchUebernommen: 20, seite: 3 },
+      ],
+      kostenpositionen: [
+        { id: "a1", bezeichnung: "Grundsteuer", kategorie: "grundsteuer", gesamtkosten: 3000, umlageschluessel: f, anteilMieter: 300 },
+        // 3,00 € je m³ Frischwasser, 3,50 € je m³ Schmutzwasser
+        { id: "a2", bezeichnung: "Frischwasser", kategorie: "wasser", gesamtkosten: 2040, umlageschluessel: m3, anteilMieter: 204 },
+        { id: "a3", bezeichnung: "Schmutzwasser", kategorie: "entwaesserung", gesamtkosten: 2380, umlageschluessel: m3, anteilMieter: 238 },
+        { id: "a4", bezeichnung: "Gartenpflege", kategorie: "gartenpflege", gesamtkosten: 800, umlageschluessel: f, anteilMieter: 80, belegnummer: "RE 2024-118" },
+        { id: "a5", bezeichnung: "Außenanlagenpflege", kategorie: "gartenpflege", gesamtkosten: 800, umlageschluessel: f, anteilMieter: 80, belegnummer: "RE 2024-118" },
+        { id: "a6", bezeichnung: "Gebäudeunterhaltung", kategorie: "sonstige", gesamtkosten: 640, umlageschluessel: f, anteilMieter: 64, hinweise: ["Leistungsnachweis: Schadhafte Putzflächen im Treppenhaus repariert."] },
+      ],
+      heizkosten: { gesamtkosten: 9000, verbrauchsanteilProzent: 70, verbrauchErfasst: true, anteilMieter: 900, flaecheMieter: 70, gesamtflaeche: 700 },
+      vorauszahlungen: 1800,
+      ausgewiesen: { summeKostenMieter: 1866, saldo: 66 },
+    };
+  };
+  const { bericht, s1 } = stufen(a05());
+  const fehler = bericht.ergebnisse.filter((e) => e.status === "abweichung");
+
+  it("Reparaturkosten als „Gebäudeunterhaltung“: 640 € × 10 % = 64,00 €", () => {
+    const e = fehler.find((x) => x.regelId === "I-07")!;
+    expect(e).toMatchObject({ positionId: "a6", betragZugunstenMieter: 64 });
+    expect(e.textstelle).toContain("Putzflächen");
+  });
+
+  it("Gartenpflege doppelt: dieselbe Rechnung, einmal 80,00 € streichen", () => {
+    const e = fehler.find((x) => x.regelId === "I-16")!;
+    expect(e).toMatchObject({ positionId: "a5", betragZugunstenMieter: 80, beleg: { positionen: ["a4", "a5"] } });
+  });
+
+  it("Wasserverbrauch: 60 statt 68 m³ → 24,00 € Frischwasser und 28,00 € Schmutzwasser", () => {
+    const r08 = fehler.filter((x) => x.regelId === "R-08");
+    expect(r08.map((e) => [e.positionId, e.betragZugunstenMieter])).toEqual([["a2", 24], ["a3", 28]]);
+    expect(r08[0]!.beleg).toMatchObject({ verbrauchZaehler: 60, verbrauchAbgerechnet: 68, zuViel: 8 });
+  });
+
+  it("zusammen 196,00 € – ohne Doppelzählung der Position, die zwei Regeln beanstanden könnten", () => {
+    expect(bericht.zusammenfassung.einsparpotenzial).toBe(196);
+    expect(s1.fehlerpotenzial.stufe).toBe("hoch");
+    expect(s1.kosten.korrigierterSaldo).toBe(-130);
+    // Mit Mietvertrag ohne vereinbarte sonstige Kosten beanstandet auch I-02 die Gebäudeunterhaltung – der Betrag zählt trotzdem nur einmal
+    const a = a05();
+    a.mietvertrag = { vereinbarteSonstigeKosten: [] };
+    expect(pruefeAbrechnung(a, { heute: HEUTE }).zusammenfassung.einsparpotenzial).toBe(196);
+  });
+
+  it("Gegenproben: richtige Zählerwerte, unterschiedliche Rechnungen, Wartung statt Reparatur → kein Fehler", () => {
+    const a = a05();
+    a.zaehler![0]!.verbrauchUebernommen = 40;
+    for (const i of [1, 2]) {
+      a.kostenpositionen[i]!.umlageschluessel!.anteilEinheit = 60;
+      a.kostenpositionen[i]!.anteilMieter = i === 1 ? 180 : 210;
+    }
+    a.kostenpositionen[4]!.belegnummer = "RE 2024-207";
+    a.kostenpositionen[4]!.gesamtkosten = 500;
+    a.kostenpositionen[4]!.anteilMieter = 50;
+    a.kostenpositionen[5]!.hinweise = ["Leistungsnachweis: Dachrinnen gereinigt, keine Reparaturen."];
+    const b = pruefeAbrechnung(a, { heute: HEUTE });
+    expect(b.ergebnisse.filter((e) => ["R-08", "I-16", "I-07"].includes(e.regelId) && e.status !== "ok")).toEqual([]);
+  });
+});
+
+describe("Abrechnung 06 – Rechtsschutz im Versicherungspaket, nur in der Erläuterung auf Seite 3 erkennbar", () => {
+  const a06 = (text: string): AbrechnungEingabe => {
+    const a = abrechnung01();
+    // 75 von 750 m²: 180 € Rechtsschutz × 10 % = 18,00 €
+    a.kostenpositionen[8] = { id: "k09", bezeichnung: "Versicherungen Hauspaket", kategorie: "versicherung", gesamtkosten: 2300, umlageschluessel: wf(), anteilMieter: 230 };
+    a.erlaeuterungen = [{ text, seite: 3 }];
+    return a;
+  };
+
+  it("erkennt die 180 € Vermieter-Rechtsschutz und beanstandet nur diesen Anteil (18,00 €)", () => {
+    for (const text of [
+      "Das Hauspaket umfasst Gebäude-, Haftpflicht- und Glasversicherung sowie 180 € Vermieter-Rechtsschutz.",
+      "In der Position Versicherungen sind 180,00 EUR für die Rechtsschutzversicherung des Vermieters enthalten.",
+      "Vermieter-Rechtsschutz: 180 €",
+    ]) {
+      const bericht = pruefeAbrechnung(a06(text), { heute: HEUTE });
+      const e = bericht.ergebnisse.find((x) => x.regelId === "I-17" && x.status === "abweichung")!;
+      expect(e, text).toMatchObject({ positionId: "k09", betragZugunstenMieter: 18 });
+      expect(e.textstelle).toContain("Rechtsschutz");
+      expect(bericht.zusammenfassung.einsparpotenzial).toBe(18);
+    }
+  });
+
+  it("Gebäude- und Haftpflichtversicherung allein bleiben unbeanstandet; „kein Rechtsschutz enthalten“ ist kein Fehler", () => {
+    for (const text of ["Das Hauspaket umfasst Gebäude-, Haftpflicht- und Glasversicherung.", "Im Hauspaket ist kein Rechtsschutz enthalten."]) {
+      expect(pruefeAbrechnung(a06(text), { heute: HEUTE }).ergebnisse.filter((x) => x.regelId === "I-17" && x.status !== "ok"), text).toEqual([]);
+    }
+  });
+});
+
 function wf() {
   return { typ: "wohnflaeche" as const, anteilEinheit: 75, anteilGesamt: 750 };
 }

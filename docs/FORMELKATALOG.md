@@ -3,8 +3,8 @@
 Automatisch erzeugt aus `packages/pruefkern/src/fehlerkatalog.ts`. Nicht von Hand ändern:
 `UPDATE_FORMELKATALOG=1 pnpm --filter @biaticheck/pruefkern test`.
 
-Der Prüfkern erkennt 49 Fehlerarten in 30 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
-Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1225 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
+Der Prüfkern erkennt 56 Fehlerarten in 33 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
+Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1400 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
 
 | ID | Fehlerart | Formel | Ergebnis | Betrag | Braucht |
 |---|---|---|---|---|---|
@@ -28,6 +28,7 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | R-05.c | Vorauszahlungen laut Zahlungsübersicht unvollständig angerechnet | Betrag = gezahlte Vorauszahlungen laut Zahlungsübersicht der Abrechnung − angerechnete Vorauszahlungen, falls > 1 € | Belegter Fehler | exakt | Zahlungsübersicht in der Abrechnung |
 | R-06.a | Ein- oder Auszug nicht berücksichtigt | möglicher Betrag = zeitabhängige Kosten × (1 − Miettage / Tage des Zeitraums) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Mietbeginn/-ende) |
 | R-07.a | Mehr Wohnfläche als im Mietvertrag | (Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Wohnfläche) |
+| R-08.a | Verbrauch weicht von den Zählerständen ab | Verbrauch laut Zähler = Σ (Endstand − Anfangsstand); Betrag je Position = Anteil × (abgerechneter Verbrauch − Verbrauch laut Zähler) / abgerechneter Verbrauch | Belegter Fehler | exakt | Zählerstände in der Abrechnung |
 | I-01.a | Verwaltungskosten umgelegt | Kategorie = Verwaltung → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
 | I-01.b | Reparaturen/Instandhaltung umgelegt | Kategorie = Instandhaltung → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
 | I-01.c | Rücklage umgelegt | Kategorie = Rücklage → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
@@ -42,6 +43,7 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | I-07.a | Reparatur in Wartungsposition ausgewiesen | Betrag = Anteil × Σ Reparaturbestandteile / Gesamtkosten | Belegter Fehler | exakt | Aufschlüsselung der Position |
 | I-07.b | Vollwartung ohne Aufschlüsselung | Text nennt Vollwartung, keine Aufschlüsselung | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung, Erläuterungen |
 | I-07.c | Reparaturen in der Bezeichnung genannt | Bezeichnung nennt Reparatur/Instandsetzung, nicht verneint, keine Aufschlüsselung | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung, Erläuterungen |
+| I-07.d | Reparatur laut Leistungsnachweis als Betriebskosten umgelegt | Leistungsnachweis der Position beschreibt Reparatur/Instandsetzung (nicht verneint), Position ist keine Wartung → Betrag = Anteil | Belegter Fehler | exakt | Leistungsnachweis zur Position |
 | I-08.a | CO₂-Kosten falsch aufgeteilt | \|Kosten × Vermieterquote(kg CO₂ je m²) − Vermieteranteil\| > 1 € | Belegter Fehler | nicht bezifferbar | CO₂-Angaben der Heizkostenabrechnung |
 | I-09.a | Frisch-/Schmutzwasser nicht nach Verbrauch trotz Zähler | Wasserart ∈ {Frisch, Schmutz} und Schlüssel ≠ Verbrauch und Wasserzähler vorhanden | Begründeter Prüfbedarf | nicht bezifferbar | Angabe zum Wasserzähler |
 | I-10.a | Miete für Rauchwarnmelder ausgewiesen | Betrag = Anteil × Σ Mietbestandteile / Gesamtkosten | Belegter Fehler | exakt | Aufschlüsselung der Position |
@@ -53,6 +55,11 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | I-13.a | Leerstand auf Mieter verteilt | unterschiedliche Wohnungszahl N → möglicher Betrag = Σ Anteil × (1 − N / N_max) | Begründeter Prüfbedarf | bis zu | Positionen nach Einheiten |
 | I-14.a | Grundsteuer ab 2025 stark verändert | \|Grundsteuer − Vorjahr\| / Vorjahr ≥ 20 % | Begründeter Prüfbedarf | nicht bezifferbar | Vorjahresabrechnung |
 | I-15.a | Niederschlagswasser mehrfach berechnet | Anzahl Positionen mit Wasserart = Niederschlagswasser > 1 | Begründeter Prüfbedarf | nicht bezifferbar | Kostenpositionen |
+| I-16.a | Dieselbe Rechnung in zwei Positionen | gleiche Rechnungs-/Belegnummer bei zwei Positionen (und nicht erkennbar aufgeteilt) → Betrag = kleinerer der beiden Anteile | Belegter Fehler | exakt | Rechnungsnummern zu den Positionen |
+| I-16.b | Gleiche Kostenart mit identischen Beträgen | gleiche Kostenart, Gesamtkosten und Anteil identisch → möglicher Betrag = Anteil | Begründeter Prüfbedarf | bis zu | Kostenpositionen |
+| I-17.a | Nicht umlagefähige Versicherung im Paket ausgewiesen | Betrag = Anteil × ausgewiesener Betrag für Rechtsschutz/Mietausfall/Hausrat / Gesamtkosten (aus Aufschlüsselung oder Erläuterung mit Betrag) | Belegter Fehler | exakt | Aufschlüsselung oder Erläuterung mit Betrag |
+| I-17.b | Reine Rechtsschutz-, Mietausfall- oder Hausratversicherung umgelegt | Bezeichnung nennt nur eine nicht umlagefähige Versicherung → Betrag = Anteil | Belegter Fehler | exakt | Bezeichnung |
+| I-17.c | Nicht umlagefähige Versicherung genannt, Betrag fehlt | Text nennt Rechtsschutz/Mietausfall/Hausrat ohne Betrag | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung, Erläuterungen |
 | P-01.a | Kostenart stark gestiegen | (Kosten − Vorjahr) / Vorjahr > 10 % und Kosten − Vorjahr > 25 € | Hinweis | nicht bezifferbar | Vorjahresabrechnung |
 | P-01.b | Neue Kostenart | Kostenart im Vorjahr nicht vorhanden | Begründeter Prüfbedarf | nicht bezifferbar | Vorjahresabrechnung |
 | P-02.a | Kalte Nebenkosten über dem Rahmen | kalte Kosten / Wohnfläche / Monate > 2,50 € | Hinweis | nicht bezifferbar | Wohnfläche, Zeitraum |

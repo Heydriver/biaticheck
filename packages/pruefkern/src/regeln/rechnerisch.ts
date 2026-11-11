@@ -1,4 +1,4 @@
-import { findeAussagen, texteZu } from "../textanalyse";
+import { findeAussagen, texteZu, wasserart } from "../textanalyse";
 import { datumDE, euro, runde, tageInklusive, zahlDE } from "../hilfen";
 import type { Befund, Regel } from "../regel";
 import type { Abrechnung } from "../schema";
@@ -491,4 +491,56 @@ export const R07_WohnflaecheMietvertrag: Regel = {
   },
 };
 
-export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen, R06_EinAuszug, R07_WohnflaecheMietvertrag];
+/**
+ * Zählerstände: Verbrauch = Endstand − Anfangsstand. Weicht der abgerechnete Verbrauch davon ab, ist jede
+ * Position, die nach diesem Verbrauch verteilt wird, im selben Verhältnis falsch.
+ * Betrag je Position = Anteil × (abgerechneter Verbrauch − Verbrauch laut Zähler) / abgerechneter Verbrauch.
+ */
+export const R08_Zaehlerstaende: Regel = {
+  id: "R-08",
+  version: "1.0.0",
+  titel: "Verbrauch stimmt mit den Zählerständen überein",
+  bereich: "rechnerisch",
+  grundlage: "§ 556a Abs. 1 Satz 2 BGB; rechnerische Richtigkeit",
+  stand: "entwurf",
+  pruefe(a, { einstellungen }) {
+    const wasser = a.zaehler.filter((z) => z.art === "kaltwasser" || z.art === "warmwasser");
+    if (wasser.length === 0) return [];
+    const laut = (liste: typeof wasser) => runde(liste.reduce((s, z) => s + (z.ende - z.anfang), 0));
+    const uebernommen = (liste: typeof wasser) => (liste.every((z) => z.verbrauchUebernommen !== undefined) ? runde(liste.reduce((s, z) => s + z.verbrauchUebernommen!, 0)) : undefined);
+    const kalt = wasser.filter((z) => z.art === "kaltwasser");
+    // Mögliche Bezugsgrößen einer Wasserposition: gesamter Wasserverbrauch (kalt + warm) oder nur Kaltwasser
+    const gruppen = [wasser, kalt].filter((g) => g.length > 0).map((g) => ({ zaehler: laut(g), abgerechnet: uebernommen(g) }));
+    const befunde: Befund[] = [];
+    const positionen = a.kostenpositionen.filter((p) => wasserart(p) !== undefined && wasserart(p) !== "niederschlagswasser" && p.umlageschluessel?.typ === "verbrauch" && p.umlageschluessel.anteilEinheit !== undefined);
+    for (const p of positionen) {
+      const einheit = p.umlageschluessel!.anteilEinheit!;
+      // Stimmt der abgerechnete Verbrauch mit einem Zählerwert überein, ist die Position in Ordnung
+      if (gruppen.some((g) => Math.abs(g.zaehler - einheit) < 0.005)) continue;
+      // Sonst: Gruppe, deren übernommener Wert zum abgerechneten Verbrauch passt – oder der gesamte Wasserverbrauch
+      const gruppe = gruppen.find((g) => g.abgerechnet !== undefined && Math.abs(g.abgerechnet - einheit) < 0.005) ?? gruppen[0]!;
+      const zuViel = runde(einheit - gruppe.zaehler);
+      const betrag = runde((p.anteilMieter * zuViel) / einheit);
+      const stand = wasser.map((z) => `${z.bezeichnung ?? (z.art === "kaltwasser" ? "Kaltwasser" : "Warmwasser")}: ${zahlDE(z.ende)} − ${zahlDE(z.anfang)} = ${zahlDE(runde(z.ende - z.anfang))} m³${z.verbrauchUebernommen !== undefined && Math.abs(z.verbrauchUebernommen - (z.ende - z.anfang)) >= 0.005 ? ` (übernommen ${zahlDE(z.verbrauchUebernommen)} m³)` : ""}`).join("; ");
+      if (Math.abs(betrag) <= einstellungen.toleranzEuro) continue;
+      befunde.push({
+        status: "abweichung",
+        titel: `Verbrauch falsch übertragen: ${p.bezeichnung}`,
+        erklaerung:
+          `Die Zählerstände ergeben ${zahlDE(gruppe.zaehler)} m³ (${stand}). Abgerechnet wurden bei „${p.bezeichnung}“ ${zahlDE(einheit)} m³` +
+          (zuViel > 0 ? `, also ${zahlDE(zuViel)} m³ zu viel. Das sind ${euro(betrag)} zu viel.` : `, also ${zahlDE(-zuViel)} m³ zu wenig.`),
+        naechsterSchritt: zuViel > 0 ? `Fordern Sie die Abrechnung nach dem Verbrauch laut Zählerständen (${euro(betrag)} weniger).` : "Der Fehler wirkt zu Ihren Gunsten.",
+        betragZugunstenMieter: betrag,
+        positionId: p.id,
+        textstelle: stand,
+        beleg: { verbrauchZaehler: gruppe.zaehler, verbrauchAbgerechnet: einheit, zuViel, anteilMieter: p.anteilMieter },
+      });
+    }
+    if (befunde.length === 0 && positionen.length > 0) {
+      return [{ status: "ok", titel: "Verbrauch stimmt mit den Zählerständen überein", erklaerung: `Die Zählerstände ergeben ${zahlDE(laut(wasser))} m³ – wie abgerechnet.` }];
+    }
+    return befunde;
+  },
+};
+
+export const RECHNERISCHE_REGELN = [R01_Positionsanteil, R02_Gesamtsumme, R03_Saldo, R04_Flaechen, R05_Vorauszahlungen, R06_EinAuszug, R07_WohnflaecheMietvertrag, R08_Zaehlerstaende];

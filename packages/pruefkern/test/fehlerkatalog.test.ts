@@ -70,6 +70,8 @@ function korrekt(z: Zufall): AbrechnungEingabe {
     ausstattung: { wasserzaehler: true, gewerbeImHaus: false },
     mietvertrag: { vereinbarteSonstigeKosten: [], pauschaleVereinbart: false, aufzugAusgenommen: false, wohnflaeche: w, mietbeginn: "2019-03-01" },
     erlaeuterungen: [],
+    // Zählerstände passen zum abgerechneten Verbrauch
+    zaehler: [((anfang) => ({ art: "kaltwasser" as const, anfang, ende: anfang + verbrauch.anteilEinheit, verbrauchUebernommen: verbrauch.anteilEinheit }))(z.ganz(100, 900))],
     kostenpositionen,
     heizkosten: { gesamtkosten: runde((heiz * g) / w), verbrauchsanteilProzent: 70, verbrauchErfasst: true, anteilMieter: heiz, flaecheMieter: w, gesamtflaeche: g },
     vorauszahlungen,
@@ -241,6 +243,42 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
   },
   "I-07.b": (a) => ((p(a, "k11").bezeichnung = "Aufzug Vollwartungsvertrag"), { positionId: "k11" }),
   "I-07.c": (a) => ((p(a, "k11").bezeichnung = "Aufzug Wartung und Reparaturen"), { positionId: "k11" }),
+  "I-07.d": (a, z) => ((x) => ({ betrag: x.anteilMieter, positionId: x.id }))(neu(a, z, "Gebäudeunterhaltung", "sonstige", { hinweise: [z.ganz(0, 1) ? "Leistungsnachweis: Schadhafte Putzflächen im Treppenhaus repariert." : "Ausbesserung der Fassade nach Sturmschaden."] })),
+  "I-16.a": (a, z) => {
+    const garten = p(a, "k07");
+    garten.belegnummer = "RE-2025-0417";
+    const x = neu(a, z, "Außenanlagenpflege", "gartenpflege", { gesamtkosten: garten.gesamtkosten, anteilMieter: garten.anteilMieter, belegnummer: z.ganz(0, 1) ? "RE-2025-0417" : "Re 2025/0417" });
+    return { betrag: garten.anteilMieter, positionId: x.id };
+  },
+  "I-16.b": (a, z) => {
+    const garten = p(a, "k07");
+    const x = neu(a, z, "Außenanlagenpflege", "gartenpflege", { gesamtkosten: garten.gesamtkosten, anteilMieter: garten.anteilMieter });
+    return { betrag: garten.anteilMieter, positionId: x.id };
+  },
+  "R-08.a": (a, z) => {
+    const mehr = z.ganz(2, 15);
+    a.zaehler![0]!.verbrauchUebernommen! += mehr;
+    for (const id of ["k02", "k03"]) {
+      const pos = p(a, id);
+      pos.umlageschluessel!.anteilEinheit! += mehr;
+      pos.anteilMieter = runde((pos.gesamtkosten! * pos.umlageschluessel!.anteilEinheit!) / pos.umlageschluessel!.anteilGesamt!);
+    }
+    const frisch = p(a, "k02");
+    return { betrag: runde((frisch.anteilMieter * mehr) / frisch.umlageschluessel!.anteilEinheit!), positionId: "k02" };
+  },
+  "I-17.a": (a, z) => {
+    const pos = p(a, "k09");
+    pos.bezeichnung = "Versicherungen Hauspaket";
+    const rechtsschutz = z.ganz(20, Math.floor(pos.gesamtkosten! * 0.4));
+    const art = z.ganz(0, 2);
+    // Der Bestandteil steht nur in einer Erläuterung (allgemein oder mit Bezug auf die Position) oder in der Aufschlüsselung
+    if (art === 0) a.erlaeuterungen = [{ text: `Im Hauspaket sind ${rechtsschutz.toLocaleString("de-DE")} € Vermieter-Rechtsschutz enthalten.`, seite: 3 }];
+    else if (art === 1) a.erlaeuterungen = [{ text: `Die Prämie enthält ${rechtsschutz.toLocaleString("de-DE")} EUR für die Mietausfallversicherung.`, seite: 3 }];
+    else pos.bestandteile = [{ bezeichnung: "Gebäudeversicherung", betrag: runde(pos.gesamtkosten! - rechtsschutz) }, { bezeichnung: "Vermieter-Rechtsschutz", betrag: rechtsschutz }];
+    return { betrag: runde((pos.anteilMieter * rechtsschutz) / pos.gesamtkosten!), positionId: pos.id };
+  },
+  "I-17.b": (a, z) => ((x) => ({ betrag: x.anteilMieter, positionId: x.id }))(neu(a, z, z.ganz(0, 1) ? "Rechtsschutzversicherung Vermieter" : "Mietausfallversicherung", "versicherung")),
+  "I-17.c": (a) => ((a.erlaeuterungen = [{ text: "Das Versicherungspaket umfasst auch den Vermieter-Rechtsschutz." }]), { positionId: "k09" }),
   "I-08.a": (a, z) => {
     const kosten = z.euro(300, 3000);
     // 30 kg CO₂ je m² → Vermieter trägt 40 %

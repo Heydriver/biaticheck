@@ -60,6 +60,8 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("R-06.a", "Ein- oder Auszug nicht berücksichtigt", "möglicher Betrag = zeitabhängige Kosten × (1 − Miettage / Tage des Zeitraums)", "auffaelligkeit", "bis_zu", "Mietvertrag (Mietbeginn/-ende)"),
   f("R-07.a", "Mehr Wohnfläche als im Mietvertrag", "(Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung)", "auffaelligkeit", "bis_zu", "Mietvertrag (Wohnfläche)"),
 
+  f("R-08.a", "Verbrauch weicht von den Zählerständen ab", "Verbrauch laut Zähler = Σ (Endstand − Anfangsstand); Betrag je Position = Anteil × (abgerechneter Verbrauch − Verbrauch laut Zähler) / abgerechneter Verbrauch", "abweichung", "exakt", "Zählerstände in der Abrechnung"),
+
   // ---------- Inhaltlich ----------
   f("I-01.a", "Verwaltungskosten umgelegt", "Kategorie = Verwaltung → Betrag = Anteil", "abweichung", "exakt", "Kostenpositionen"),
   f("I-01.b", "Reparaturen/Instandhaltung umgelegt", "Kategorie = Instandhaltung → Betrag = Anteil", "abweichung", "exakt", "Kostenpositionen"),
@@ -75,6 +77,7 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("I-07.a", "Reparatur in Wartungsposition ausgewiesen", "Betrag = Anteil × Σ Reparaturbestandteile / Gesamtkosten", "abweichung", "exakt", "Aufschlüsselung der Position"),
   f("I-07.b", "Vollwartung ohne Aufschlüsselung", "Text nennt Vollwartung, keine Aufschlüsselung", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
   f("I-07.c", "Reparaturen in der Bezeichnung genannt", "Bezeichnung nennt Reparatur/Instandsetzung, nicht verneint, keine Aufschlüsselung", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
+  f("I-07.d", "Reparatur laut Leistungsnachweis als Betriebskosten umgelegt", "Leistungsnachweis der Position beschreibt Reparatur/Instandsetzung (nicht verneint), Position ist keine Wartung → Betrag = Anteil", "abweichung", "exakt", "Leistungsnachweis zur Position"),
   f("I-08.a", "CO₂-Kosten falsch aufgeteilt", "|Kosten × Vermieterquote(kg CO₂ je m²) − Vermieteranteil| > 1 €", "abweichung", "keiner", "CO₂-Angaben der Heizkostenabrechnung"),
   f("I-09.a", "Frisch-/Schmutzwasser nicht nach Verbrauch trotz Zähler", "Wasserart ∈ {Frisch, Schmutz} und Schlüssel ≠ Verbrauch und Wasserzähler vorhanden", "auffaelligkeit", "keiner", "Angabe zum Wasserzähler"),
   f("I-10.a", "Miete für Rauchwarnmelder ausgewiesen", "Betrag = Anteil × Σ Mietbestandteile / Gesamtkosten", "abweichung", "exakt", "Aufschlüsselung der Position"),
@@ -86,6 +89,13 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("I-13.a", "Leerstand auf Mieter verteilt", "unterschiedliche Wohnungszahl N → möglicher Betrag = Σ Anteil × (1 − N / N_max)", "auffaelligkeit", "bis_zu", "Positionen nach Einheiten"),
   f("I-14.a", "Grundsteuer ab 2025 stark verändert", "|Grundsteuer − Vorjahr| / Vorjahr ≥ 20 %", "auffaelligkeit", "keiner", "Vorjahresabrechnung"),
   f("I-15.a", "Niederschlagswasser mehrfach berechnet", "Anzahl Positionen mit Wasserart = Niederschlagswasser > 1", "auffaelligkeit", "keiner", "Kostenpositionen"),
+
+  f("I-16.a", "Dieselbe Rechnung in zwei Positionen", "gleiche Rechnungs-/Belegnummer bei zwei Positionen (und nicht erkennbar aufgeteilt) → Betrag = kleinerer der beiden Anteile", "abweichung", "exakt", "Rechnungsnummern zu den Positionen"),
+  f("I-16.b", "Gleiche Kostenart mit identischen Beträgen", "gleiche Kostenart, Gesamtkosten und Anteil identisch → möglicher Betrag = Anteil", "auffaelligkeit", "bis_zu", "Kostenpositionen"),
+
+  f("I-17.a", "Nicht umlagefähige Versicherung im Paket ausgewiesen", "Betrag = Anteil × ausgewiesener Betrag für Rechtsschutz/Mietausfall/Hausrat / Gesamtkosten (aus Aufschlüsselung oder Erläuterung mit Betrag)", "abweichung", "exakt", "Aufschlüsselung oder Erläuterung mit Betrag"),
+  f("I-17.b", "Reine Rechtsschutz-, Mietausfall- oder Hausratversicherung umgelegt", "Bezeichnung nennt nur eine nicht umlagefähige Versicherung → Betrag = Anteil", "abweichung", "exakt", "Bezeichnung"),
+  f("I-17.c", "Nicht umlagefähige Versicherung genannt, Betrag fehlt", "Text nennt Rechtsschutz/Mietausfall/Hausrat ohne Betrag", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
 
   // ---------- Plausibilität (nur Hinweise, außer neue Kostenart) ----------
   f("P-01.a", "Kostenart stark gestiegen", "(Kosten − Vorjahr) / Vorjahr > 10 % und Kosten − Vorjahr > 25 €", "hinweis", "keiner", "Vorjahresabrechnung"),

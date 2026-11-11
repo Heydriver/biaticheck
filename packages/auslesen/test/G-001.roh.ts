@@ -22,6 +22,7 @@ const pos = (
   unterart: null,
   bestandteile: [],
   hinweise: [],
+  belegnummer: null,
   ...extra,
 });
 const je = { schluesselTyp: "einheiten", anteilEinheit: 1, anteilGesamt: 42 } as const;
@@ -82,6 +83,7 @@ export const G001_ROH: Rohdaten = {
   monatlicheVorauszahlungHeizkosten: 199.94,
   summeKostenMieter: 3917.21,
   saldo: 1214.88,
+  zaehler: [],
   erlaeuterungen: [],
   gezahlteVorauszahlungenBetriebskosten: null,
   gezahlteVorauszahlungenHeizkosten: null,

@@ -33,7 +33,8 @@ export const Rohposition = z.object({
   bestandteile: z
     .array(z.object({ bezeichnung: z.string(), betrag: z.number().describe("Betrag für das ganze Haus in Euro") }))
     .describe("Aufschlüsselung der Position, wenn die Abrechnung oder eine Anlage sie ausweist (z. B. Wartung 1.100,00 / Reparatur 400,00 oder Gerätemiete / Wartung); sonst leere Liste"),
-  hinweise: z.array(z.string()).describe("Fußnoten oder Erläuterungen, die sich ausdrücklich nur auf diese Position beziehen, wörtlich; sonst leere Liste"),
+  hinweise: z.array(z.string()).describe("Fußnoten, Erläuterungen und Leistungsnachweise (was genau gemacht wurde), die sich ausdrücklich nur auf diese Position beziehen, wörtlich; sonst leere Liste"),
+  belegnummer: z.string().nullable().describe("Rechnungs- oder Belegnummer, die die Abrechnung oder eine Anlage zu dieser Position nennt; sonst null"),
   quelle: z.enum(["betriebskostenabrechnung", "heizkostenabrechnung"]),
 });
 export type Rohposition = z.infer<typeof Rohposition>;
@@ -79,6 +80,18 @@ export const Rohdaten = z.object({
   monatlicheVorauszahlungHeizkosten: zahl,
   summeKostenMieter: zahl.describe("Summe aller Kosten der Wohnung laut Abrechnung"),
   saldo: zahl.describe("Abrechnungsergebnis: positiv = Nachzahlung des Mieters, negativ = Guthaben"),
+  zaehler: z
+    .array(
+      z.object({
+        art: z.enum(["kaltwasser", "warmwasser", "heizung", "strom", "sonstig"]),
+        bezeichnung: z.string().nullable().describe("z. B. Zählernummer oder Raum"),
+        anfang: z.number().describe("Anfangsstand"),
+        ende: z.number().describe("Endstand"),
+        verbrauchUebernommen: z.number().nullable().describe("Verbrauch, den die Abrechnung für diesen Zähler ansetzt – so wie er dort steht, auch wenn er nicht Endstand minus Anfangsstand entspricht; sonst null"),
+        seite: z.number().int().nullable(),
+      }),
+    )
+    .describe("Zählerstände der Wohnung laut Abrechnung oder Ableseprotokoll; sonst leere Liste"),
   erlaeuterungen: z
     .array(z.object({ text: z.string().describe("Wörtlich, ohne Namen oder Adressen"), seite: z.number().int().nullable() }))
     .describe("Erläuterungen, Fußnoten und Anmerkungen der Abrechnung und ihrer Anlagen, die mehrere Positionen oder die ganze Abrechnung betreffen (z. B. „Hauswart und Aufzug enthalten keine Reparaturkosten.“), wörtlich"),

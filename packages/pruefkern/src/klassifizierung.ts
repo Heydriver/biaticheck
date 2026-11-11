@@ -9,7 +9,7 @@ import type { Kostenkategorie } from "./schema";
 const MUSTER: [Kostenkategorie, RegExp][] = [
   ["ruecklage", /rücklage|ruecklage/],
   ["verwaltung", /verwaltung|hausverwalt/],
-  ["instandhaltung", /reparatur|instandhaltung|instandsetzung|wartung.*reparatur|erneuerung/],
+  ["instandhaltung", /reparatur|instandhaltung|instandsetzung|wartung.*reparatur|erneuerung|gebäudeunterhalt|bauunterhalt/],
   ["bank_porto", /bankgebühr|kontoführung|porto|bankspesen/],
   ["grundsteuer", /grundsteuer|grundbesitzabgabe/],
   ["entwaesserung", /abwasser|entwässerung|kanal|schmutzwasser|niederschlag|regenwasser/],
@@ -19,7 +19,7 @@ const MUSTER: [Kostenkategorie, RegExp][] = [
   ["aufzug", /aufzug|fahrstuhl|lift/],
   ["strassenreinigung_muell", /müll|abfall|straßenreinigung|strassenreinigung|winterdienst|biotonne/],
   ["gebaeudereinigung_ungeziefer", /hausreinigung|treppenhaus|gebäudereinigung|ungeziefer|schädling/],
-  ["gartenpflege", /garten|grünanlage|grünpflege|spielplatz/],
+  ["gartenpflege", /garten|grünanlage|grünpflege|spielplatz|außenanlage|aussenanlage/],
   ["beleuchtung", /allgemeinstrom|beleuchtung|hausstrom|strom allgemein/],
   ["schornsteinreinigung", /schornstein|kaminkehrer|immissionsmessung/],
   ["versicherung", /versicherung/],

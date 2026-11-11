@@ -89,6 +89,20 @@ describe("Umwandlung", () => {
     expect(r05.betragZugunstenMieter).toBe(100);
   });
 
+  it("übernimmt Zählerstände, Rechnungsnummern und Leistungsnachweise bis in die Prüfung", () => {
+    const r = roh();
+    r.zaehler = [{ art: "kaltwasser", bezeichnung: "Bad", anfang: 100, ende: 140, verbrauchUebernommen: 48, seite: 3 }];
+    const garten = r.kostenpositionen.filter((p) => p.kategorie === "gartenpflege");
+    garten[0]!.belegnummer = "RE 2024-118";
+    garten[1]!.belegnummer = "RE 2024-118";
+    garten[1]!.gesamtkosten = garten[0]!.gesamtkosten;
+    r.kostenpositionen.find((p) => p.bezeichnung === "Dachrinnenreinigung")!.hinweise = ["Leistungsnachweis: schadhafte Dachrinne repariert."];
+    const { abrechnung } = wandleUm(r);
+    expect(abrechnung.zaehler).toEqual([{ art: "kaltwasser", bezeichnung: "Bad", anfang: 100, ende: 140, verbrauchUebernommen: 48, seite: 3 }]);
+    const fehler = pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }).ergebnisse.filter((e) => e.status === "abweichung").map((e) => e.regelId);
+    expect(fehler).toEqual(expect.arrayContaining(["I-16", "I-07"]));
+  });
+
   it("verwirft ungültige Datumsangaben mit Hinweis", () => {
     const r = roh();
     r.erstelltAm = "25.11.2025";

@@ -1,7 +1,7 @@
 import { euro, monateZwischen, runde, tageInklusive, vergleiche, zahlDE } from "../hilfen";
-import { anteilVon, ausgewieseneTeile, bewerteReparatur, findeAussagen, texteZu, wasserart } from "../textanalyse";
+import { anteilVon, ausgewieseneTeile, bewerteReparatur, findeAussagen, REPARATUR, texteZu, wasserart } from "../textanalyse";
 import type { Befund, Regel } from "../regel";
-import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema";
+import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG, type Kostenposition } from "../schema";
 
 export const I01_NichtUmlagefaehig: Regel = {
   id: "I-01",
@@ -280,12 +280,29 @@ export const I07_WartungMitReparatur: Regel = {
   grundlage: "§ 2 Nr. 7 BetrKV; § 1 Abs. 2 Nr. 2 BetrKV",
   stand: "entwurf",
   pruefe(a) {
-    const kandidaten = a.kostenpositionen.filter(
-      (p) => p.kategorie !== "instandhaltung" && p.kategorie !== "hauswart" && (WARTUNGSKATEGORIEN.has(p.kategorie) || /wart|prüf|pruef/i.test(p.bezeichnung)),
-    );
+    // Alle Positionen außer Hauswart (eigene Regel I-11) und bereits als Instandhaltung eingeordneten (I-01)
+    const kandidaten = a.kostenpositionen.filter((p) => !NICHT_UMLAGEFAEHIG.includes(p.kategorie) && p.kategorie !== "hauswart");
     const befunde: Befund[] = [];
     for (const p of kandidaten) {
+      const wartung = WARTUNGSKATEGORIEN.has(p.kategorie) || /wart|prüf|pruef/i.test(p.bezeichnung);
       const r = bewerteReparatur(p, a);
+      // Gartenpflege: Erneuerung von Pflanzen ist umlagefähig (§ 2 Nr. 10 BetrKV) – Texte dort nicht als Reparatur werten
+      if (p.kategorie === "gartenpflege" && r.bestandteile.every((b) => !/reparatur|instandsetz/i.test(b.bezeichnung))) continue;
+      // Leistungsnachweis oder Fußnote der Position beschreibt die Arbeit selbst als Reparatur
+      const imNachweis = r.bestandteile.length === 0 ? findeAussagen(p.hinweise ?? [], REPARATUR).find((x) => !x.verneint) : undefined;
+      if (imNachweis && !/wart|prüf|pruef/i.test(p.bezeichnung) && (p.kategorie === "sonstige" || p.kategorie === "unbekannt" || /unterhalt|instand|baulich/i.test(p.bezeichnung))) {
+        befunde.push({
+          status: "abweichung",
+          titel: `Reparaturkosten umgelegt: ${p.bezeichnung}`,
+          erklaerung: `Laut Leistungsnachweis wurden mit „${p.bezeichnung}“ (${p.gesamtkosten !== undefined ? `${euro(p.gesamtkosten)}, ` : ""}Ihr Anteil ${euro(p.anteilMieter)}) Reparaturen bezahlt: „${imNachweis.text}“ Reparaturen und Instandsetzung sind keine Betriebskosten und dürfen nicht umgelegt werden.`,
+          naechsterSchritt: `Fordern Sie die Streichung dieser Position (${euro(p.anteilMieter)}).`,
+          betragZugunstenMieter: p.anteilMieter,
+          positionId: p.id,
+          textstelle: imNachweis.text,
+          beleg: { gesamtkosten: p.gesamtkosten, anteilMieter: p.anteilMieter, ganzePosition: true },
+        });
+        continue;
+      }
       if (r.bestandteile.length > 0) {
         const haus = runde(r.bestandteile.reduce((x, b) => x + b.betrag, 0));
         const anteil = anteilVon(p, haus);
@@ -325,6 +342,7 @@ export const I07_WartungMitReparatur: Regel = {
         });
         continue;
       }
+      if (!wartung) continue;
       befunde.push({
         status: "ok",
         titel: `Keine Reparaturen erkennbar: ${p.bezeichnung}`,
@@ -755,6 +773,128 @@ export const I14_Grundsteuer2025: Regel = {
   },
 };
 
+/**
+ * Doppelberechnung: Dieselbe Rechnung oder dieselbe Leistung darf nur einmal umgelegt werden.
+ * Sicher (Fehler): zwei Positionen nennen dieselbe Rechnungs-/Belegnummer.
+ * Prüfbedarf: gleiche Kostenart, identische Gesamtkosten und identischer Anteil unter verschiedenen Namen.
+ */
+export const I16_Doppelberechnung: Regel = {
+  id: "I-16",
+  version: "1.0.0",
+  titel: "Keine Leistung doppelt berechnet",
+  bereich: "inhaltlich",
+  grundlage: "§ 556 Abs. 1, 3 BGB; § 1 Abs. 1 BetrKV (nur tatsächlich entstandene Kosten)",
+  stand: "entwurf",
+  pruefe(a) {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const befunde: Befund[] = [];
+    const erledigt = new Set<string>();
+    const ps = a.kostenpositionen;
+    for (let i = 0; i < ps.length; i++) {
+      for (let j = i + 1; j < ps.length; j++) {
+        const x = ps[i]!, y = ps[j]!;
+        if (erledigt.has(y.id)) continue;
+        const gleicheRechnung = x.belegnummer && y.belegnummer && norm(x.belegnummer).length >= 3 && norm(x.belegnummer) === norm(y.belegnummer);
+        const gleicheBetraege = x.kategorie === y.kategorie && x.kategorie !== "unbekannt" && x.gesamtkosten !== undefined && x.gesamtkosten > 0 && x.gesamtkosten === y.gesamtkosten && x.anteilMieter === y.anteilMieter;
+        // Dieselbe Rechnungsnummer mit unterschiedlichen Teilbeträgen ist eine Aufteilung, keine Doppelung
+        if (gleicheRechnung && x.gesamtkosten !== undefined && y.gesamtkosten !== undefined && x.gesamtkosten !== y.gesamtkosten) continue;
+        if (!gleicheRechnung && !gleicheBetraege) continue;
+        erledigt.add(y.id);
+        const betrag = Math.min(x.anteilMieter, y.anteilMieter);
+        befunde.push({
+          status: gleicheRechnung ? "abweichung" : "auffaelligkeit",
+          titel: `Doppelt berechnet: ${x.bezeichnung} und ${y.bezeichnung}`,
+          erklaerung: gleicheRechnung
+            ? `„${x.bezeichnung}“ (${euro(x.anteilMieter)}) und „${y.bezeichnung}“ (${euro(y.anteilMieter)}) beziehen sich auf dieselbe Rechnung (${x.belegnummer}). Dieselbe Leistung darf nur einmal umgelegt werden.`
+            : `„${x.bezeichnung}“ und „${y.bezeichnung}“ gehören zur selben Kostenart und haben genau dieselben Gesamtkosten (${euro(x.gesamtkosten!)}) und denselben Anteil (${euro(x.anteilMieter)}). Das deutet auf eine doppelt abgerechnete Leistung hin.`,
+          naechsterSchritt: gleicheRechnung ? `Fordern Sie die Streichung einer der beiden Positionen (${euro(betrag)}).` : "Verlangen Sie die Rechnungen zu beiden Positionen.",
+          betragZugunstenMieter: betrag,
+          positionId: y.id,
+          textstelle: gleicheRechnung ? `Rechnung ${x.belegnummer} bei „${x.bezeichnung}“ und „${y.bezeichnung}“` : undefined,
+          unterlagen: undefined,
+          beleg: { positionen: [x.id, y.id], belegnummer: gleicheRechnung ? x.belegnummer : undefined, gesamtkosten: x.gesamtkosten },
+        });
+      }
+    }
+    return befunde;
+  },
+};
+
+/**
+ * Versicherungen: Umlagefähig sind nur Sach- und Haftpflichtversicherungen für das Gebäude (§ 2 Nr. 13 BetrKV:
+ * Feuer, Sturm, Wasser, Elementar, Glas, Haftpflicht für Gebäude, Öltank, Aufzug). Rechtsschutz, Mietausfall,
+ * Hausrat und ähnliche Versicherungen des Vermieters sind keine Betriebskosten.
+ */
+const VERSICHERUNG_NICHT_UMLAGEFAEHIG = /rechtsschutz|mietausfall|mietverlust|mietnomaden|hausrat|vermögensschaden|vermoegensschaden|privathaftpflicht|private haftpflicht|reparaturversicherung|reparaturkostenversicherung|d&o/i;
+
+export const I17_Versicherungen: Regel = {
+  id: "I-17",
+  version: "1.0.0",
+  titel: "Nur Sach- und Haftpflichtversicherungen umgelegt",
+  bereich: "inhaltlich",
+  grundlage: "§ 2 Nr. 13 BetrKV",
+  stand: "entwurf",
+  pruefe(a) {
+    const versicherungen = a.kostenpositionen.filter((p) => p.kategorie === "versicherung" || /versicherung|rechtsschutz/i.test(p.bezeichnung));
+    if (versicherungen.length === 0) return [];
+    // Erläuterungen, die eine nicht umlagefähige Versicherung nennen, aber keiner Position zugeordnet sind → größte Versicherungsposition
+    const zugeordnet = new Set(versicherungen.flatMap((p) => texteZu(p, a).erlaeuterungen));
+    const frei = a.erlaeuterungen.map((e) => e.text).filter((t) => VERSICHERUNG_NICHT_UMLAGEFAEHIG.test(t) && !zugeordnet.has(t));
+    const groesste = [...versicherungen].sort((x, y) => y.anteilMieter - x.anteilMieter)[0]!;
+    return versicherungen.map((p): Befund => {
+      const name = findeAussagen([p.bezeichnung], VERSICHERUNG_NICHT_UMLAGEFAEHIG).find((x) => !x.verneint);
+      // Ganze Position ist eine nicht umlagefähige Versicherung (kein Paket mit anderen Bestandteilen)
+      if (name && !(p.bestandteile?.length) && !/paket|und |sowie|\+|, /i.test(p.bezeichnung)) {
+        return {
+          status: "abweichung",
+          titel: `Versicherung nicht umlagefähig: ${p.bezeichnung}`,
+          erklaerung: `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) ist keine Sach- oder Haftpflichtversicherung für das Gebäude. Solche Versicherungen des Vermieters dürfen nicht umgelegt werden.`,
+          naechsterSchritt: `Fordern Sie die Streichung dieser Position (${euro(p.anteilMieter)}).`,
+          betragZugunstenMieter: p.anteilMieter,
+          positionId: p.id,
+          textstelle: p.bezeichnung,
+          beleg: { gesamtkosten: p.gesamtkosten, anteilMieter: p.anteilMieter, ganzePosition: true },
+        };
+      }
+      const zusatz: Kostenposition = p === groesste && frei.length ? { ...p, hinweise: [...(p.hinweise ?? []), ...frei] } : p;
+      const teile = ausgewieseneTeile(zusatz, a, VERSICHERUNG_NICHT_UMLAGEFAEHIG);
+      if (teile.length > 0) {
+        const haus = runde(teile.reduce((x, t) => x + t.betrag, 0));
+        const anteil = anteilVon(p, haus);
+        const liste = teile.map((t) => (/\d/.test(t.bezeichnung) ? `„${t.bezeichnung}“` : `„${t.bezeichnung}“ ${euro(t.betrag)}`)).join(", ");
+        return {
+          status: anteil !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: `Nicht umlagefähige Versicherung enthalten: ${p.bezeichnung}`,
+          erklaerung:
+            `In „${p.bezeichnung}“ ist eine Versicherung enthalten, die nicht umgelegt werden darf: ${liste}.` +
+            (anteil !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(runde(anteil))}.` : "") +
+            " Umlagefähig sind nur Sach- und Haftpflichtversicherungen für das Gebäude.",
+          naechsterSchritt: anteil !== undefined ? `Fordern Sie den Abzug dieses Anteils (${euro(runde(anteil))}).` : "Fordern Sie den Abzug dieses Anteils.",
+          betragZugunstenMieter: anteil !== undefined ? runde(anteil) : undefined,
+          positionId: p.id,
+          textstelle: teile.map((t) => t.bezeichnung).join("; "),
+          beleg: { gesamtkosten: p.gesamtkosten, nichtUmlagefaehigHaus: haus, anteilMieter: p.anteilMieter },
+        };
+      }
+      const texte = texteZu(zusatz, a);
+      const genannt = findeAussagen([...texte.eigene, ...texte.erlaeuterungen], VERSICHERUNG_NICHT_UMLAGEFAEHIG).find((x) => !x.verneint);
+      if (genannt) {
+        return {
+          status: "pruefbedarf",
+          titel: `Nicht umlagefähige Versicherung enthalten? ${p.bezeichnung}`,
+          erklaerung: `„${genannt.text}“ nennt eine Versicherung, die nicht umgelegt werden darf. Wie hoch ihr Anteil an „${p.bezeichnung}“ ist, steht nicht in der Abrechnung.`,
+          naechsterSchritt: "Verlangen Sie die Versicherungsscheine und Beitragsrechnungen. Der Anteil für Rechtsschutz, Mietausfall oder Hausrat ist abzuziehen.",
+          positionId: p.id,
+          betroffen: p.anteilMieter,
+          textstelle: genannt.text,
+          unterlagen: ["rechnungen"],
+        };
+      }
+      return { status: "ok", titel: `Versicherung umlagefähig: ${p.bezeichnung}`, erklaerung: "Kein Hinweis auf nicht umlagefähige Versicherungen.", positionId: p.id };
+    });
+  },
+};
+
 export const INHALTLICHE_REGELN = [
   I01_NichtUmlagefaehig,
   I02_SonstigeKosten,
@@ -771,4 +911,6 @@ export const INHALTLICHE_REGELN = [
   I12_Gewerbe,
   I13_Leerstand,
   I14_Grundsteuer2025,
+  I16_Doppelberechnung,
+  I17_Versicherungen,
 ];

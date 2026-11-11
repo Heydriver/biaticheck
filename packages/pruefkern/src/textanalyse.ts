@@ -11,7 +11,7 @@ import type { Abrechnung, Kostenposition } from "./schema";
 const VERNEINUNG = /\b(kein|keine|keinen|keiner|keines|nicht|ohne|ausgenommen|ausgeschlossen|exklusive|abzüglich|herausgerechnet|bereinigt|abgezogen)\b/i;
 
 /** Nicht umlagefähige Arbeiten nach § 1 Abs. 2 BetrKV. */
-export const REPARATUR = /reparatur|instandsetz|instandhalt|ersatzteil|störungsbeseitigung|stoerungsbeseitigung|austausch|erneuerung|schadens?behebung/i;
+export const REPARATUR = /reparatur|reparier|repariert|instandsetz|instandgesetzt|instandhalt|ausgebessert|ausbesserung|schadhaft|sanier|ersatzteil|störungsbeseitigung|stoerungsbeseitigung|austausch|erneuer|schadens?behebung|schadens?beseitigung/i;
 const VOLLWARTUNG = /vollwartung|vollwartungsvertrag|full[- ]?service|wartung\s+(inkl\.?|inklusive|einschl\.?|einschließlich|mit)\s+(reparatur|instandsetzung|ersatzteil)/i;
 
 /** Teilt einen Text in Aussagen (Sätze und durch Semikolon getrennte Teilsätze). */
@@ -66,10 +66,12 @@ export function betraegeZu(texte: readonly string[], begriff: RegExp): { betrag:
   return treffer;
 }
 
+const ALLERWELT = new Set(["kosten", "sonstige", "sonstiges", "betrieb", "betriebskosten", "allgemein", "gebühren", "gebuehren", "wartung", "prüfung", "pruefung", "anteil", "umlage", "pflege", "reinigung", "service"]);
+
 /** Suchbegriffe, mit denen eine allgemeine Erläuterung einer Kostenart zugeordnet wird. */
 const BEZUG: Partial<Record<Kostenposition["kategorie"], RegExp>> = {
   grundsteuer: /grundsteuer/i,
-  versicherung: /versicherung/i,
+  versicherung: /versicherung|rechtsschutz|haftpflicht|police|prämie/i,
   strassenreinigung_muell: /müll|abfall|straßenreinigung|winterdienst/i,
   beleuchtung: /strom|beleuchtung/i,
   schornsteinreinigung: /schornstein/i,
@@ -90,10 +92,14 @@ const BEZUG: Partial<Record<Kostenposition["kategorie"], RegExp>> = {
  */
 export function texteZu(p: Kostenposition, a: Abrechnung): { eigene: string[]; erlaeuterungen: string[] } {
   const bezug = BEZUG[p.kategorie];
-  const erste = p.bezeichnung.split(/[\s:,/(]+/)[0]?.toLowerCase();
+  // Kennwörter der Bezeichnung (z. B. „Hauspaket“ aus „Versicherungen Hauspaket“), ohne Allerweltswörter
+  const woerter = p.bezeichnung
+    .toLowerCase()
+    .split(/[^a-zäöüß]+/)
+    .filter((x, i) => (i === 0 ? x.length >= 4 : x.length >= 5) && !ALLERWELT.has(x));
   const erlaeuterungen = a.erlaeuterungen
     .map((e) => e.text)
-    .filter((t) => (bezug && bezug.test(t)) || (erste && erste.length >= 4 && t.toLowerCase().includes(erste)) || /alle(n)? (kosten)?positionen|sämtliche (kosten|positionen)/i.test(t));
+    .filter((t) => (bezug && bezug.test(t)) || woerter.some((x) => t.toLowerCase().includes(x)) || /alle(n)? (kosten)?positionen|sämtliche (kosten|positionen)/i.test(t));
   return { eigene: [p.bezeichnung, ...(p.hinweise ?? [])], erlaeuterungen };
 }
 

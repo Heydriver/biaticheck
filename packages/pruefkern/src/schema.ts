@@ -98,8 +98,10 @@ export const Kostenposition = z.object({
   unterart: z.enum(["frischwasser", "schmutzwasser", "niederschlagswasser", "wasser_abwasser"]).optional(),
   /** Aufschlüsselung laut Abrechnung oder Anlage, Beträge für das ganze Haus (wie `gesamtkosten`). */
   bestandteile: z.array(z.object({ bezeichnung: z.string(), betrag: betrag, fundstelle: Fundstelle.optional() })).optional(),
-  /** Erläuterungen und Fußnoten, die sich ausdrücklich auf diese Position beziehen (wörtlich). */
+  /** Erläuterungen, Fußnoten und Leistungsnachweise, die sich ausdrücklich auf diese Position beziehen (wörtlich). */
   hinweise: z.array(z.string()).optional(),
+  /** Rechnungs- oder Belegnummer, auf die sich die Position bezieht – zum Erkennen doppelt abgerechneter Rechnungen. */
+  belegnummer: z.string().optional(),
 });
 export type Kostenposition = z.infer<typeof Kostenposition>;
 
@@ -200,6 +202,23 @@ export const Abrechnung = z.object({
    * nicht als Beweis – ausdrücklich ausgewiesene Beträge gehen vor.
    */
   erlaeuterungen: z.array(z.object({ text: z.string(), seite: z.number().int().positive().optional() })).default([]),
+  /**
+   * Zählerstände der Wohnung laut Abrechnung oder Ableseprotokoll. Der Verbrauch (Ende − Anfang) wird mit dem
+   * abgerechneten Verbrauch verglichen.
+   */
+  zaehler: z
+    .array(
+      z.object({
+        art: z.enum(["kaltwasser", "warmwasser", "heizung", "strom", "sonstig"]),
+        bezeichnung: z.string().optional(),
+        anfang: z.number().nonnegative(),
+        ende: z.number().nonnegative(),
+        /** Verbrauch, den die Abrechnung für diesen Zähler übernommen hat (falls ausgewiesen). */
+        verbrauchUebernommen: z.number().nonnegative().optional(),
+        seite: z.number().int().positive().optional(),
+      }),
+    )
+    .default([]),
   /** Werte, die die Abrechnung selbst als Ergebnis ausweist. */
   ausgewiesen: z
     .object({
