@@ -10,16 +10,18 @@ import {
 import { FORMELLE_REGELN } from "./regeln/formell";
 import { INHALTLICHE_REGELN } from "./regeln/inhaltlich";
 import { PLAUSIBILITAETS_REGELN } from "./regeln/plausibilitaet";
+import { K01_KiKontrolle } from "./regeln/kontrolle";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.11.0";
+export const REGELWERK_VERSION = "0.12.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,
   ...RECHNERISCHE_REGELN,
   ...INHALTLICHE_REGELN,
   ...PLAUSIBILITAETS_REGELN,
+  K01_KiKontrolle,
 ];
 
 export interface Pruefbericht {

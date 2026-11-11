@@ -314,6 +314,11 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
     ];
     return { betrag: runde((h.anteilMieter * gutschrift) / h.gesamtkosten!) };
   },
+  "K-01.a": (a, z) => {
+    const mitPosition = z.ganz(0, 1) === 1;
+    a.kontrollbefunde = [{ beschreibung: "Der Anfangsstand des Wasserzählers wurde manuell übernommen und noch nicht mit der Vorjahresabrechnung abgeglichen.", textstelle: "Ein Abgleich mit dem Endstand der Abrechnung 2024 steht noch aus", ...(mitPosition ? { positionId: "k02" } : {}), seite: 3 }];
+    return mitPosition ? { positionId: "k02" } : {};
+  },
   "I-08.a": (a, z) => {
     const kosten = z.euro(300, 3000);
     // 30 kg CO₂ je m² → Vermieter trägt 40 %

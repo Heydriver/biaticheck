@@ -101,6 +101,9 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("I-17.b", "Reine Rechtsschutz-, Mietausfall- oder Hausratversicherung umgelegt", "Bezeichnung nennt nur eine nicht umlagefähige Versicherung → Betrag = Anteil", "abweichung", "exakt", "Bezeichnung"),
   f("I-17.c", "Nicht umlagefähige Versicherung genannt, Betrag fehlt", "Text nennt Rechtsschutz/Mietausfall/Hausrat ohne Betrag", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
 
+  // ---------- KI-Kontrolle ----------
+  f("K-01.a", "Unstimmigkeit, die nur die KI-Kontrolle im Dokument findet", "KI meldet eine Auffälligkeit mit wörtlicher Textstelle, die keine Formel erfasst → begründeter Prüfbedarf", "auffaelligkeit", "keiner", "KI-Kontrolle mit Textstelle"),
+
   // ---------- Plausibilität (nur Hinweise, außer neue Kostenart) ----------
   f("P-01.a", "Kostenart stark gestiegen", "(Kosten − Vorjahr) / Vorjahr > 10 % und Kosten − Vorjahr > 25 €", "hinweis", "keiner", "Vorjahresabrechnung"),
   f("P-01.b", "Neue Kostenart", "Kostenart im Vorjahr nicht vorhanden", "auffaelligkeit", "keiner", "Vorjahresabrechnung"),

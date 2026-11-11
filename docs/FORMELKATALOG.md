@@ -3,8 +3,8 @@
 Automatisch erzeugt aus `packages/pruefkern/src/fehlerkatalog.ts`. Nicht von Hand ändern:
 `UPDATE_FORMELKATALOG=1 pnpm --filter @biaticheck/pruefkern test`.
 
-Der Prüfkern erkennt 60 Fehlerarten in 34 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
-Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1500 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
+Der Prüfkern erkennt 61 Fehlerarten in 35 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
+Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1525 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
 
 | ID | Fehlerart | Formel | Ergebnis | Betrag | Braucht |
 |---|---|---|---|---|---|
@@ -64,6 +64,7 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | I-17.a | Nicht umlagefähige Versicherung im Paket ausgewiesen | Betrag = Anteil × ausgewiesener Betrag für Rechtsschutz/Mietausfall/Hausrat / Gesamtkosten (aus Aufschlüsselung oder Erläuterung mit Betrag) | Belegter Fehler | exakt | Aufschlüsselung oder Erläuterung mit Betrag |
 | I-17.b | Reine Rechtsschutz-, Mietausfall- oder Hausratversicherung umgelegt | Bezeichnung nennt nur eine nicht umlagefähige Versicherung → Betrag = Anteil | Belegter Fehler | exakt | Bezeichnung |
 | I-17.c | Nicht umlagefähige Versicherung genannt, Betrag fehlt | Text nennt Rechtsschutz/Mietausfall/Hausrat ohne Betrag | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung, Erläuterungen |
+| K-01.a | Unstimmigkeit, die nur die KI-Kontrolle im Dokument findet | KI meldet eine Auffälligkeit mit wörtlicher Textstelle, die keine Formel erfasst → begründeter Prüfbedarf | Begründeter Prüfbedarf | nicht bezifferbar | KI-Kontrolle mit Textstelle |
 | P-01.a | Kostenart stark gestiegen | (Kosten − Vorjahr) / Vorjahr > 10 % und Kosten − Vorjahr > 25 € | Hinweis | nicht bezifferbar | Vorjahresabrechnung |
 | P-01.b | Neue Kostenart | Kostenart im Vorjahr nicht vorhanden | Begründeter Prüfbedarf | nicht bezifferbar | Vorjahresabrechnung |
 | P-02.a | Kalte Nebenkosten über dem Rahmen | kalte Kosten / Wohnfläche / Monate > 2,50 € | Hinweis | nicht bezifferbar | Wohnfläche, Zeitraum |

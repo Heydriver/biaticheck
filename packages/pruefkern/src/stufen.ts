@@ -546,6 +546,10 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return s === "abweichung" ? k(`Kabelfernsehen: ${name}`, "Seit Juli 2024 nicht mehr umlagefähig.") : k(`Kabelfernsehen: ${name}`, "Erlaubt sind nur Kosten bis Juni 2024.");
     case "I-06":
       return s === "abweichung" ? k("Aufzug trotz Erdgeschoss", "Ihr Mietvertrag nimmt Sie davon aus.") : k("Aufzug im Erdgeschoss", "Nur unzulässig, wenn Ihr Mietvertrag das so regelt.");
+    case "K-01": {
+      const satz = e.erklaerung.split(/(?<=[.!?])\s/)[0]!;
+      return k(e.positionId ? `Von der KI-Kontrolle gefunden: ${name}` : "Von der KI-Kontrolle gefunden", satz.length > 150 ? `${satz.slice(0, 147)}…` : satz);
+    }
     case "I-17":
       if (s === "abweichung") return b.ganzePosition === true ? k(`Versicherung nicht umlagefähig: ${name}`, "Nur Sach- und Haftpflichtversicherungen für das Gebäude dürfen umgelegt werden.") : k(`Rechtsschutz oder Ähnliches in „${name}“`, "Dieser Versicherungsanteil darf nicht umgelegt werden.");
       return k(`Versicherung: „${name}“`, "Enthält eine nicht umlagefähige Versicherung. Auswirkung noch nicht bezifferbar.");
@@ -660,6 +664,9 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
     case "I-06":
       if (e.status === "abweichung") return `Aufzugskosten${betrag}: Nach meinem Mietvertrag sind Erdgeschosswohnungen davon ausgenommen.`;
       break;
+    case "K-01":
+      // Ins Schreiben kommt nur das Zitat aus der Abrechnung, nicht die Deutung der KI
+      return `${name ? `${name}: ` : ""}In der Abrechnung heißt es: „${e.textstelle ?? ""}“ Bitte erläutern Sie das und legen Sie die zugehörigen Belege vor.`;
     case "I-17":
       if (e.status === "abweichung" && name) return `${name}${betrag}: Darin ist eine nicht umlagefähige Versicherung enthalten (${e.textstelle ?? ""}). Nach § 2 Nr. 13 BetrKV sind nur Sach- und Haftpflichtversicherungen für das Gebäude umlagefähig. Bitte ziehen Sie den Betrag ab.`;
       if (name) return `${name}: Bitte legen Sie die Versicherungsscheine und Beitragsrechnungen vor und weisen Sie Anteile für Rechtsschutz-, Mietausfall- oder Hausratversicherung aus.`;
@@ -829,6 +836,7 @@ function belegFuer(e: Regelergebnis, a: Abrechnung): string | undefined {
     case "R-07": return "Wohnflächenberechnung für Ihre Wohnung";
     case "I-12": return "Aufstellung des Vorwegabzugs für Gewerbe";
     case "I-16": return "Rechnungen zu beiden Positionen";
+    case "K-01": return name ? `Belege zu „${name}“` : undefined;
     case "R-09": return "Originalbelege zu den beanstandeten Rechnungen";
     case "I-17": return name ? `Versicherungsscheine und Beitragsrechnungen zu „${name}“` : undefined;
     case "R-08": return "Ableseprotokoll mit Zählerständen";

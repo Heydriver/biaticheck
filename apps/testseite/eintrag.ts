@@ -3,7 +3,7 @@ import { Rohdaten } from "../../packages/auslesen/src/rohdaten";
 import { SYSTEM_PROMPT } from "../../packages/auslesen/src/prompt";
 import { wandleUm } from "../../packages/auslesen/src/umwandlung";
 import { pruefeKonsistenz } from "../../packages/auslesen/src/konsistenz";
-import { KEINE_KONTROLLE, KONTROLL_PROMPT, KontrolleRoh, protokollFuerKontrolle, werteKontrolleAus } from "../../packages/auslesen/src/kontrolle";
+import { KEINE_KONTROLLE, KONTROLL_PROMPT, KontrolleRoh, kontrollbefundeAus, protokollFuerKontrolle, werteKontrolleAus } from "../../packages/auslesen/src/kontrolle";
 import { erstelleZeilenprotokoll, ALLE_REGELN, schliesstAn, erstelleStufe1, erstelleStufe2, pruefeAbrechnung, wendeAntwortAn, AntwortFehler, personalisiereAnschreiben } from "../../packages/pruefkern/src/index";
 
 export { personalisiereAnschreiben, schliesstAn };
@@ -32,7 +32,10 @@ export function werteKontrolle(antwort: unknown, rohJson: unknown, heute: string
   const protokoll = protokollVon(rohJson, heute);
   if (!protokoll) return KEINE_KONTROLLE("keine Abrechnung");
   const gueltig = KontrolleRoh.safeParse(antwort);
-  return gueltig.success ? werteKontrolleAus(gueltig.data, protokoll) : KEINE_KONTROLLE("keine gültige Antwort", protokoll.zeilen.length);
+  if (!gueltig.success) return KEINE_KONTROLLE("keine gültige Antwort", protokoll.zeilen.length);
+  const kontrolle = werteKontrolleAus(gueltig.data, protokoll);
+  // befunde: Funde für die Liste „Das haben wir gefunden“ (Regel K-01)
+  return { ...kontrolle, befunde: kontrollbefundeAus(kontrolle, protokoll) };
 }
 
 /** Ältere Antworten (und das Beispiel) kennen die neuen Felder noch nicht – mit leeren Werten ergänzen. */
@@ -56,12 +59,14 @@ export function werteAus(
   antworten: Record<string, unknown> = {},
   mietvertrag?: { pauschaleVereinbart?: boolean; vereinbarteSonstigeKosten?: string[]; aufzugAusgenommen?: boolean; mietbeginn?: string; mietende?: string; wohnflaeche?: number; gewerbeImHaus?: boolean },
   vorauszahlungen?: { verlauf: Verlauf; quelle: "vorjahresabrechnung" | "kontoauszug" | "kunde" },
+  kontrollbefunde?: { beschreibung: string; textstelle: string; positionId?: string; seite?: number }[],
 ) {
   const roh = Rohdaten.safeParse(ergaenze(rohJson));
   if (!roh.success) return { fehler: "format", details: roh.error.issues.slice(0, 5).map((i) => `${i.path.join(".")}: ${i.message}`) };
   if (!roh.data.istNebenkostenabrechnung) return { fehler: "keine_abrechnung" };
   let { abrechnung, hinweise } = wandleUm(roh.data);
   const konsistenz = pruefeKonsistenz(abrechnung);
+  if (kontrollbefunde?.length) abrechnung = { ...abrechnung, kontrollbefunde };
   if (mietvertrag) {
     const { gewerbeImHaus, ...vertrag } = mietvertrag;
     abrechnung = { ...abrechnung, mietvertrag: { ...abrechnung.mietvertrag, ...vertrag } };

@@ -121,3 +121,7 @@ Beigefügte Rechnungen, Gutschriften und Geräteprotokolle werden ausgelesen und
 ## Anklickbare Werte (v0.11)
 
 Jeder berechnete Wert ist anklickbar und zeigt eine kurze Erklärung mit den Zahlen, aus denen er entsteht: Gesamtbetrag, Einstufung des Fehlerpotenzials, Nachzahlung oder Guthaben, korrigiertes Ergebnis, Einspruchsfrist, Kostenvergleich und der Betrag jedes Befunds. Die Texte entstehen im Prüfkern (`Stufe1.erklaerungen`). In der kostenlosen Ansicht der Web-App zeigt der Befundbetrag nur den Rechenweg aus den sichtbaren Zahlen; die ausführliche Erklärung gehört zum Erledigen-Paket.
+
+## KI-Funde bei den gefundenen Punkten (v0.12)
+
+Auffälligkeiten, die nur die KI-Kontrolle im Dokument findet, werden als Regel **K-01** in die Prüfung übernommen (`kontrollbefunde`). Sie erscheinen bei „Das haben wir gefunden“ als begründeter Prüfbedarf mit wörtlicher Textstelle und ohne Betrag, zählen zur Einstufung, aber nie als belegter Fehler. Ins Schreiben an die Hausverwaltung kommt nur das Zitat aus der Abrechnung mit der Bitte um Erläuterung, nicht die Deutung der KI. In der Web-App geht ein Fall mit KI-Fund weiterhin zuerst an den Fachprüfer.

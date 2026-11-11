@@ -293,6 +293,11 @@ describe("KI-Kontrolle (Unterschritt 2)", () => {
     }));
     const a = await leseAus(c, [PDF]);
     expect(a.kontrolle!.auffaelligkeiten).toEqual([{ zeileNr: 1, bezeichnung: "Grundsteuer", beschreibung: "Fußnote nennt eine Nachberechnung für 2022 in der Grundsteuer.", textstelle: "inkl. Nachberechnung 2022", seite: 5 }]);
+    // Der Fund steht in den Daten und wird vom Prüfkern als begründeter Prüfbedarf an der Position gemeldet
+    expect(a.abrechnung!.kontrollbefunde).toEqual([{ beschreibung: "Fußnote nennt eine Nachberechnung für 2022 in der Grundsteuer.", textstelle: "inkl. Nachberechnung 2022", positionId: "p01", seite: 5 }]);
+    const k01 = pruefeAbrechnung(a.abrechnung!, { heute: "2026-10-29" }).ergebnisse.filter((e) => e.regelId === "K-01");
+    expect(k01).toEqual([expect.objectContaining({ status: "auffaelligkeit", positionId: "p01", textstelle: "inkl. Nachberechnung 2022" })]);
+    expect(k01[0]!.betragZugunstenMieter).toBeUndefined();
     expect(a.konsistenz.konsistent).toBe(false);
   });
 

@@ -484,6 +484,34 @@ describe("Familie Yilmaz – vier Fehler, die nur die Belege zeigen (80 von 800 
   });
 });
 
+describe("Muster 11 – Fund der KI-Kontrolle steht bei „Das haben wir gefunden“", () => {
+  const TEXT = "Bei der Umstellung der Verwaltung wurde der Anfangsstand KW-04 manuell aus dem Altdatenbestand übernommen. Ein Abgleich mit dem Endstand der Abrechnung 2024 steht noch aus";
+  const a = abrechnung01();
+  a.kontrollbefunde = [{ beschreibung: "Der Anfangsstand des Wasserzählers KW-04 wurde manuell aus einem Altdatenbestand übernommen und noch nicht mit dem Endstand der Vorjahresabrechnung abgeglichen. Daraus ergibt sich der Verbrauch für Frischwasser und Schmutzwasser.", textstelle: TEXT, positionId: "k02", seite: 3 }];
+  const { bericht, s1, s2 } = stufen(a);
+
+  it("erscheint als begründeter Prüfbedarf an der Position, ohne Betrag, mit Textstelle", () => {
+    const punkt = s2.auffaelligkeiten.find((p) => p.regelId === "K-01")!;
+    expect(punkt).toMatchObject({ status: "auffaelligkeit", einordnung: "pruefbedarf", textstelle: TEXT, betroffen: 310 });
+    expect(punkt.betrag).toBeUndefined();
+    expect(punkt.kurz.titel).toBe("Von der KI-Kontrolle gefunden: Frischwasser");
+    expect(punkt.fakten).toContainEqual({ label: "Auswirkung", wert: "noch nicht bezifferbar", betont: true });
+    expect(punkt.fakten.some((f) => f.label === "Textstelle" && f.wert.includes("Altdatenbestand"))).toBe(true);
+  });
+
+  it("zählt zu den gefundenen Punkten und zur Einstufung, aber nicht als belegter Fehler oder Betrag", () => {
+    expect(s1.fehlerpotenzial.anzahl.auffaelligkeit).toBe(1);
+    expect(s1.fehlerpotenzial.anzahl.abweichung).toBe(0);
+    expect(s1.fehlerpotenzial.stufe).toBe("gering");
+    expect(bericht.zusammenfassung.einsparpotenzial + bericht.zusammenfassung.klaerungspotenzial).toBe(0);
+  });
+
+  it("im Schreiben steht nur das Zitat aus der Abrechnung mit der Bitte um Erläuterung", () => {
+    expect(s2.anschreiben.text).toContain(`Frischwasser: In der Abrechnung heißt es: „${TEXT}“ Bitte erläutern Sie das und legen Sie die zugehörigen Belege vor.`);
+    expect(s2.anschreiben.text).not.toContain("manuell aus einem Altdatenbestand übernommen und noch nicht mit dem Endstand der Vorjahresabrechnung");
+  });
+});
+
 function wf() {
   return { typ: "wohnflaeche" as const, anteilEinheit: 75, anteilGesamt: 750 };
 }

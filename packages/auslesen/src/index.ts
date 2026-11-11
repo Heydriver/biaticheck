@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { erstelleZeilenprotokoll, pruefeAbrechnung, type AbrechnungEingabe } from "@biaticheck/pruefkern";
-import type { Kontrolle } from "./kontrolle";
+import { kontrollbefundeAus, type Kontrolle } from "./kontrolle";
 import { kontrolliere } from "./kontrollaufruf";
 import { pruefeKonsistenz, type Konsistenz } from "./konsistenz";
 import { rufeModellAuf, type Dokument } from "./modell";
@@ -10,7 +10,7 @@ export { AuslesenFehler, MODELL, type Dokument, type Dokumenttyp } from "./model
 export { erkenneDokumenttyp } from "./dateityp";
 export { pruefeKonsistenz, type Konsistenz } from "./konsistenz";
 export { Rohdaten } from "./rohdaten";
-export { KEINE_KONTROLLE, KONTROLL_PROMPT, KontrolleRoh, protokollFuerKontrolle, werteKontrolleAus, type Kontrolle } from "./kontrolle";
+export { KEINE_KONTROLLE, KONTROLL_PROMPT, KontrolleRoh, kontrollbefundeAus, protokollFuerKontrolle, werteKontrolleAus, type Kontrolle } from "./kontrolle";
 export { kontrolliere } from "./kontrollaufruf";
 export { wandleUm } from "./umwandlung";
 export { vergleiche, type Vergleich } from "./vergleich";
@@ -54,6 +54,9 @@ export async function leseAus(client: Anthropic, dokumente: Dokument[], optionen
     const protokoll = erstelleZeilenprotokoll(pruefeAbrechnung(abrechnung, { heute: optionen.heute }), abrechnung);
     const ergebnis = await kontrolliere(client, dokumente, protokoll);
     kontrolle = ergebnis.kontrolle;
+    // Funde der KI-Kontrolle gehen als begründeter Prüfbedarf in die Prüfung ein (Regel K-01)
+    const befunde = kontrollbefundeAus(kontrolle, protokoll);
+    if (befunde.length) abrechnung.kontrollbefunde = befunde;
     nutzung.eingabeTokens += ergebnis.nutzung.eingabeTokens;
     nutzung.ausgabeTokens += ergebnis.nutzung.ausgabeTokens;
   }

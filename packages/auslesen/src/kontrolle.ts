@@ -147,3 +147,11 @@ export function werteKontrolleAus(roh: KontrolleRoh, protokoll: Zeilenprotokoll)
     gruende,
   };
 }
+
+/** Funde der KI-Kontrolle in der Form, in der sie der Prüfkern als begründeten Prüfbedarf übernimmt (Regel K-01). */
+export function kontrollbefundeAus(kontrolle: Kontrolle, protokoll: Zeilenprotokoll): { beschreibung: string; textstelle: string; positionId?: string; seite?: number }[] {
+  return kontrolle.auffaelligkeiten.map((x) => {
+    const positionId = x.zeileNr !== undefined ? protokoll.zeilen.find((z) => z.nr === x.zeileNr)?.positionId : undefined;
+    return { beschreibung: x.beschreibung, textstelle: x.textstelle, ...(positionId ? { positionId } : {}), ...(x.seite ? { seite: x.seite } : {}) };
+  });
+}

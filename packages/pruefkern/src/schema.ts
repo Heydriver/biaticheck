@@ -251,6 +251,11 @@ export const Abrechnung = z.object({
       }),
     )
     .default([]),
+  /**
+   * Auffälligkeiten, die die KI-Kontrolle (Unterschritt 2) im Dokument gefunden hat und die keine Formel erfasst.
+   * Jede braucht eine wörtliche Textstelle. Sie erscheinen als begründeter Prüfbedarf ohne Betrag (Regel K-01).
+   */
+  kontrollbefunde: z.array(z.object({ beschreibung: z.string().min(1), textstelle: z.string().min(3), positionId: z.string().optional(), seite: z.number().int().positive().optional() })).default([]),
   /** Werte, die die Abrechnung selbst als Ergebnis ausweist. */
   ausgewiesen: z
     .object({

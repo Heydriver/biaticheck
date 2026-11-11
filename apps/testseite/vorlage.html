@@ -299,7 +299,7 @@ button.wert:focus-visible { outline: 2px solid currentColor; outline-offset: 2px
 
   // ---------- Ergebnis ----------
   function auswertung() {
-    return P.werteAus(z.roh, HEUTE, z.antworten, z.mietvertrag ?? undefined, z.vorauszahlungen ?? undefined);
+    return P.werteAus(z.roh, HEUTE, z.antworten, z.mietvertrag ?? undefined, z.vorauszahlungen ?? undefined, z.kontrolle?.befunde ?? undefined);
   }
 
   function zeige() {
@@ -364,7 +364,7 @@ button.wert:focus-visible { outline: 2px solid currentColor; outline-offset: 2px
       <p>${unter}</p>
       ${f.pruefbedarf.anzahl ? `<p class="leise" style="font-size:15px">${f.pruefbedarf.anzahl === 1 ? "Ein weiterer Punkt" : `${f.pruefbedarf.anzahl} weitere Punkte`}${f.pruefbedarf.betrag > 0 ? ` mit bis zu ${euro(f.pruefbedarf.betrag)}` : ""} prüfen wir, sobald Sie eine Unterlage nachreichen.${f.pruefbedarf.ohneBetrag ? ` ${f.pruefbedarf.betrag > 0 ? "Teilweise ist die" : "Die"} Auswirkung ist noch nicht bezifferbar.` : ""}</p>` : ""}
       ${!r.konsistenz.konsistent ? `<p class="hinweis">Einige Zahlen konnten wir nicht sicher lesen. Bitte prüfen Sie unten die ausgelesenen Beträge.</p>` : ""}
-      ${z.kontrolle && !z.kontrolle.bestanden ? `<p class="hinweis">Die zweite Kontrolle hat etwas gemeldet. Ein Fachprüfer sollte dieses Ergebnis ansehen. Einzelheiten stehen unten unter „So haben wir geprüft“.</p>` : ""}
+      ${z.kontrolle && (z.kontrolle.lesefehler.length || z.kontrolle.fehlendeZeilen.length || !z.kontrolle.durchgefuehrt) ? `<p class="hinweis">Die zweite Kontrolle konnte nicht alle Zeilen bestätigen. Ein Fachprüfer sollte dieses Ergebnis ansehen. Einzelheiten stehen unten unter „So haben wir geprüft“.</p>` : ""}
       <dl class="fakten">
         ${fehler}
         ${saldo !== undefined ? `<div><dt>${saldo >= 0 ? "Ihre Nachzahlung" : "Ihr Guthaben"}</dt><dd>${wert(euro(Math.abs(saldo)), s1.erklaerungen.saldo)}</dd>${k.korrigierterSaldo !== undefined ? `<small>Nach Korrektur der belegten Fehler: ${wert(k.korrigierterSaldo > 0 ? `Nachzahlung ${euro(k.korrigierterSaldo)}` : `Guthaben ${euro(Math.abs(k.korrigierterSaldo))}`, s1.erklaerungen.korrigiert)}</small>` : ""}</div>` : ""}
@@ -605,7 +605,7 @@ ${text}`, { modelTier: "complex", signal: ctl.signal });
       const punkte = [
         ...k.lesefehler.map((x) => `Zeile ${x.nr} „${esc(x.bezeichnung)}“: ${esc(x.abweichung)}`),
         ...k.fehlendeZeilen.map((x) => `Zeile fehlt: „${esc(x.bezeichnung)}“${x.betrag !== undefined ? ` (${euro(x.betrag)})` : ""}`),
-        ...k.auffaelligkeiten.map((x) => `${esc(x.beschreibung)} Textstelle: „${esc(x.textstelle)}“`),
+        ...k.auffaelligkeiten.map((x) => `${esc(x.beschreibung)} Textstelle: „${esc(x.textstelle)}“ Dieser Punkt steht oben unter „Das haben wir gefunden“.`),
       ];
       kontrolle = `<p>${k.zeilenBestaetigt} von ${k.zeilenGesamt} Zeilen stimmen mit Ihrem Dokument überein.${k.bestanden ? " Keine Zeile fehlt, nichts Zusätzliches aufgefallen." : ""}</p>${punkte.length ? `<ul class="belege" style="display:grid;gap:4px">${punkte.map((t) => `<li>${t}</li>`).join("")}</ul>` : ""}`;
     }

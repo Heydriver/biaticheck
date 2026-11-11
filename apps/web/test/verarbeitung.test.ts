@@ -116,6 +116,10 @@ describe("Verarbeitung eines Falls", () => {
       expect(fall.auslesung!.konsistenz.gruende.join(" ")).toContain("KI-Kontrolle");
       // Das Formelergebnis bleibt erhalten – der Fachprüfer baut darauf auf
       expect(fall.bericht).toBeTruthy();
+      // Ein Fund der KI-Kontrolle steht als eigener Punkt im Prüfbericht (Regel K-01)
+      const k01 = fall.bericht!.ergebnisse.filter((e) => e.regelId === "K-01");
+      if (fall.auslesung!.kontrolle!.auffaelligkeiten.length) expect(k01).toEqual([expect.objectContaining({ status: "auffaelligkeit", textstelle: "inkl. Nachberechnung 2022" })]);
+      else expect(k01).toEqual([]);
     }
   });
 
