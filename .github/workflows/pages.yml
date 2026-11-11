@@ -1,0 +1,51 @@
+name: Testseite auf GitHub Pages
+
+# Baut die Testseite aus apps/testseite und legt sie als index.html auf den Branch "biati-main-test".
+# GitHub Pages zeigt diesen Branch (Einstellungen → Pages → Branch: biati-main-test, Ordner: / (root)).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/pruefkern/**"
+      - "packages/auslesen/**"
+      - "apps/testseite/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-testseite
+  cancel-in-progress: true
+
+jobs:
+  veroeffentlichen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Nur veröffentlichen, wenn die Tests bestehen
+      - run: pnpm --filter @biaticheck/pruefkern --filter @biaticheck/auslesen test
+      - run: pnpm testseite:bauen
+      - name: Auf den Branch biati-main-test legen
+        run: |
+          set -e
+          stand=$(git rev-parse --short HEAD)
+          mkdir seite
+          cp apps/testseite/dist/biaticheck-test.html seite/index.html
+          touch seite/.nojekyll
+          printf '# BiatiCheck – Testseite (GitHub Pages)\n\nDieser Branch enthält nur die fertig gebaute Testseite (`index.html`) für GitHub Pages.\nEr wird bei jedem Push auf `main` automatisch aus `apps/testseite` neu erzeugt. Bitte hier nichts von Hand ändern.\n\nHinweis: Außerhalb von claude.ai funktioniert nur „Beispiel ansehen“. Eigene Abrechnungen lassen sich nur über die Testseite bei Claude auslesen.\n' > seite/README.md
+          cd seite
+          git init -q -b biati-main-test
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Testseite für GitHub Pages (Stand $stand)"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" biati-main-test

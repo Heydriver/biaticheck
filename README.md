@@ -24,6 +24,8 @@ Zum Testen gibt es einen festen Link (Anmeldung bei claude.ai nötig, weil die S
 
 Die Seite wird aus `apps/testseite` gebaut und nach jeder Änderung an Prüfkern, Auslesen oder Testseite unter demselben Link neu veröffentlicht. Die Regeln dafür stehen in [CLAUDE.md](CLAUDE.md).
 
+Zusätzlich liegt die gebaute Seite auf dem Branch `biati-main-test` für GitHub Pages (wird bei jedem Push auf `main` automatisch erneuert). Dort funktioniert nur „Beispiel ansehen“; zum Auslesen eigener Abrechnungen braucht die Seite Claude.
+
 ```bash
 pnpm install
 pnpm testseite:bauen   # → apps/testseite/dist/biaticheck-test.html

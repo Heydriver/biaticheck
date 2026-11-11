@@ -39,6 +39,15 @@ Wenn die Veröffentlichung nicht klappt (kein Artifact-Werkzeug, keine Bearbeitu
 
 Änderungen nur an `apps/web`, `apps/video` oder `docs` brauchen keine neue Veröffentlichung.
 
+## Zweite Adresse: GitHub Pages
+
+Dieselbe Testseite liegt zusätzlich auf GitHub Pages. Sie ist **keine zweite Testseite**, sondern derselbe Bau aus `apps/testseite`.
+
+- Branch **`biati-main-test`**: enthält nur die gebaute Seite als `index.html`. Nichts von Hand dort ändern.
+- `.github/workflows/pages.yml` erzeugt den Branch bei jedem Push auf `main` neu, wenn sich Prüfkern, Auslesen oder Testseite geändert haben – nur bei bestandenen Tests.
+- Auf GitHub Pages funktioniert nur „Beispiel ansehen“. Eigene Abrechnungen auslesen geht nur über den Claude-Link oben, weil die Seite dafür Claude braucht.
+- Der Claude-Link bleibt die Seite, mit der das Team testet. Die Schritte oben gelten unverändert.
+
 ## Wie die Testseite aufgebaut ist
 
 - `apps/testseite/vorlage.html` – Oberfläche und Ablauf (Hochladen, Auslesen über Claude, Ergebnis).
