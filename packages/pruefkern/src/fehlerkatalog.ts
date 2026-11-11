@@ -52,7 +52,8 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("R-03.a", "Saldo falsch berechnet", "Betrag = ausgewiesener Saldo − (Summe − Vorauszahlungen), falls |Betrag| > 0,05 €", "abweichung", "exakt", "Summe, Vorauszahlungen, Saldo"),
   f("R-04.a", "Falscher Flächennenner bei Heizkosten", "Nenner ≠ Gesamtfläche und Abrechnung nennt dieselbe beheizte Gesamtfläche → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "abweichung", "exakt", "Gesamtfläche, beheizte Gesamtfläche, Position"),
   f("R-04.b", "Kleinerer Flächennenner ohne Begründung", "Nenner < Gesamtfläche, keine Begründung in der Abrechnung → möglicher Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "auffaelligkeit", "bis_zu", "Gesamtfläche, Position"),
-  f("R-04.c", "Unterschiedliche Wohnflächen für dieselbe Wohnung", "Anzahl verschiedener AnteilEinheit (Fläche) > 1", "auffaelligkeit", "keiner", "Positionen nach Fläche"),
+  f("R-04.c", "Position mit größerer Fläche als der Wohnfläche verteilt", "angesetzte Fläche > Wohnfläche, Grund nicht erkennbar → möglicher Betrag = Anteil × (1 − Wohnfläche / angesetzte Fläche)", "auffaelligkeit", "bis_zu", "Wohnfläche, Positionen nach Fläche"),
+  f("R-04.e", "Garten- oder Nebenfläche zur Wohnfläche addiert", "angesetzte Fläche > Wohnfläche und Abrechnung nennt Garten-, Hof- oder Kellerfläche als Grund → Betrag = Anteil × (1 − Wohnfläche / angesetzte Fläche)", "abweichung", "exakt", "Wohnfläche, Hinweis der Abrechnung"),
   f("R-04.d", "Leerstand aus dem Flächennenner herausgerechnet", "Nenner < Gesamtfläche und Abrechnung nennt Leerstand als Grund → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "abweichung", "exakt", "Gesamtfläche, Hinweis der Abrechnung"),
   f("R-05.a", "Vorauszahlungen zu niedrig angerechnet (belegt)", "Betrag = Σ Monatsbeträge laut Beleg − angerechnete Vorauszahlungen, falls > 1 €", "abweichung", "exakt", "Vorjahresabrechnung oder Kontoauszüge"),
   f("R-05.b", "Vorauszahlungen möglicherweise zu niedrig angerechnet", "möglicher Betrag = Monatsbetrag × Monate − angerechnete Vorauszahlungen, falls > 1 €", "pruefbedarf", "bis_zu", "Monatsbetrag laut Schreiben"),
@@ -100,6 +101,9 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("I-17.a", "Nicht umlagefähige Versicherung im Paket ausgewiesen", "Betrag = Anteil × ausgewiesener Betrag für Rechtsschutz/Mietausfall/Hausrat / Gesamtkosten (aus Aufschlüsselung oder Erläuterung mit Betrag)", "abweichung", "exakt", "Aufschlüsselung oder Erläuterung mit Betrag"),
   f("I-17.b", "Reine Rechtsschutz-, Mietausfall- oder Hausratversicherung umgelegt", "Bezeichnung nennt nur eine nicht umlagefähige Versicherung → Betrag = Anteil", "abweichung", "exakt", "Bezeichnung"),
   f("I-17.c", "Nicht umlagefähige Versicherung genannt, Betrag fehlt", "Text nennt Rechtsschutz/Mietausfall/Hausrat ohne Betrag", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
+
+  f("I-18.a", "Kosten einer fremden Privatfläche auf alle verteilt", "allgemein verteilte Position enthält ausgewiesene Kosten einer allein genutzten Fläche (nicht der eigenen) → Betrag = Anteil × Teilbetrag / Gesamtkosten", "abweichung", "exakt", "Aufschlüsselung oder Erläuterung mit Betrag"),
+  f("I-18.b", "Direkt berechnete Sonderleistung ohne Vertragsanlage", "Position direkt zugeordnet und Abrechnung verweist auf eine fehlende Anlage oder Vereinbarung → Prüfbedarf, Unterlage anfordern", "pruefbedarf", "keiner", "Vertragsanlage"),
 
   // ---------- KI-Kontrolle ----------
   f("K-01.a", "Unstimmigkeit, die nur die KI-Kontrolle im Dokument findet", "KI meldet eine Auffälligkeit mit wörtlicher Textstelle, die keine Formel erfasst → begründeter Prüfbedarf", "auffaelligkeit", "keiner", "KI-Kontrolle mit Textstelle"),

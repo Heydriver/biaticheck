@@ -31,7 +31,7 @@ export function einordnung(status: Exclude<Status, "ok">, bereich?: Regelbereich
 }
 
 /** Unterlagen, die das Tool für eine sichere Prüfung nachfordern kann. */
-export type Unterlage = "vorjahresabrechnung" | "kontoauszug" | "mietvertrag" | "heizkostenabrechnung" | "zaehlerstaende" | "rechnungen";
+export type Unterlage = "vorjahresabrechnung" | "kontoauszug" | "mietvertrag" | "vertragsanlage" | "heizkostenabrechnung" | "zaehlerstaende" | "rechnungen";
 
 export const UNTERLAGEN: Readonly<Record<Unterlage, string>> = {
   vorjahresabrechnung: "Abrechnung des Vorjahres",
@@ -39,6 +39,7 @@ export const UNTERLAGEN: Readonly<Record<Unterlage, string>> = {
   mietvertrag: "Mietvertrag",
   heizkostenabrechnung: "Heizkostenabrechnung des Messdienstes",
   zaehlerstaende: "Zählerstände",
+  vertragsanlage: "Vertragsanlage oder Zusatzvereinbarung zum Mietvertrag",
   rechnungen: "Rechnungen und Verträge (über die Belegeinsicht)",
 };
 

@@ -125,3 +125,9 @@ Jeder berechnete Wert ist anklickbar und zeigt eine kurze Erklärung mit den Zah
 ## KI-Funde bei den gefundenen Punkten (v0.12)
 
 Auffälligkeiten, die nur die KI-Kontrolle im Dokument findet, werden als Regel **K-01** in die Prüfung übernommen (`kontrollbefunde`). Sie erscheinen bei „Das haben wir gefunden“ als begründeter Prüfbedarf mit wörtlicher Textstelle und ohne Betrag, zählen zur Einstufung, aber nie als belegter Fehler. Ins Schreiben an die Hausverwaltung kommt nur das Zitat aus der Abrechnung mit der Bitte um Erläuterung, nicht die Deutung der KI. In der Web-App geht ein Fall mit KI-Fund weiterhin zuerst an den Fachprüfer.
+
+## Ergänzungen v0.13 (aus dem Test „Muster 14“)
+
+- **R-04 Fläche der Wohnung je Position:** Wird eine Position mit einer größeren Fläche als der Wohnfläche verteilt, ist der Mehrbetrag Anteil × (1 − Wohnfläche / angesetzte Fläche). Nennt die Abrechnung als Grund eine Garten-, Hof- oder Kellerfläche (keine Wohnfläche nach WoFlV), ist das ein belegter Fehler; ohne Grund Prüfbedarf „bis zu“. Terrassen und Balkone sind ausgenommen (anteilig Wohnfläche).
+- **I-18 Sondernutzung (neu):** Enthält eine allgemein verteilte Position ausgewiesene Kosten einer Fläche, die ein anderer allein nutzt (z. B. fremder Privatgarten), ist dieser Anteil ein belegter Fehler (BGH VIII ZR 135/03). Die Kosten der Gemeinschaftsfläche bleiben.
+- **I-18 Direkt berechnete Sonderleistung:** Wird eine Leistung der Wohnung direkt berechnet und verweist die Abrechnung auf eine Anlage oder Vereinbarung, die nicht vorliegt, entsteht Prüfbedarf ohne Betrag mit der Aufforderung, die Vertragsanlage anzufordern.

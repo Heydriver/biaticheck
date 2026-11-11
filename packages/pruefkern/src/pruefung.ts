@@ -14,7 +14,7 @@ import { K01_KiKontrolle } from "./regeln/kontrolle";
 import { RECHNERISCHE_REGELN } from "./regeln/rechnerisch";
 import { Abrechnung, type AbrechnungEingabe } from "./schema";
 
-export const REGELWERK_VERSION = "0.12.0";
+export const REGELWERK_VERSION = "0.13.0";
 
 export const ALLE_REGELN: readonly Regel[] = [
   ...FORMELLE_REGELN,

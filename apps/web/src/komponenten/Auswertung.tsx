@@ -259,7 +259,7 @@ function Pruefbedarf({
       {punkte.some((p) => p.rueckfrage) && (
         <Rueckfragen fragen={punkte.flatMap((p) => (p.rueckfrage ? [p.rueckfrage] : []))} beantworte={beantworte} ohneUeberschrift />
       )}
-      {unterlagen.length > 0 && <UnterlageHochladen hochladen={hochladen} />}
+      {unterlagen.some((u) => u.arten.includes("vorjahresabrechnung")) && <UnterlageHochladen hochladen={hochladen} />}
       {punkte.some((p) => p.titel.startsWith("Vorauszahlungen")) && <VerlaufFormular beantworte={beantworte} />}
     </section>
   );

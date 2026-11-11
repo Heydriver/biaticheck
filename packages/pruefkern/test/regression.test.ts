@@ -512,6 +512,71 @@ describe("Muster 11 – Fund der KI-Kontrolle steht bei „Das haben wir gefunde
   });
 });
 
+describe("Muster 14 – Gartenfläche als Wohnfläche, fremder Privatgarten, eigener Gartenservice ohne Vertragsanlage (72 von 600 m²)", () => {
+  const m14 = (): AbrechnungEingabe => {
+    const f = { typ: "wohnflaeche" as const, anteilEinheit: 72, anteilGesamt: 600 };
+    return {
+      meta: { abrechnungszeitraum: { von: "2024-01-01", bis: "2024-12-31" }, erstelltAm: "2025-06-16", zugangAm: "2025-06-20" },
+      flaechen: { wohnflaecheMieter: 72, gesamtflaeche: 600 },
+      ausstattung: { wasserzaehler: false, gewerbeImHaus: false },
+      erlaeuterungen: [{ text: "Bei der Grundsteuer wurden 25 % der offenen Gartenfläche (10 m²) zur Wohnfläche addiert.", seite: 2 }],
+      kostenpositionen: [
+        // 3.000 € × 82 / 600 = 410 € statt × 72 / 600 = 360 €
+        { id: "m1", bezeichnung: "Grundsteuer", kategorie: "grundsteuer", gesamtkosten: 3000, umlageschluessel: { typ: "wohnflaeche", anteilEinheit: 82, anteilGesamt: 600 }, anteilMieter: 410 },
+        { id: "m2", bezeichnung: "Müllabfuhr", kategorie: "strassenreinigung_muell", gesamtkosten: 2000, umlageschluessel: f, anteilMieter: 240 },
+        { id: "m3", bezeichnung: "Gebäudeversicherung", kategorie: "versicherung", gesamtkosten: 2500, umlageschluessel: f, anteilMieter: 300 },
+        // 3.000 € Gemeinschaftsgarten (360 €) + 600 € fremder Privatgarten (72 €)
+        { id: "m4", bezeichnung: "Gartenpflege", kategorie: "gartenpflege", gesamtkosten: 3600, umlageschluessel: f, anteilMieter: 432, bestandteile: [{ bezeichnung: "Pflege Gemeinschaftsgarten", betrag: 3000 }, { bezeichnung: "Pflege Privatgarten Wohnung EG links", betrag: 600 }] },
+        { id: "m5", bezeichnung: "Gartenservice eigener Privatgarten", kategorie: "gartenpflege", umlageschluessel: { typ: "direkt" }, anteilMieter: 180, hinweise: ["Abrechnung nach Anlage G zum Mietvertrag. Die Anlage G liegt nicht vor."] },
+      ],
+      vorauszahlungen: 1356,
+      ausgewiesen: { summeKostenMieter: 1562, saldo: 206 },
+    };
+  };
+  const { bericht, s1, s2 } = stufen(m14());
+  const fehler = bericht.ergebnisse.filter((e) => e.status === "abweichung");
+
+  it("Grundsteuer mit 82 statt 72 m²: 50,00 € Korrektur", () => {
+    const e = fehler.find((x) => x.regelId === "R-04")!;
+    expect(e).toMatchObject({ positionId: "m1", betragZugunstenMieter: 50, beleg: { flaecheAngesetzt: 82, wohnflaeche: 72, korrekt: 360 } });
+    expect(e.textstelle).toContain("Gartenfläche");
+  });
+
+  it("fremder Privatgarten in der Gartenpflege: 600 € × 12 % = 72,00 € – der Gemeinschaftsgarten (360 €) bleibt", () => {
+    const e = fehler.find((x) => x.regelId === "I-18")!;
+    expect(e).toMatchObject({ positionId: "m4", betragZugunstenMieter: 72 });
+    expect(e.textstelle).toBe("Pflege Privatgarten Wohnung EG links");
+  });
+
+  it("eigener Gartenservice 180 €: Vertragsanlage G anfordern, keine gesicherte Ersparnis", () => {
+    const e = bericht.ergebnisse.find((x) => x.regelId === "I-18" && x.positionId === "m5")!;
+    expect(e).toMatchObject({ status: "pruefbedarf", betroffen: 180, unterlagen: ["vertragsanlage"], beleg: { anlage: "Anlage G" } });
+    expect(e.betragZugunstenMieter).toBeUndefined();
+    expect(e.naechsterSchritt).toContain("Vertragsanlage G");
+    expect(s2.unterlagen).toEqual([expect.objectContaining({ arten: ["vertragsanlage"] })]);
+    expect(s2.auffaelligkeiten.find((p) => p.regelId === "I-18" && p.status === "pruefbedarf")!.kurz.satz).toBe("Bitte Vertragsanlage G anfordern. Noch keine gesicherte Ersparnis.");
+  });
+
+  it("Soll-Ergebnis: zwei bestätigte Fehler mit 122 €, Nachforderung sinkt von 206 € auf 84 €", () => {
+    expect(fehler.map((e) => e.regelId).sort()).toEqual(["I-18", "R-04"]);
+    expect(bericht.zusammenfassung.einsparpotenzial).toBe(122);
+    expect(bericht.zusammenfassung.klaerungspotenzial + bericht.zusammenfassung.pruefbedarfBetrag).toBe(0);
+    expect(s1.kosten.saldo).toBe(206);
+    expect(s1.kosten.korrigierterSaldo).toBe(84);
+    expect(s1.fehlerpotenzial.stufe).toBe("hoch");
+    expect(s1.fehlerpotenzial.pruefbedarf).toMatchObject({ anzahl: 1, betrag: 0, ohneBetrag: 1 });
+  });
+
+  it("Gegenproben: gleiche Fläche überall, nur Gemeinschaftsgarten, Vertragsanlage nicht als fehlend genannt → kein Befund", () => {
+    const a = m14();
+    a.erlaeuterungen = [];
+    a.kostenpositionen[0] = { ...a.kostenpositionen[0]!, umlageschluessel: { typ: "wohnflaeche", anteilEinheit: 72, anteilGesamt: 600 }, anteilMieter: 360 };
+    a.kostenpositionen[3]!.bestandteile = [{ bezeichnung: "Pflege Gemeinschaftsgarten", betrag: 3600 }];
+    a.kostenpositionen[4] = { ...a.kostenpositionen[4]!, bezeichnung: "Kabelanschluss Einzelvertrag", kategorie: "sonstige", hinweise: [] };
+    expect(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse.filter((e) => ["R-04", "I-18"].includes(e.regelId) && e.status !== "ok")).toEqual([]);
+  });
+});
+
 function wf() {
   return { typ: "wohnflaeche" as const, anteilEinheit: 75, anteilGesamt: 750 };
 }

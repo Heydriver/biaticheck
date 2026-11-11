@@ -174,6 +174,8 @@ export const R03_Saldo: Regel = {
   },
 };
 
+/** Flächen, die keine Wohnfläche sind (Terrassen und Balkone zählen nach § 4 WoFlV anteilig und sind hier nicht gemeint). */
+const KEINE_WOHNFLAECHE = /gartenfl[äa]che|gartenanteil|garten|freifl[äa]che|au[ßs]+enfl[äa]che|hoffl[äa]che|stellplatz|kellerfl[äa]che|kellerraum/i;
 const LEERSTAND = /leerstand|leerstehend|leer stehend|leersteht|leer steht|unvermietet|nicht vermietet/i;
 
 export const R04_Flaechen: Regel = {
@@ -234,7 +236,35 @@ export const R04_Flaechen: Regel = {
         });
       }
     }
-    if (wohnflaechen.size > 1) {
+    // Fläche der Wohnung je Position gegen die Wohnfläche laut Abrechnung
+    const einheiten = flaechenPositionen.map((p) => p.umlageschluessel?.anteilEinheit).filter((x): x is number => x !== undefined);
+    const ueblich = [...new Set(einheiten)].map((x) => [x, einheiten.filter((y) => y === x).length] as const).sort((x, y) => y[1] - x[1])[0];
+    const wohnung = a.flaechen.wohnflaecheMieter ?? (ueblich && ueblich[1] >= 3 && ueblich[1] > einheiten.length / 2 ? ueblich[0] : undefined);
+    let einzeln = false;
+    if (wohnung) {
+      for (const p of flaechenPositionen) {
+        const u = p.umlageschluessel!;
+        if (u.anteilEinheit === undefined || u.anteilEinheit <= wohnung) continue;
+        einzeln = true;
+        const zuViel = runde(p.anteilMieter * (1 - wohnung / u.anteilEinheit));
+        // Unzulässiger Grund: Garten-, Hof- oder Kellerflächen sind keine Wohnfläche (§ 2 WoFlV) – dann sicherer Fehler
+        const texte = texteZu(p, a);
+        const grund = findeAussagen([...texte.eigene, ...texte.erlaeuterungen, ...a.erlaeuterungen.map((e) => e.text)], KEINE_WOHNFLAECHE).find((x) => !x.verneint && /wohnfl|fläche|flaeche|addiert|hinzu|angerechnet|eingerechnet|zugeschlagen/i.test(x.text));
+        befunde.push({
+          status: grund && zuViel > 0 ? "abweichung" : "auffaelligkeit",
+          titel: grund ? `Zu große Fläche angesetzt: ${p.bezeichnung}` : `Abweichende Wohnfläche: ${p.bezeichnung}`,
+          erklaerung:
+            `„${p.bezeichnung}“ wird mit ${zahlDE(u.anteilEinheit)} m² für Ihre Wohnung verteilt, die Wohnfläche beträgt aber ${zahlDE(wohnung)} m². Mit ${zahlDE(wohnung)} m² ergibt sich Ihr Anteil zu ${euro(runde(p.anteilMieter - zuViel))} statt ${euro(p.anteilMieter)}.` +
+            (grund ? ` Als Grund nennt die Abrechnung: „${grund.text}“ Garten-, Hof- und Kellerflächen zählen nicht zur Wohnfläche.` : " Der Grund für die größere Fläche ist nicht erkennbar."),
+          naechsterSchritt: grund ? `Fordern Sie die Verteilung nach ${zahlDE(wohnung)} m² (${euro(zuViel)} weniger).` : "Bitten Sie um eine Erklärung, warum hier eine größere Fläche angesetzt wird.",
+          betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
+          positionId: p.id,
+          textstelle: grund?.text ?? `${p.bezeichnung}: ${zahlDE(u.anteilEinheit)} m² statt ${zahlDE(wohnung)} m²`,
+          beleg: { flaecheAngesetzt: u.anteilEinheit, wohnflaeche: wohnung, abgerechnet: p.anteilMieter, korrekt: runde(p.anteilMieter - zuViel), zuViel, grund: grund?.text },
+        });
+      }
+    }
+    if (wohnflaechen.size > 1 && !einzeln) {
       befunde.push({
         status: "auffaelligkeit",
         titel: "Unterschiedliche Wohnflächen verwendet",

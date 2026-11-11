@@ -184,7 +184,17 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
     const pos = p(a, "k06");
     pos.umlageschluessel!.anteilEinheit = w(a) + z.ganz(2, 9);
     pos.anteilMieter = runde((pos.gesamtkosten! * pos.umlageschluessel!.anteilEinheit!) / g(a));
-    return {};
+    return { betrag: runde(pos.anteilMieter * (1 - w(a) / pos.umlageschluessel!.anteilEinheit!)), positionId: pos.id };
+  },
+  "R-04.e": (a, z) => {
+    const pos = p(a, "k01");
+    const mehr = z.ganz(2, 15);
+    pos.umlageschluessel!.anteilEinheit = w(a) + mehr;
+    pos.anteilMieter = runde((pos.gesamtkosten! * (w(a) + mehr)) / g(a));
+    const text = `25 % der offenen Gartenfläche (${mehr} m²) wurden zur Wohnfläche addiert.`;
+    if (z.ganz(0, 1)) pos.hinweise = [text];
+    else a.erlaeuterungen = [{ text, seite: 2 }];
+    return { betrag: runde(pos.anteilMieter * (1 - w(a) / (w(a) + mehr))), positionId: pos.id };
   },
   "R-05.a": (a, z) => {
     const monat = z.ganz(80, 300);
@@ -313,6 +323,20 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
       { zuPosition: "heizkosten", bezeichnung: "Gutschrift Preiskorrektur", art: "gutschrift", betrag: gutschrift, seite: 7 },
     ];
     return { betrag: runde((h.anteilMieter * gutschrift) / h.gesamtkosten!) };
+  },
+  "I-18.a": (a, z) => {
+    const pos = p(a, "k07");
+    const fremd = z.ganz(50, Math.floor(pos.gesamtkosten! * 0.5));
+    if (z.ganz(0, 1)) pos.bestandteile = [{ bezeichnung: "Pflege Gemeinschaftsgarten", betrag: runde(pos.gesamtkosten! - fremd) }, { bezeichnung: "Pflege Privatgarten Wohnung EG rechts", betrag: fremd }];
+    else pos.hinweise = [`Enthalten sind ${fremd.toLocaleString("de-DE")} € für die Pflege des Privatgartens der Erdgeschosswohnung.`];
+    return { betrag: runde((pos.anteilMieter * fremd) / pos.gesamtkosten!), positionId: pos.id };
+  },
+  "I-18.b": (a, z) => {
+    const kosten = z.euro(50, 400);
+    a.kostenpositionen.push({ id: "x99", bezeichnung: "Gartenservice Privatgarten", kategorie: "gartenpflege", umlageschluessel: { typ: "direkt" }, anteilMieter: kosten, hinweise: ["Grundlage ist Anlage G zum Mietvertrag. Die Anlage G liegt nicht bei."] });
+    a.ausgewiesen!.summeKostenMieter = runde(a.ausgewiesen!.summeKostenMieter! + kosten);
+    a.ausgewiesen!.saldo = runde(a.ausgewiesen!.saldo! + kosten);
+    return { positionId: "x99" };
   },
   "K-01.a": (a, z) => {
     const mitPosition = z.ganz(0, 1) === 1;

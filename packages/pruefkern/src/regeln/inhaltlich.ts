@@ -895,6 +895,76 @@ export const I17_Versicherungen: Regel = {
   },
 };
 
+/**
+ * Sondernutzung: Kosten für Flächen, die ein einzelner Mieter (oder der Vermieter) allein nutzt – etwa ein
+ * Privatgarten –, dürfen nicht auf alle Mieter verteilt werden (BGH, Urt. v. 26.05.2004 – VIII ZR 135/03:
+ * Gartenpflege ist nur umlagefähig, wenn die Fläche nicht einzelnen zur alleinigen Nutzung überlassen ist).
+ * Eigene, direkt berechnete Sonderleistungen brauchen eine Vereinbarung; fehlt die Vertragsanlage: Prüfbedarf.
+ */
+const SONDERNUTZUNG = /privatgarten|privatgärten|privatgaerten|mietergarten|sondernutzung|alleinige[nr]? nutzung|zur alleinigen|ausschlie[ßs]+lich(en)? (ge)?nutz|privat(e[nr]?)? (garten|terrasse|stellplatz)|garten (der|von) wohnung/i;
+const EIGEN = /\b(ihr|ihre[nmrs]?|eigene[nmrs]?|des mieters|der mieterin)\b/i;
+const VEREINBARUNG_FEHLT = /(anlage|vereinbarung|zusatzvereinbarung|nachtrag|vertrag)[^.;]*(fehlt|liegt nicht (bei|vor)|nicht beigefügt|nicht vorgelegt|nicht vorhanden|steht aus)/i;
+
+export const I18_Sondernutzung: Regel = {
+  id: "I-18",
+  version: "1.0.0",
+  titel: "Kosten für allein genutzte Flächen und direkt berechnete Sonderleistungen",
+  bereich: "inhaltlich",
+  grundlage: "§ 556a Abs. 1 BGB; BGH VIII ZR 135/03; § 556 Abs. 1 BGB (Vereinbarung)",
+  stand: "entwurf",
+  pruefe(a) {
+    const befunde: Befund[] = [];
+    for (const p of a.kostenpositionen) {
+      const direkt = p.umlageschluessel?.typ === "direkt";
+      if (!direkt) {
+        // Allgemein verteilte Position enthält Kosten einer fremden, allein genutzten Fläche
+        const teile = ausgewieseneTeile(p, a, SONDERNUTZUNG).filter((t) => !EIGEN.test(t.bezeichnung));
+        if (teile.length === 0) continue;
+        const haus = runde(teile.reduce((x, t) => x + t.betrag, 0));
+        const anteil = anteilVon(p, haus);
+        const liste = teile.map((t) => (/\d/.test(t.bezeichnung) ? `„${t.bezeichnung}“` : `„${t.bezeichnung}“ ${euro(t.betrag)}`)).join(", ");
+        befunde.push({
+          status: anteil !== undefined ? "abweichung" : "auffaelligkeit",
+          titel: `Kosten einer fremden Privatfläche mitverteilt: ${p.bezeichnung}`,
+          erklaerung:
+            `In „${p.bezeichnung}“ sind Kosten für eine Fläche enthalten, die ein anderer allein nutzt: ${liste}.` +
+            (anteil !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(runde(anteil))}.` : "") +
+            " Solche Kosten dürfen nicht auf alle Mieter verteilt werden. Die Kosten der gemeinsam genutzten Fläche bleiben umlagefähig.",
+          naechsterSchritt: anteil !== undefined ? `Fordern Sie den Abzug dieses Anteils (${euro(runde(anteil))}).` : "Fordern Sie den Abzug dieses Anteils.",
+          betragZugunstenMieter: anteil !== undefined ? runde(anteil) : undefined,
+          positionId: p.id,
+          textstelle: teile.map((t) => t.bezeichnung).join("; "),
+          beleg: { gesamtkosten: p.gesamtkosten, nichtUmlagefaehigHaus: haus, anteilMieter: p.anteilMieter },
+        });
+        continue;
+      }
+      // Direkt berechnete Sonderleistung: braucht eine Vereinbarung. Fehlt die Vertragsanlage → Prüfbedarf.
+      if (["heizung", "warmwasser", "verbundene_anlagen", "wasser", "entwaesserung"].includes(p.kategorie)) continue;
+      const texte = texteZu(p, a);
+      const fehlt = findeAussagen([...texte.eigene, ...texte.erlaeuterungen], VEREINBARUNG_FEHLT).find((x) => !/\bkein|\bkeine/i.test(x.text.slice(0, x.text.search(VEREINBARUNG_FEHLT))));
+      const sonder = SONDERNUTZUNG.test(p.bezeichnung) || /sonderleistung|zusatzleistung|service/i.test(p.bezeichnung);
+      if (!fehlt && !sonder) continue;
+      if (!fehlt && a.mietvertrag?.vereinbarteSonstigeKosten?.some((v) => v.length > 0 && p.bezeichnung.toLowerCase().includes(v.toLowerCase()))) continue;
+      const anlage = fehlt?.text.match(/\b(Anlage|Nachtrag)\s+([A-Z0-9]{1,3})\b/)?.[0];
+      befunde.push({
+        status: "pruefbedarf",
+        titel: `Vereinbarung fehlt: ${p.bezeichnung}`,
+        erklaerung:
+          `„${p.bezeichnung}“ (${euro(p.anteilMieter)}) wird Ihnen direkt berechnet. Das ist nur zulässig, wenn es vereinbart ist.` +
+          (fehlt ? ` Die Abrechnung verweist auf eine Unterlage, die nicht vorliegt: „${fehlt.text}“` : " Eine Vereinbarung dazu liegt uns nicht vor.") +
+          " Ob der Betrag berechtigt ist, lässt sich erst mit dieser Vereinbarung prüfen.",
+        naechsterSchritt: `Fordern Sie ${anlage ? `die ${anlage.replace(/^Anlage/, "Vertragsanlage")}` : "die Vereinbarung zu dieser Leistung"} an oder laden Sie sie hoch.`,
+        positionId: p.id,
+        betroffen: p.anteilMieter,
+        textstelle: fehlt?.text,
+        unterlagen: ["vertragsanlage"],
+        beleg: { anlage, anteilMieter: p.anteilMieter },
+      });
+    }
+    return befunde;
+  },
+};
+
 export const INHALTLICHE_REGELN = [
   I01_NichtUmlagefaehig,
   I02_SonstigeKosten,
@@ -913,4 +983,5 @@ export const INHALTLICHE_REGELN = [
   I14_Grundsteuer2025,
   I16_Doppelberechnung,
   I17_Versicherungen,
+  I18_Sondernutzung,
 ];

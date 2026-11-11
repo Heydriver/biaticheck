@@ -511,6 +511,10 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "R-03":
       return s === "abweichung" ? k("Nachzahlung falsch berechnet", "Kosten minus Vorauszahlungen ergibt einen anderen Betrag.") : k("Vorauszahlungen fehlen", "Ohne sie lässt sich die Nachzahlung nicht prüfen.");
     case "R-04":
+      if (zahl(b.flaecheAngesetzt) !== undefined)
+        return s === "abweichung"
+          ? k(`Zu große Fläche: ${name}`, `Verteilt mit ${zahlDE(zahl(b.flaecheAngesetzt)!)} statt ${zahlDE(zahl(b.wohnflaeche)!)} m². Gartenflächen sind keine Wohnfläche.`)
+          : k(`Abweichende Wohnfläche: ${name}`, `Verteilt mit ${zahlDE(zahl(b.flaecheAngesetzt)!)} statt ${zahlDE(zahl(b.wohnflaeche)!)} m². Der Grund fehlt.`);
       if (typeof b.leerstand === "string" && zahl(b.nenner) !== undefined)
         return k(`Leerstand herausgerechnet: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Leerstand trägt der Vermieter.`);
       if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined)
@@ -546,6 +550,10 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
       return s === "abweichung" ? k(`Kabelfernsehen: ${name}`, "Seit Juli 2024 nicht mehr umlagefähig.") : k(`Kabelfernsehen: ${name}`, "Erlaubt sind nur Kosten bis Juni 2024.");
     case "I-06":
       return s === "abweichung" ? k("Aufzug trotz Erdgeschoss", "Ihr Mietvertrag nimmt Sie davon aus.") : k("Aufzug im Erdgeschoss", "Nur unzulässig, wenn Ihr Mietvertrag das so regelt.");
+    case "I-18":
+      return s === "pruefbedarf"
+        ? k(`Vereinbarung fehlt: ${name}`, typeof b.anlage === "string" ? `Bitte ${b.anlage.replace(/^Anlage/, "Vertragsanlage")} anfordern. Noch keine gesicherte Ersparnis.` : "Bitte die Vereinbarung anfordern. Noch keine gesicherte Ersparnis.")
+        : k(`Fremde Privatfläche in „${name}“`, "Kosten einer allein genutzten Fläche dürfen nicht auf alle verteilt werden.");
     case "K-01": {
       const satz = e.erklaerung.split(/(?<=[.!?])\s/)[0]!;
       return k(e.positionId ? `Von der KI-Kontrolle gefunden: ${name}` : "Von der KI-Kontrolle gefunden", satz.length > 150 ? `${satz.slice(0, 147)}…` : satz);
@@ -636,6 +644,10 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
     case "R-03":
       return `Das ausgewiesene Abrechnungsergebnis stimmt nicht mit Kosten abzüglich Vorauszahlungen überein${betrag}.`;
     case "R-04":
+      if (zahl(b.flaecheAngesetzt) !== undefined && name)
+        return e.status === "abweichung"
+          ? `${name}: Die Kosten werden mit ${zahlDE(zahl(b.flaecheAngesetzt)!)} m² für meine Wohnung verteilt. Die Wohnfläche beträgt ${zahlDE(zahl(b.wohnflaeche)!)} m²; Garten- und Nebenflächen zählen nicht dazu. Mein Anteil beträgt danach ${euro(zahl(b.korrekt)!)} statt ${euro(zahl(b.abgerechnet)!)}${betrag}.`
+          : `${name}: Die Kosten werden mit ${zahlDE(zahl(b.flaecheAngesetzt)!)} m² statt ${zahlDE(zahl(b.wohnflaeche)!)} m² für meine Wohnung verteilt. Bitte erläutern Sie die abweichende Fläche.`;
       if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined && name)
         return e.status === "abweichung"
           ? `${name}: Die Kosten werden auf ${zahlDE(zahl(b.nenner)!)} m² verteilt, die Abrechnung nennt als Gesamtfläche jedoch ${zahlDE(zahl(b.hausflaeche)!)} m². Mein Anteil beträgt danach ${euro(zahl(b.korrekt)!)} statt ${euro(zahl(b.abgerechnet)!)}${betrag}.`
@@ -663,6 +675,10 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
       break;
     case "I-06":
       if (e.status === "abweichung") return `Aufzugskosten${betrag}: Nach meinem Mietvertrag sind Erdgeschosswohnungen davon ausgenommen.`;
+      break;
+    case "I-18":
+      if (e.status === "pruefbedarf") return `${name ?? e.titel}: Diese Leistung wird mir direkt berechnet. Bitte legen Sie ${typeof b.anlage === "string" ? `die ${b.anlage.replace(/^Anlage/, "Vertragsanlage")}` : "die zugrunde liegende Vereinbarung"} vor.`;
+      if (name) return `${name}${betrag}: Darin sind Kosten für eine Fläche enthalten, die ein anderer allein nutzt (${e.textstelle ?? ""}). Bitte ziehen Sie diese Kosten ab.`;
       break;
     case "K-01":
       // Ins Schreiben kommt nur das Zitat aus der Abrechnung, nicht die Deutung der KI
@@ -914,6 +930,7 @@ export function erstelleFahrplan(s1: Stufe1, punkte: Auffaelligkeit[], bericht: 
 
 const GRUND: Partial<Record<string, string>> = {
   "F-02": "Damit bestätigen wir den Abrechnungszeitraum. Davon hängt ab, ob die Frist wirklich versäumt ist und Sie die Nachzahlung nicht zahlen müssen.",
+  "I-18": "Darin muss stehen, dass Sie diese Leistung zusätzlich bezahlen. Ohne diese Unterlage ist der Betrag weder bestätigt noch widerlegt.",
   "R-05": "Damit prüfen wir, ob bei Ihren Vorauszahlungen wirklich Geld fehlt. Ohne diese Unterlage zählen wir den Betrag nicht als Ersparnis.",
 };
 
@@ -1029,7 +1046,13 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       break;
     case "R-04": {
       const h = zahl(b.heizflaeche), w = zahl(b.wohnflaeche);
-      if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined) {
+      if (zahl(b.flaecheAngesetzt) !== undefined) {
+        position();
+        add("Wohnfläche", `${zahlDE(w!)} m²`);
+        add("Hier angesetzte Fläche", `${zahlDE(zahl(b.flaecheAngesetzt)!)} m²`, true);
+        add("Richtig berechnet", `${eur(b.abgerechnet)} × ${zahlDE(w!)} / ${zahlDE(zahl(b.flaecheAngesetzt)!)} m² = ${eur(b.korrekt)}`);
+        if (e.betragZugunstenMieter) add(e.status === "abweichung" ? "Zu viel berechnet" : "Möglicherweise zu viel", e.status === "abweichung" ? euro(e.betragZugunstenMieter) : `bis zu ${euro(e.betragZugunstenMieter)}`, true);
+      } else if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined) {
         position();
         add("Gesamtfläche laut Abrechnung", `${zahlDE(zahl(b.hausflaeche)!)} m²`);
         add("Verwendeter Flächennenner", `${zahlDE(zahl(b.nenner)!)} m²`, true);
@@ -1138,6 +1161,7 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       add("Miete laut Aufstellung (Haus)", eur(b.mieteHaus));
       if (e.betragZugunstenMieter) add("Davon Ihr Anteil, nicht umlagefähig", euro(e.betragZugunstenMieter), true);
       break;
+    case "I-18":
     case "I-17":
     case "I-11":
       position();
