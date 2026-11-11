@@ -14,6 +14,20 @@ Automatisierte Prüfung von Nebenkostenabrechnungen auf Basis von Expertenwissen
 | `packages/pruefkern` | Datenschema, Prüfregeln, Rückfragen, kostenlose Erstauswertung – ohne Abhängigkeit zu Web oder Datenbank |
 | `packages/auslesen` | PDF/Foto → Datenschema über die Claude API, mit Selbstkontrolle der ausgelesenen Zahlen |
 | `apps/web` | Next.js-App: Upload, Fallseite, Rückfragen, API, Datenbank (PostgreSQL/Drizzle), verschlüsselte Dateiablage |
+| `apps/testseite` | Testseite für das Team: eine einzelne HTML-Seite mit dem echten Prüfkern, ohne Server |
+
+## Testseite für das Team
+
+Zum Testen gibt es einen festen Link (Anmeldung bei claude.ai nötig, weil die Seite Claude zum Auslesen der Abrechnung benutzt):
+
+**https://claude.ai/artifact/SnRtBSPhZU3ngqTaeKFYU6**
+
+Die Seite wird aus `apps/testseite` gebaut und nach jeder Änderung an Prüfkern, Auslesen oder Testseite unter demselben Link neu veröffentlicht. Die Regeln dafür stehen in [CLAUDE.md](CLAUDE.md).
+
+```bash
+pnpm install
+pnpm testseite:bauen   # → apps/testseite/dist/biaticheck-test.html
+```
 
 ## Entwicklung
 

@@ -8,6 +8,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @biaticheck/web test:e2e",
     "typecheck": "pnpm -r typecheck",
-    "auslesen": "pnpm --filter @biaticheck/auslesen auslesen"
+    "auslesen": "pnpm --filter @biaticheck/auslesen auslesen",
+    "testseite:bauen": "NODE_PATH=packages/auslesen/node_modules npx -y esbuild@0.25.10 apps/testseite/eintrag.ts --bundle --format=iife --global-name=Pruefkern --minify --target=es2020 --outfile=apps/testseite/dist/pruefkern.js && python3 apps/testseite/bauen.py apps/testseite/dist/biaticheck-test.html"
   }
 }
