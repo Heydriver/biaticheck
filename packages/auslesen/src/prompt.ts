@@ -18,6 +18,9 @@ Grundsätze:
 - Monatliche Vorauszahlungen: Nimm die bisherigen Beträge (vor einer eventuellen Anpassung), wie sie im Schreiben genannt sind.
 - Kennzeichnungen nach § 35a EStG (oft * für haushaltsnahe Dienstleistungen und ** für Handwerkerleistungen) in steuerlich35a übernehmen.
 - seite bezieht sich auf die Seitenzahl im hochgeladenen Dokument (erste Seite = 1), nicht auf aufgedruckte Seitenzahlen.
+- Enthält das Dokument eine Buchungsübersicht, Zahlungsaufstellung oder ein Mietkonto mit den tatsächlich gezahlten Vorauszahlungen, deren Summen in gezahlteVorauszahlungen… übernehmen – auch wenn sie von den in der Abrechnung angerechneten Vorauszahlungen abweichen. Die angerechneten Beträge bleiben unverändert in vorauszahlungen….
+- Nennt ein Text einen Teilbetrag einer Position (z. B. „Das Jahresentgelt enthält 480 € für Mietkonten und Mieterkorrespondenz“), den Satz wörtlich in die hinweise dieser Position übernehmen und den Betrag zusätzlich in bestandteile.
+- Nennt die Abrechnung einen Grund für einen abweichenden Verteilerschlüssel (z. B. Leerstand, Gewerbe, nicht beheizte Flächen), den Satz wörtlich in die hinweise der betroffenen Position übernehmen.
 - Erläuterungen, Fußnoten und Anmerkungen (auch aus Anlagen) wörtlich übernehmen: Bezieht sich der Text nur auf eine Position, in deren hinweise, sonst in erlaeuterungen. Verneinungen genau so übernehmen, wie sie dastehen („keine Reparaturkosten enthalten“). Nicht zusammenfassen, nicht bewerten.
 - Weist die Abrechnung oder eine Anlage eine Position aufgeschlüsselt aus (z. B. Wartung und Reparatur, Gerätemiete und Wartung), die Teilbeträge in bestandteile übernehmen. Keine Teilbeträge erfinden.
 - Bei Wasser und Entwässerung unterart setzen: Niederschlagswasser (auch Regenwasser, Oberflächenwasser, Niederschlagswasserentsorgung) ist eine eigene Unterart und kein Frisch- oder Schmutzwasser.

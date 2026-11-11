@@ -81,6 +81,7 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
     betriebskosten: wert(roh.monatlicheVorauszahlungBetriebskosten),
     heizkosten: wert(roh.monatlicheVorauszahlungHeizkosten),
   };
+  const hatGezahlt = roh.gezahlteVorauszahlungenBetriebskosten !== null || roh.gezahlteVorauszahlungenHeizkosten !== null || roh.gezahlteVorauszahlungenGesamt !== null;
   const hatMonatlich = monatlich.betriebskosten !== undefined || monatlich.heizkosten !== undefined;
 
   const abrechnung: AbrechnungEingabe = {
@@ -124,8 +125,16 @@ export function wandleUm(roh: Rohdaten): Umwandlung {
       : undefined,
     vorauszahlungen: wert(roh.vorauszahlungenGesamt),
     vorauszahlungenDetail:
-      roh.vorauszahlungenBetriebskosten !== null || roh.vorauszahlungenHeizkosten !== null || hatMonatlich
+      roh.vorauszahlungenBetriebskosten !== null || roh.vorauszahlungenHeizkosten !== null || hatMonatlich || hatGezahlt
         ? {
+            gezahlt: hatGezahlt
+              ? {
+                  betriebskosten: wert(roh.gezahlteVorauszahlungenBetriebskosten),
+                  heizkosten: wert(roh.gezahlteVorauszahlungenHeizkosten),
+                  gesamt: wert(roh.gezahlteVorauszahlungenGesamt),
+                  seite: roh.gezahlteVorauszahlungenSeite !== null && roh.gezahlteVorauszahlungenSeite > 0 ? roh.gezahlteVorauszahlungenSeite : undefined,
+                }
+              : undefined,
             betriebskosten: wert(roh.vorauszahlungenBetriebskosten),
             heizkosten: wert(roh.vorauszahlungenHeizkosten),
             monatlich: hatMonatlich ? monatlich : undefined,

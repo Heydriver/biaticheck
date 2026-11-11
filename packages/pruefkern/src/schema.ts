@@ -187,6 +187,11 @@ export const Abrechnung = z.object({
        */
       verlauf: z.array(z.object({ ab: datum, betriebskosten: betrag.optional(), heizkosten: betrag.optional() })).optional(),
       verlaufQuelle: z.enum(["vorjahresabrechnung", "kontoauszug", "kunde"]).optional(),
+      /**
+       * Tatsächlich gezahlte Vorauszahlungen, wie sie die Abrechnung selbst belegt (Buchungsübersicht,
+       * Zahlungsaufstellung oder Mietkonto in einer Anlage). Weicht vom angerechneten Betrag ab → Fehler.
+       */
+      gezahlt: z.object({ betriebskosten: betrag.optional(), heizkosten: betrag.optional(), gesamt: betrag.optional(), seite: z.number().int().positive().optional() }).optional(),
     })
     .optional(),
   /**

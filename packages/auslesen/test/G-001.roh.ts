@@ -83,5 +83,9 @@ export const G001_ROH: Rohdaten = {
   summeKostenMieter: 3917.21,
   saldo: 1214.88,
   erlaeuterungen: [],
+  gezahlteVorauszahlungenBetriebskosten: null,
+  gezahlteVorauszahlungenHeizkosten: null,
+  gezahlteVorauszahlungenGesamt: null,
+  gezahlteVorauszahlungenSeite: null,
   unsicherheiten: ["Gesamteinheiten Satellitenanlage: 20,89 ST passt nicht zum Betrag"],
 };

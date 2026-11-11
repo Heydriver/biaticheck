@@ -1,5 +1,5 @@
 import { euro, monateZwischen, runde, tageInklusive, vergleiche, zahlDE } from "../hilfen";
-import { anteilVon, bewerteReparatur, findeAussagen, texteZu, wasserart } from "../textanalyse";
+import { anteilVon, ausgewieseneTeile, bewerteReparatur, findeAussagen, texteZu, wasserart } from "../textanalyse";
 import type { Befund, Regel } from "../regel";
 import { KOSTENKATEGORIEN, NICHT_UMLAGEFAEHIG } from "../schema";
 
@@ -591,7 +591,7 @@ export const I11_Hauswart: Regel = {
   pruefe(a) {
     const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
     const flaeche = a.flaechen?.wohnflaecheMieter;
-    const NICHT_UMLAGEFAEHIG = /reparatur|instand|verwalt|notdienst|bereitschaft|schönheitsrep/i;
+    const NICHT_UMLAGEFAEHIG = /reparatur|instand|verwalt|mietkont|korrespondenz|abrechnungsvorbereitung|abrechnungserstellung|wohnungsabnahme|wohnungsübergabe|vermietung|notdienst|bereitschaft|schönheitsrep/i;
     return a.kostenpositionen
       .filter((p) => p.kategorie === "hauswart")
       .map((p): Befund => {
@@ -600,6 +600,26 @@ export const I11_Hauswart: Regel = {
         const ausschluss = findeAussagen([...eigene, ...erlaeuterungen], NICHT_UMLAGEFAEHIG).find((x) => x.verneint);
         const jeQm = flaeche && zeitraum ? p.anteilMieter / flaeche / monateIm(zeitraum.von, zeitraum.bis) : undefined;
         const teuer = jeQm !== undefined && jeQm > HAUSWART_DURCHSCHNITT * 1.3;
+        // Ausdrücklich ausgewiesener Betrag (Aufschlüsselung oder Text wie „enthält 480 € für Mietkonten“): nur dieser Anteil
+        const teile = ausgewieseneTeile(p, a, NICHT_UMLAGEFAEHIG);
+        if (teile.length > 0) {
+          const haus = runde(teile.reduce((x, t) => x + t.betrag, 0));
+          const anteil = anteilVon(p, haus);
+          const liste = teile.map((t) => (t.bezeichnung.includes("€") || /\d/.test(t.bezeichnung) ? `„${t.bezeichnung}“` : `„${t.bezeichnung}“ ${euro(t.betrag)}`)).join(", ");
+          return {
+            status: anteil !== undefined ? "abweichung" : "auffaelligkeit",
+            titel: `Verwaltung oder Reparaturen im Hauswart: ${p.bezeichnung}`,
+            erklaerung:
+              `Die Abrechnung weist in „${p.bezeichnung}“ einen Anteil für nicht umlagefähige Arbeiten aus: ${liste}.` +
+              (anteil !== undefined ? ` Auf Ihre Wohnung entfallen davon ${euro(runde(anteil))}.` : "") +
+              " Verwaltung, Reparaturen und Bereitschaft trägt der Vermieter.",
+            naechsterSchritt: anteil !== undefined ? `Fordern Sie den Abzug dieses Anteils (${euro(runde(anteil))}).` : "Fordern Sie den Abzug dieses Anteils.",
+            betragZugunstenMieter: anteil !== undefined ? runde(anteil) : undefined,
+            positionId: p.id,
+            textstelle: teile.map((t) => t.bezeichnung).join("; "),
+            beleg: { gesamtkosten: p.gesamtkosten, nichtUmlagefaehigHaus: haus, anteilMieter: p.anteilMieter },
+          };
+        }
         if (genannt)
           return {
             status: "pruefbedarf",

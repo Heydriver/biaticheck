@@ -238,6 +238,73 @@ describe("Abrechnung 03 – falscher Flächennenner bei den Heizungsgrundkosten"
   });
 });
 
+describe("Abrechnung 04 – drei zuvor nicht erkannte Fehler (68 von 680 m²)", () => {
+  const a04 = (): AbrechnungEingabe => {
+    const f = { typ: "wohnflaeche" as const, anteilEinheit: 68, anteilGesamt: 680 };
+    return {
+      meta: { abrechnungszeitraum: { von: "2024-01-01", bis: "2024-12-31" }, erstelltAm: "2025-06-16", zugangAm: "2025-06-20" },
+      flaechen: { wohnflaecheMieter: 68, gesamtflaeche: 680 },
+      ausstattung: { wasserzaehler: false, gewerbeImHaus: false },
+      kostenpositionen: [
+        // Leerstand herausgerechnet: 3.000 € × 68 / 600 = 340 € statt × 68 / 680 = 300 €
+        { id: "g1", bezeichnung: "Grundsteuer", kategorie: "grundsteuer", gesamtkosten: 3000, umlageschluessel: { typ: "wohnflaeche", anteilEinheit: 68, anteilGesamt: 600 }, anteilMieter: 340, hinweise: ["Die leerstehende Wohnung im Dachgeschoss (80 m²) wurde nicht berücksichtigt."] },
+        { id: "g2", bezeichnung: "Müllabfuhr", kategorie: "strassenreinigung_muell", gesamtkosten: 1500, umlageschluessel: f, anteilMieter: 150 },
+        { id: "g3", bezeichnung: "Gebäudeversicherung", kategorie: "versicherung", gesamtkosten: 2200, umlageschluessel: f, anteilMieter: 220 },
+        // 480 € Verwaltung im Jahresentgelt: 480 € × 68 / 680 = 48 €
+        { id: "g4", bezeichnung: "Hauswart", kategorie: "hauswart", gesamtkosten: 2400, umlageschluessel: f, anteilMieter: 240, hinweise: ["Das Jahresentgelt enthält 480 € für Mietkonten, Mieterkorrespondenz und Abrechnungsvorbereitung."] },
+      ],
+      heizkosten: { gesamtkosten: 12000, verbrauchsanteilProzent: 70, verbrauchErfasst: true, anteilMieter: 1200, flaecheMieter: 68, gesamtflaeche: 680 },
+      vorauszahlungen: 2100,
+      // Seite 1 rechnet 1.100 € an, die Buchungsübersicht auf Seite 4 belegt 1.200 €
+      vorauszahlungenDetail: { betriebskosten: 1000, heizkosten: 1100, gezahlt: { heizkosten: 1200, seite: 4 } },
+      ausgewiesen: { summeKostenMieter: 2150, saldo: 50 },
+    };
+  };
+  const { bericht, s1, s2 } = stufen(a04());
+  const fehler = bericht.ergebnisse.filter((e) => e.status === "abweichung");
+
+  it("Verwaltung im Hauswart: 480 € × 68/680 = 48,00 €", () => {
+    const e = fehler.find((x) => x.regelId === "I-11")!;
+    expect(e).toMatchObject({ positionId: "g4", betragZugunstenMieter: 48 });
+    expect(e.textstelle).toContain("480 € für Mietkonten");
+  });
+
+  it("Leerstand bei der Grundsteuer: 300 € statt 340 € = 40,00 €", () => {
+    const e = fehler.find((x) => x.regelId === "R-04")!;
+    expect(e).toMatchObject({ positionId: "g1", betragZugunstenMieter: 40, beleg: { nenner: 600, hausflaeche: 680, korrekt: 300 } });
+    expect(e.titel).toBe("Leerstand herausgerechnet: Grundsteuer");
+  });
+
+  it("Vorauszahlungen: 1.200 € belegt, 1.100 € angerechnet = 100,00 €", () => {
+    const e = fehler.find((x) => x.regelId === "R-05")!;
+    expect(e).toMatchObject({ betragZugunstenMieter: 100, beleg: { art: "heizkosten", jahr: 1100, summe: 1200, seite: 4 } });
+  });
+
+  it("zusammen 188,00 € belegte Überbelastung, Einstufung hoch, aus 50 € Nachzahlung werden 138 € Guthaben", () => {
+    expect(fehler.map((e) => e.regelId).sort()).toEqual(["I-11", "R-04", "R-05"]);
+    expect(bericht.zusammenfassung.einsparpotenzial).toBe(188);
+    expect(s1.fehlerpotenzial.stufe).toBe("hoch");
+    expect(s1.kosten.korrigierterSaldo).toBe(-138);
+    expect(s2.auffaelligkeiten.filter((p) => p.einordnung === "fehler").map((p) => p.betrag)).toEqual([100, 48, 40]);
+    expect(s2.anschreiben.text).toContain("Hauswart");
+    expect(s2.anschreiben.text).toContain("Grundsteuer");
+    expect(s2.anschreiben.text).toContain("Vorauszahlungen");
+  });
+
+  it("ohne genannten Leerstand bleibt der kleinere Nenner Prüfbedarf (kein vorschneller Fehler)", () => {
+    const a = a04();
+    delete a.kostenpositionen[0]!.hinweise;
+    const e = pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse.find((x) => x.regelId === "R-04" && x.positionId === "g1")!;
+    expect(e).toMatchObject({ status: "auffaelligkeit", betragZugunstenMieter: 40 });
+  });
+
+  it("verneinte Aussage („enthält keine Verwaltungskosten“) ist kein Fehler", () => {
+    const a = a04();
+    a.kostenpositionen[3]!.hinweise = ["Das Jahresentgelt von 2.400 € enthält keine Verwaltungskosten."];
+    expect(pruefeAbrechnung(a, { heute: HEUTE }).ergebnisse.filter((x) => x.regelId === "I-11" && x.status !== "ok")).toEqual([]);
+  });
+});
+
 function wf() {
   return { typ: "wohnflaeche" as const, anteilEinheit: 75, anteilGesamt: 750 };
 }

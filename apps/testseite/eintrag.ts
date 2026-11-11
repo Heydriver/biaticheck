@@ -38,7 +38,7 @@ export function werteKontrolle(antwort: unknown, rohJson: unknown, heute: string
 /** Ältere Antworten (und das Beispiel) kennen die neuen Felder noch nicht – mit leeren Werten ergänzen. */
 function ergaenze(roh: unknown): unknown {
   if (!roh || typeof roh !== "object") return roh;
-  const r = { erlaeuterungen: [], ...(roh as Record<string, unknown>) };
+  const r = { erlaeuterungen: [], gezahlteVorauszahlungenBetriebskosten: null, gezahlteVorauszahlungenHeizkosten: null, gezahlteVorauszahlungenGesamt: null, gezahlteVorauszahlungenSeite: null, ...(roh as Record<string, unknown>) };
   if (Array.isArray(r.kostenpositionen))
     r.kostenpositionen = r.kostenpositionen.map((p: unknown) => (p && typeof p === "object" ? { unterart: null, bestandteile: [], hinweise: [], ...(p as object) } : p));
   return r;

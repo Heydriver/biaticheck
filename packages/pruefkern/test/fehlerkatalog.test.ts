@@ -170,6 +170,14 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
     pos.anteilMieter = runde((pos.gesamtkosten! * w(a)) / nenner);
     return { betrag: runde(pos.anteilMieter - (pos.gesamtkosten! * w(a)) / g(a)), positionId: pos.id };
   },
+  "R-04.d": (a, z) => {
+    const pos = p(a, "k01");
+    const leer = z.ganz(20, Math.floor(g(a) / 5));
+    pos.umlageschluessel!.anteilGesamt = g(a) - leer;
+    pos.anteilMieter = runde((pos.gesamtkosten! * w(a)) / (g(a) - leer));
+    pos.hinweise = [z.ganz(0, 1) ? `Die leerstehende Wohnung (${leer} m²) wurde bei der Grundsteuer nicht berücksichtigt.` : `Wegen Leerstand nur ${g(a) - leer} m² angesetzt.`];
+    return { betrag: runde(pos.anteilMieter - (pos.gesamtkosten! * w(a)) / g(a)), positionId: pos.id };
+  },
   "R-04.c": (a, z) => {
     const pos = p(a, "k06");
     pos.umlageschluessel!.anteilEinheit = w(a) + z.ganz(2, 9);
@@ -186,6 +194,12 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
     const monat = z.ganz(80, 300);
     const x = z.euro(1.5, 400);
     a.vorauszahlungenDetail = { heizkosten: runde(12 * monat - x), monatlich: { heizkosten: monat } };
+    return { betrag: x };
+  },
+  "R-05.c": (a, z) => {
+    const angerechnet = z.euro(600, 2400);
+    const x = z.euro(1.5, 400);
+    a.vorauszahlungenDetail = { heizkosten: angerechnet, gezahlt: { heizkosten: runde(angerechnet + x), seite: 4 } };
     return { betrag: x };
   },
   "R-06.a": (a, z) => {
@@ -251,6 +265,20 @@ const EINBAUEN: Record<string, (a: AbrechnungEingabe, z: Zufall) => Erwartung> =
   "I-10.b": (a, z) => ((x) => ({ betrag: x.anteilMieter, positionId: x.id }))(neu(a, z, "Miete Rauchwarnmelder", "sonstige")),
   "I-10.c": (a, z) => ({ positionId: neu(a, z, "Rauchwarnmelder Miete und Wartung", "sonstige").id }),
   "I-11.a": (a) => ((p(a, "k10").bezeichnung = "Hausmeister inkl. Kleinreparaturen"), { positionId: "k10" }),
+  "I-11.b": (a, z) => {
+    const pos = p(a, "k10");
+    const verwaltung = z.ganz(20, Math.floor(pos.gesamtkosten! * 0.5));
+    if (z.ganz(0, 1)) {
+      // als Satz in einer Erläuterung, Betrag in deutscher Schreibweise
+      pos.hinweise = [`Das Jahresentgelt enthält ${verwaltung.toLocaleString("de-DE")} € für Mietkonten, Mieterkorrespondenz und Abrechnungsvorbereitung.`];
+    } else {
+      pos.bestandteile = [
+        { bezeichnung: "Hauswarttätigkeiten", betrag: runde(pos.gesamtkosten! - verwaltung) },
+        { bezeichnung: "Verwaltung: Mietkonten und Korrespondenz", betrag: verwaltung },
+      ];
+    }
+    return { betrag: runde((pos.anteilMieter * verwaltung) / pos.gesamtkosten!), positionId: pos.id };
+  },
   "I-12.a": (a) => ((a.ausstattung!.gewerbeImHaus = true), {}),
   "I-13.a": (a, z) => {
     const alle = z.ganz(8, 40);

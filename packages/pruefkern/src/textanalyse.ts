@@ -43,8 +43,37 @@ export function findeAussagen(texte: readonly string[], begriff: RegExp): Aussag
   return treffer;
 }
 
+const BETRAG = /(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:,\d{1,2})?)\s*(?:€|EUR\b|Euro\b)/g;
+
+/**
+ * Beträge, die ein Text ausdrücklich einem Begriff zuordnet, z. B. „Das Jahresentgelt enthält 480 € für
+ * Mietkonten und Mieterkorrespondenz.“ → 480. Verneinte Aussagen zählen nicht. Stehen mehrere Beträge im
+ * Satz, gilt der Betrag, der dem Begriff am nächsten steht.
+ */
+export function betraegeZu(texte: readonly string[], begriff: RegExp): { betrag: number; text: string }[] {
+  const treffer: { betrag: number; text: string }[] = [];
+  for (const a of findeAussagen(texte, begriff)) {
+    if (a.verneint) continue;
+    const stelle = a.text.search(begriff);
+    let bester: { betrag: number; abstand: number } | undefined;
+    for (const m of a.text.matchAll(BETRAG)) {
+      const betrag = Number(m[1]!.replace(/\./g, "").replace(",", "."));
+      const abstand = Math.abs(m.index! - stelle);
+      if (Number.isFinite(betrag) && betrag > 0 && (!bester || abstand < bester.abstand)) bester = { betrag, abstand };
+    }
+    if (bester && !treffer.some((t) => t.text === a.text)) treffer.push({ betrag: bester.betrag, text: a.text });
+  }
+  return treffer;
+}
+
 /** Suchbegriffe, mit denen eine allgemeine Erläuterung einer Kostenart zugeordnet wird. */
 const BEZUG: Partial<Record<Kostenposition["kategorie"], RegExp>> = {
+  grundsteuer: /grundsteuer/i,
+  versicherung: /versicherung/i,
+  strassenreinigung_muell: /müll|abfall|straßenreinigung|winterdienst/i,
+  beleuchtung: /strom|beleuchtung/i,
+  schornsteinreinigung: /schornstein/i,
+  antenne_kabel: /kabel|antenne/i,
   aufzug: /aufzug|fahrstuhl|lift/i,
   hauswart: /hauswart|hausmeister/i,
   wasser: /wasser/i,
@@ -68,6 +97,19 @@ export function texteZu(p: Kostenposition, a: Abrechnung): { eigene: string[]; e
   return { eigene: [p.bezeichnung, ...(p.hinweise ?? [])], erlaeuterungen };
 }
 
+/**
+ * Ausdrücklich ausgewiesene Teilbeträge einer Position, die zu einem Begriff gehören (Hausbeträge):
+ * zuerst aus der Aufschlüsselung, sonst aus Hinweisen und Erläuterungen mit Betrag.
+ */
+export function ausgewieseneTeile(p: Kostenposition, a: Abrechnung, begriff: RegExp): { bezeichnung: string; betrag: number }[] {
+  const ausListe = (p.bestandteile ?? []).filter((b) => begriff.test(b.bezeichnung) && !findeAussagen([b.bezeichnung], begriff)[0]?.verneint);
+  if (ausListe.length > 0) return ausListe.map((b) => ({ bezeichnung: b.bezeichnung, betrag: b.betrag }));
+  const { eigene, erlaeuterungen } = texteZu(p, a);
+  return betraegeZu([...eigene, ...erlaeuterungen], begriff)
+    .filter((t) => p.gesamtkosten === undefined || t.betrag < p.gesamtkosten)
+    .map((t) => ({ bezeichnung: t.text, betrag: t.betrag }));
+}
+
 export interface Reparaturbewertung {
   /** Ausdrücklich ausgewiesene Reparaturbestandteile (Hausbeträge). */
   bestandteile: { bezeichnung: string; betrag: number }[];
@@ -82,7 +124,7 @@ export interface Reparaturbewertung {
 /** Bewertet, ob eine Position Reparatur- oder Instandsetzungskosten enthält. */
 export function bewerteReparatur(p: Kostenposition, a: Abrechnung): Reparaturbewertung {
   const { eigene, erlaeuterungen } = texteZu(p, a);
-  const bestandteile = (p.bestandteile ?? []).filter((b) => REPARATUR.test(b.bezeichnung) && !findeAussagen([b.bezeichnung], REPARATUR)[0]?.verneint);
+  const bestandteile = ausgewieseneTeile(p, a, REPARATUR);
   const eigeneAussagen = findeAussagen(eigene, REPARATUR);
   const genannt = eigeneAussagen.find((x) => !x.verneint);
   const vollwartung = findeAussagen([...eigene, ...erlaeuterungen], VOLLWARTUNG).find((x) => !x.verneint);

@@ -79,6 +79,16 @@ describe("Umwandlung", () => {
     expect(i07.status).toBe("abweichung");
   });
 
+  it("übernimmt im Dokument belegte Zahlungen: höhere Buchungsübersicht wird ein belegter Fehler", () => {
+    const r = roh();
+    r.gezahlteVorauszahlungenHeizkosten = r.vorauszahlungenHeizkosten! + 100;
+    r.gezahlteVorauszahlungenSeite = 4;
+    const { abrechnung } = wandleUm(r);
+    expect(abrechnung.vorauszahlungenDetail?.gezahlt).toEqual({ heizkosten: r.vorauszahlungenHeizkosten! + 100, seite: 4 });
+    const r05 = pruefeAbrechnung(abrechnung, { heute: "2026-10-29" }).ergebnisse.find((e) => e.regelId === "R-05" && e.status === "abweichung")!;
+    expect(r05.betragZugunstenMieter).toBe(100);
+  });
+
   it("verwirft ungültige Datumsangaben mit Hinweis", () => {
     const r = roh();
     r.erstelltAm = "25.11.2025";

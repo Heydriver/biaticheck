@@ -174,6 +174,8 @@ export const R03_Saldo: Regel = {
   },
 };
 
+const LEERSTAND = /leerstand|leerstehend|leer stehend|leersteht|leer steht|unvermietet|nicht vermietet/i;
+
 export const R04_Flaechen: Regel = {
   id: "R-04",
   version: "1.1.0",
@@ -191,7 +193,10 @@ export const R04_Flaechen: Regel = {
 
     const befunde: Befund[] = [];
     // Flächennenner je Position gegen die in der Abrechnung genannte Gesamtfläche
-    const hausflaeche = a.flaechen.gesamtflaeche;
+    // Gesamtfläche laut Abrechnung; fehlt sie, die Fläche, die die Mehrheit der Positionen verwendet (mindestens 3)
+    const nenner = flaechenPositionen.map((p) => p.umlageschluessel?.anteilGesamt).filter((x): x is number => x !== undefined);
+    const haeufigster = [...new Set(nenner)].map((x) => [x, nenner.filter((y) => y === x).length] as const).sort((x, y) => y[1] - x[1])[0];
+    const hausflaeche = a.flaechen.gesamtflaeche ?? (haeufigster && haeufigster[1] >= 3 && haeufigster[1] > nenner.length / 2 ? haeufigster[0] : undefined);
     const geprueft = new Set<string>();
     if (hausflaeche) {
       for (const p of flaechenPositionen) {
@@ -207,21 +212,25 @@ export const R04_Flaechen: Regel = {
         // § 7 Abs. 1 Satz 5 HeizkostenV erlaubt für Grundkosten die Fläche der beheizten Räume. Sicher falsch ist
         // der Nenner nur, wenn die Abrechnung selbst die beheizte Gesamtfläche anders angibt.
         const widerspruch = heizung ? a.heizkosten?.gesamtflaeche === hausflaeche : false;
-        const sicher = zuViel > 0 && widerspruch && !begruendet;
+        // Leerstand als Grund: Den Anteil leer stehender Flächen trägt der Vermieter (BGH VIII ZR 159/05) – sicherer Fehler
+        const texte = texteZu(p, a);
+        const leerstand = u.anteilGesamt < hausflaeche ? findeAussagen([...texte.eigene, ...texte.erlaeuterungen], LEERSTAND).find((x) => !x.verneint) : undefined;
+        const sicher = zuViel > 0 && (Boolean(leerstand) || (widerspruch && !begruendet));
         const rechnung = `${euro(p.gesamtkosten)} × ${zahlDE(u.anteilEinheit)} / ${zahlDE(hausflaeche)} m² = ${euro(runde(korrekt))}`;
         befunde.push({
           status: sicher ? "abweichung" : "auffaelligkeit",
-          titel: `Falscher Flächennenner: ${p.bezeichnung}`,
+          titel: leerstand ? `Leerstand herausgerechnet: ${p.bezeichnung}` : `Falscher Flächennenner: ${p.bezeichnung}`,
           erklaerung:
             `„${p.bezeichnung}“ wird auf ${zahlDE(u.anteilGesamt)} m² verteilt, die Abrechnung nennt als Gesamtfläche aber ${zahlDE(hausflaeche)} m²` +
             (widerspruch ? " (auch für die Heizkosten)" : "") +
             `. Mit ${zahlDE(hausflaeche)} m² ergibt sich Ihr Anteil zu ${rechnung} statt ${euro(p.anteilMieter)}.` +
+            (leerstand ? ` Als Grund nennt die Abrechnung Leerstand („${leerstand.text}“). Leer stehende Flächen dürfen den Anteil der anderen Mieter nicht erhöhen.` : "") +
             (sicher ? "" : heizung ? " Eine kleinere Fläche ist nur zulässig, wenn es die Fläche der beheizten Räume ist." : " Eine kleinere Fläche kann berechtigt sein (z. B. Gewerbe ausgenommen), muss aber erklärt werden."),
           naechsterSchritt: sicher ? `Fordern Sie die Korrektur Ihres Anteils (${euro(zuViel)} weniger).` : "Bitten Sie um eine Erklärung der kleineren Gesamtfläche.",
           betragZugunstenMieter: zuViel > 0 ? zuViel : undefined,
           positionId: p.id,
           textstelle: `${p.bezeichnung}: ${zahlDE(u.anteilEinheit)} / ${zahlDE(u.anteilGesamt)} m²`,
-          beleg: { nenner: u.anteilGesamt, hausflaeche, gesamtkosten: p.gesamtkosten, einheit: u.anteilEinheit, korrekt: runde(korrekt), abgerechnet: p.anteilMieter, zuViel },
+          beleg: { leerstand: leerstand?.text, nenner: u.anteilGesamt, hausflaeche, gesamtkosten: p.gesamtkosten, einheit: u.anteilEinheit, korrekt: runde(korrekt), abgerechnet: p.anteilMieter, zuViel },
         });
       }
     }
@@ -297,7 +306,7 @@ export const R05_Vorauszahlungen: Regel = {
   pruefe(a, { einstellungen }) {
     const d = a.vorauszahlungenDetail;
     const zeitraum = a.meta.nutzungszeitraum ?? a.meta.abrechnungszeitraum;
-    if (!d || !zeitraum || (!d.monatlich && !d.verlauf?.length)) return [];
+    if (!d || !zeitraum || (!d.monatlich && !d.verlauf?.length && !d.gezahlt)) return [];
     const monate = monatsanfaenge(zeitraum.von, zeitraum.bis);
     const toleranz = Math.max(einstellungen.toleranzEuro, 1);
     const verlauf = [...(d.verlauf ?? [])].sort((x, y) => x.ab.localeCompare(y.ab));
@@ -311,6 +320,27 @@ export const R05_Vorauszahlungen: Regel = {
     for (const [art, name] of arten) {
       const jahr = d[art];
       if (jahr === undefined) continue;
+
+      // Die Abrechnung belegt die Zahlungen selbst (Buchungsübersicht): direkter Vergleich, sicherer Fehler
+      const gezahlt = d.gezahlt?.[art];
+      if (gezahlt !== undefined) {
+        const differenz = runde(gezahlt - jahr);
+        const stelle = d.gezahlt?.seite ? ` (Seite ${d.gezahlt.seite})` : "";
+        if (differenz > toleranz) {
+          befunde.push({
+            status: "abweichung",
+            titel: `Vorauszahlungen ${name} unvollständig angerechnet`,
+            erklaerung: `Die Zahlungsübersicht der Abrechnung${stelle} belegt ${euro(gezahlt)} Vorauszahlungen für ${name}. Angerechnet wurden nur ${euro(jahr)}. Es fehlen ${euro(differenz)}.`,
+            naechsterSchritt: `Fordern Sie die Anrechnung der fehlenden ${euro(differenz)}.`,
+            betragZugunstenMieter: differenz,
+            textstelle: `Zahlungsübersicht${stelle}: ${euro(gezahlt)}; angerechnet: ${euro(jahr)}`,
+            beleg: { art, jahr, summe: gezahlt, differenz, quelle: "dokument", seite: d.gezahlt?.seite },
+          });
+        } else {
+          befunde.push({ status: "ok", titel: `Vorauszahlungen ${name} vollständig angerechnet`, erklaerung: `Belegt und angerechnet: ${euro(jahr)}.`, beleg: { art, jahr, summe: gezahlt, differenz, quelle: "dokument" } });
+        }
+        continue;
+      }
 
       const belegt = verlauf.some((v) => v[art] !== undefined);
       if (belegt) {
@@ -367,6 +397,19 @@ export const R05_Vorauszahlungen: Regel = {
         beleg: { art, jahr, monatlich, monate: monate.length, erwartet, differenz },
         unterlagen: ["vorjahresabrechnung"],
       });
+    }
+    const gesamtGezahlt = d.gezahlt?.gesamt;
+    if (gesamtGezahlt !== undefined && a.vorauszahlungen !== undefined && !befunde.some((b) => b.beleg?.quelle === "dokument")) {
+      const differenz = runde(gesamtGezahlt - a.vorauszahlungen);
+      if (differenz > toleranz)
+        befunde.push({
+          status: "abweichung",
+          titel: "Vorauszahlungen unvollständig angerechnet",
+          erklaerung: `Die Zahlungsübersicht der Abrechnung belegt ${euro(gesamtGezahlt)} Vorauszahlungen. Angerechnet wurden nur ${euro(a.vorauszahlungen)}. Es fehlen ${euro(differenz)}.`,
+          naechsterSchritt: `Fordern Sie die Anrechnung der fehlenden ${euro(differenz)}.`,
+          betragZugunstenMieter: differenz,
+          beleg: { art: "gesamt", jahr: a.vorauszahlungen, summe: gesamtGezahlt, differenz, quelle: "dokument", seite: d.gezahlt?.seite },
+        });
     }
     return befunde;
   },

@@ -459,13 +459,17 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "R-03":
       return s === "abweichung" ? k("Nachzahlung falsch berechnet", "Kosten minus Vorauszahlungen ergibt einen anderen Betrag.") : k("Vorauszahlungen fehlen", "Ohne sie lässt sich die Nachzahlung nicht prüfen.");
     case "R-04":
+      if (typeof b.leerstand === "string" && zahl(b.nenner) !== undefined)
+        return k(`Leerstand herausgerechnet: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Leerstand trägt der Vermieter.`);
       if (zahl(b.nenner) !== undefined && zahl(b.hausflaeche) !== undefined)
         return s === "abweichung"
           ? k(`Falsche Gesamtfläche: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Ihr Anteil ist zu hoch.`)
           : k(`Kleinere Gesamtfläche: ${name}`, `Verteilt auf ${zahlDE(zahl(b.nenner)!)} statt ${zahlDE(zahl(b.hausflaeche)!)} m². Der Grund muss erklärt werden.`);
       return k("Unterschiedliche Flächen", "Für Ihre Wohnung werden verschiedene Größen angesetzt.");
     case "R-05": {
-      const art = b.art === "heizkosten" ? "Heizkosten" : "Betriebskosten";
+      const art = b.art === "heizkosten" ? "Heizkosten" : b.art === "gesamt" ? "insgesamt" : "Betriebskosten";
+      if (s === "abweichung" && b.quelle === "dokument")
+        return k(`Vorauszahlungen ${art} unvollständig angerechnet`, `Die Abrechnung belegt selbst ${euro(zahl(b.summe) ?? 0)}, angerechnet wurden nur ${euro(zahl(b.jahr) ?? 0)}.`);
       if (s === "pruefbedarf")
         return k(`Vorauszahlungen ${art}: Prüfbedarf`, `Möglich sind bis zu ${euro(zahl(b.differenz) ?? 0)}. Dafür brauchen wir Ihre Vorjahresabrechnung.`);
       if (s === "abweichung" && zahl(b.summe) !== undefined)
@@ -506,6 +510,7 @@ export function kurzfassung(e: Regelergebnis, a: Abrechnung): { titel: string; s
     case "I-10":
       return s === "abweichung" ? k("Rauchwarnmelder: Miete umgelegt", "Die Miete der Geräte darf nicht umgelegt werden, die Wartung schon.") : k("Rauchwarnmelder: Miete enthalten", "Nur die Wartung ist erlaubt. Auswirkung noch nicht bezifferbar.");
     case "I-11":
+      if (s === "abweichung") return k("Verwaltung im Hauswart enthalten", "Der ausgewiesene Anteil für Verwaltung oder Reparaturen darf nicht umgelegt werden.");
       return s === "hinweis"
         ? k("Hauswart teurer als üblich", "Statistischer Vergleich, kein Fehler. Anlass für die Belegeinsicht.")
         : k("Hauswart: Reparaturen enthalten?", "Reparatur- und Verwaltungsarbeiten müssen herausgerechnet werden.");
@@ -617,6 +622,7 @@ export function briefpunkt(e: Regelergebnis, a: Abrechnung): string {
         return `Grundsteuer: Mein Anteil hat sich von ${euro(zahl(b.vorher)!)} auf ${euro(zahl(b.jetzt)!)} geändert. Bitte legen Sie den aktuellen Grundsteuerbescheid vor.`;
       break;
     case "I-11":
+      if (e.status === "abweichung" && name) return `${name}${betrag}: Die Abrechnung weist darin einen Anteil für Verwaltung oder Reparaturen aus (${e.textstelle ?? "laut Aufstellung"}). Dieser Anteil ist nach § 2 Nr. 14 BetrKV nicht umlagefähig. Bitte ziehen Sie ihn ab.`;
       if (name) return `${name}: Bitte legen Sie den Hauswartvertrag mit Leistungsverzeichnis vor und rechnen Sie Anteile für Reparaturen, Verwaltung und Bereitschaft heraus.`;
       break;
     case "I-08":
@@ -944,7 +950,7 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
     case "R-05": {
       add("Angerechnete Vorauszahlungen", eur(b.jahr));
       if (zahl(b.summe) !== undefined) {
-        add(b.quelle === "kontoauszug" ? "Gezahlt laut Ihren Zahlungsbelegen" : b.quelle === "vorjahresabrechnung" ? "Gezahlt laut Vorjahresabrechnung" : "Gezahlt laut Ihren Angaben", eur(b.summe));
+        add(b.quelle === "dokument" ? "Gezahlt laut Zahlungsübersicht der Abrechnung" : b.quelle === "kontoauszug" ? "Gezahlt laut Ihren Zahlungsbelegen" : b.quelle === "vorjahresabrechnung" ? "Gezahlt laut Vorjahresabrechnung" : "Gezahlt laut Ihren Angaben", eur(b.summe));
         if ((zahl(b.differenz) ?? 0) > 0) add("Fehlt", eur(b.differenz), true);
       } else if (zahl(b.monatlich) !== undefined) {
         add("Laut Abrechnung pro Monat", eur(b.monatlich));
@@ -1016,6 +1022,8 @@ export function fakten(e: Regelergebnis, a: Abrechnung): Fakt[] {
       break;
     case "I-11":
       position();
+      add("Nicht umlagefähig laut Abrechnung (Haus)", eur(b.nichtUmlagefaehigHaus));
+      if (e.betragZugunstenMieter) add("Davon Ihr Anteil", euro(e.betragZugunstenMieter), true);
       if (zahl(b.jeQm) !== undefined) {
         add("Ihre Kosten je m² und Monat", `${zahlDE(zahl(b.jeQm)!)} €`, true);
         add("Bundesdurchschnitt (Mieterbund 2024)", "0,37 €");

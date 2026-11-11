@@ -53,8 +53,10 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("R-04.a", "Falscher Flächennenner bei Heizkosten", "Nenner ≠ Gesamtfläche und Abrechnung nennt dieselbe beheizte Gesamtfläche → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "abweichung", "exakt", "Gesamtfläche, beheizte Gesamtfläche, Position"),
   f("R-04.b", "Kleinerer Flächennenner ohne Begründung", "Nenner < Gesamtfläche, keine Begründung in der Abrechnung → möglicher Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "auffaelligkeit", "bis_zu", "Gesamtfläche, Position"),
   f("R-04.c", "Unterschiedliche Wohnflächen für dieselbe Wohnung", "Anzahl verschiedener AnteilEinheit (Fläche) > 1", "auffaelligkeit", "keiner", "Positionen nach Fläche"),
+  f("R-04.d", "Leerstand aus dem Flächennenner herausgerechnet", "Nenner < Gesamtfläche und Abrechnung nennt Leerstand als Grund → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche", "abweichung", "exakt", "Gesamtfläche, Hinweis der Abrechnung"),
   f("R-05.a", "Vorauszahlungen zu niedrig angerechnet (belegt)", "Betrag = Σ Monatsbeträge laut Beleg − angerechnete Vorauszahlungen, falls > 1 €", "abweichung", "exakt", "Vorjahresabrechnung oder Kontoauszüge"),
   f("R-05.b", "Vorauszahlungen möglicherweise zu niedrig angerechnet", "möglicher Betrag = Monatsbetrag × Monate − angerechnete Vorauszahlungen, falls > 1 €", "pruefbedarf", "bis_zu", "Monatsbetrag laut Schreiben"),
+  f("R-05.c", "Vorauszahlungen laut Zahlungsübersicht unvollständig angerechnet", "Betrag = gezahlte Vorauszahlungen laut Zahlungsübersicht der Abrechnung − angerechnete Vorauszahlungen, falls > 1 €", "abweichung", "exakt", "Zahlungsübersicht in der Abrechnung"),
   f("R-06.a", "Ein- oder Auszug nicht berücksichtigt", "möglicher Betrag = zeitabhängige Kosten × (1 − Miettage / Tage des Zeitraums)", "auffaelligkeit", "bis_zu", "Mietvertrag (Mietbeginn/-ende)"),
   f("R-07.a", "Mehr Wohnfläche als im Mietvertrag", "(Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung)", "auffaelligkeit", "bis_zu", "Mietvertrag (Wohnfläche)"),
 
@@ -79,6 +81,7 @@ export const FEHLERKATALOG: readonly Fehlerart[] = [
   f("I-10.b", "Reine Mietposition für Rauchwarnmelder", "Bezeichnung nennt nur Miete → Betrag = Anteil", "abweichung", "exakt", "Bezeichnung"),
   f("I-10.c", "Miete und Wartung der Rauchwarnmelder vermischt", "Bezeichnung nennt Miete und Wartung, keine Aufschlüsselung", "pruefbedarf", "keiner", "Bezeichnung"),
   f("I-11.a", "Hauswart mit Reparatur- oder Verwaltungsarbeiten", "Bezeichnung nennt Reparatur/Verwaltung/Bereitschaft, nicht verneint", "pruefbedarf", "keiner", "Bezeichnung, Erläuterungen"),
+  f("I-11.b", "Verwaltungs- oder Reparaturanteil im Hauswart ausgewiesen", "Betrag = Anteil × ausgewiesener nicht umlagefähiger Betrag / Gesamtkosten (aus Aufschlüsselung oder Text mit Betrag)", "abweichung", "exakt", "Aufschlüsselung oder Erläuterung mit Betrag"),
   f("I-12.a", "Gewerbe im Haus ohne Vorwegabzug", "Gewerbe vorhanden und keine Position mit Vorwegabzug", "auffaelligkeit", "keiner", "Angabe zu Gewerbe"),
   f("I-13.a", "Leerstand auf Mieter verteilt", "unterschiedliche Wohnungszahl N → möglicher Betrag = Σ Anteil × (1 − N / N_max)", "auffaelligkeit", "bis_zu", "Positionen nach Einheiten"),
   f("I-14.a", "Grundsteuer ab 2025 stark verändert", "|Grundsteuer − Vorjahr| / Vorjahr ≥ 20 %", "auffaelligkeit", "keiner", "Vorjahresabrechnung"),

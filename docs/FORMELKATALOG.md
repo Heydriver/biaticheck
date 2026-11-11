@@ -3,8 +3,8 @@
 Automatisch erzeugt aus `packages/pruefkern/src/fehlerkatalog.ts`. Nicht von Hand ändern:
 `UPDATE_FORMELKATALOG=1 pnpm --filter @biaticheck/pruefkern test`.
 
-Der Prüfkern erkennt 46 Fehlerarten in 30 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
-Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1150 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
+Der Prüfkern erkennt 49 Fehlerarten in 30 Regeln allein durch Formeln. Die KI liest nur die Werte aus dem Dokument.
+Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in 25 Zufallsvarianten ein (1225 Fälle) und prüft 300 korrekte Abrechnungen auf Fehlalarme.
 
 | ID | Fehlerart | Formel | Ergebnis | Betrag | Braucht |
 |---|---|---|---|---|---|
@@ -22,8 +22,10 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | R-04.a | Falscher Flächennenner bei Heizkosten | Nenner ≠ Gesamtfläche und Abrechnung nennt dieselbe beheizte Gesamtfläche → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche | Belegter Fehler | exakt | Gesamtfläche, beheizte Gesamtfläche, Position |
 | R-04.b | Kleinerer Flächennenner ohne Begründung | Nenner < Gesamtfläche, keine Begründung in der Abrechnung → möglicher Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche | Begründeter Prüfbedarf | bis zu | Gesamtfläche, Position |
 | R-04.c | Unterschiedliche Wohnflächen für dieselbe Wohnung | Anzahl verschiedener AnteilEinheit (Fläche) > 1 | Begründeter Prüfbedarf | nicht bezifferbar | Positionen nach Fläche |
+| R-04.d | Leerstand aus dem Flächennenner herausgerechnet | Nenner < Gesamtfläche und Abrechnung nennt Leerstand als Grund → Betrag = Anteil − Gesamtkosten × AnteilEinheit / Gesamtfläche | Belegter Fehler | exakt | Gesamtfläche, Hinweis der Abrechnung |
 | R-05.a | Vorauszahlungen zu niedrig angerechnet (belegt) | Betrag = Σ Monatsbeträge laut Beleg − angerechnete Vorauszahlungen, falls > 1 € | Belegter Fehler | exakt | Vorjahresabrechnung oder Kontoauszüge |
 | R-05.b | Vorauszahlungen möglicherweise zu niedrig angerechnet | möglicher Betrag = Monatsbetrag × Monate − angerechnete Vorauszahlungen, falls > 1 € | Prüfbedarf (Unterlage nötig) | bis zu | Monatsbetrag laut Schreiben |
+| R-05.c | Vorauszahlungen laut Zahlungsübersicht unvollständig angerechnet | Betrag = gezahlte Vorauszahlungen laut Zahlungsübersicht der Abrechnung − angerechnete Vorauszahlungen, falls > 1 € | Belegter Fehler | exakt | Zahlungsübersicht in der Abrechnung |
 | R-06.a | Ein- oder Auszug nicht berücksichtigt | möglicher Betrag = zeitabhängige Kosten × (1 − Miettage / Tage des Zeitraums) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Mietbeginn/-ende) |
 | R-07.a | Mehr Wohnfläche als im Mietvertrag | (Fläche Abrechnung − Fläche Vertrag) / Fläche Vertrag > 3 % → möglicher Betrag = Kosten nach Fläche × (1 − Fläche Vertrag / Fläche Abrechnung) | Begründeter Prüfbedarf | bis zu | Mietvertrag (Wohnfläche) |
 | I-01.a | Verwaltungskosten umgelegt | Kategorie = Verwaltung → Betrag = Anteil | Belegter Fehler | exakt | Kostenpositionen |
@@ -46,6 +48,7 @@ Nachweis: `packages/pruefkern/test/fehlerkatalog.test.ts` baut jede Fehlerart in
 | I-10.b | Reine Mietposition für Rauchwarnmelder | Bezeichnung nennt nur Miete → Betrag = Anteil | Belegter Fehler | exakt | Bezeichnung |
 | I-10.c | Miete und Wartung der Rauchwarnmelder vermischt | Bezeichnung nennt Miete und Wartung, keine Aufschlüsselung | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung |
 | I-11.a | Hauswart mit Reparatur- oder Verwaltungsarbeiten | Bezeichnung nennt Reparatur/Verwaltung/Bereitschaft, nicht verneint | Prüfbedarf (Unterlage nötig) | nicht bezifferbar | Bezeichnung, Erläuterungen |
+| I-11.b | Verwaltungs- oder Reparaturanteil im Hauswart ausgewiesen | Betrag = Anteil × ausgewiesener nicht umlagefähiger Betrag / Gesamtkosten (aus Aufschlüsselung oder Text mit Betrag) | Belegter Fehler | exakt | Aufschlüsselung oder Erläuterung mit Betrag |
 | I-12.a | Gewerbe im Haus ohne Vorwegabzug | Gewerbe vorhanden und keine Position mit Vorwegabzug | Begründeter Prüfbedarf | nicht bezifferbar | Angabe zu Gewerbe |
 | I-13.a | Leerstand auf Mieter verteilt | unterschiedliche Wohnungszahl N → möglicher Betrag = Σ Anteil × (1 − N / N_max) | Begründeter Prüfbedarf | bis zu | Positionen nach Einheiten |
 | I-14.a | Grundsteuer ab 2025 stark verändert | \|Grundsteuer − Vorjahr\| / Vorjahr ≥ 20 % | Begründeter Prüfbedarf | nicht bezifferbar | Vorjahresabrechnung |

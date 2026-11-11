@@ -92,3 +92,9 @@ Besteht die KI-Kontrolle nicht (Lesefehler, fehlende Zeile, zusätzliche Auffäl
 | Nichts gefunden | kein Fehler erkannt |
 
 Kontoauszüge und Mietkonto werden nicht mehr angefordert. Für Vorauszahlungen und Abrechnungsfrist genügt die Abrechnung des Vorjahres; alternativ kann der Kunde seine monatlichen Vorauszahlungen selbst eintragen.
+
+## Ergänzungen v0.8 (aus dem Test „Abrechnung 04“)
+
+- **I-11 Hauswart:** Weist die Abrechnung einen Betrag für Verwaltung, Reparaturen oder Bereitschaft aus – in einer Aufschlüsselung oder in einem Satz wie „Das Jahresentgelt enthält 480 € für Mietkonten …“ –, ist genau dieser Anteil ein belegter Fehler (Betrag × Anteil / Gesamtkosten). Dasselbe gilt für Reparaturbeträge in Wartungspositionen (I-07).
+- **R-04 Leerstand:** Wird eine Position auf eine kleinere Fläche verteilt und nennt die Abrechnung Leerstand als Grund, ist das ein belegter Fehler (BGH VIII ZR 159/05). Ohne genannten Grund bleibt es Prüfbedarf mit „bis zu“-Betrag. Fehlt die Gesamtfläche, gilt die Fläche, die die Mehrheit der Positionen verwendet.
+- **R-05 Vorauszahlungen:** Belegt die Abrechnung selbst in einer Buchungs- oder Zahlungsübersicht höhere Zahlungen als angerechnet, ist die Differenz ein belegter Fehler. Dafür ist keine nachgereichte Unterlage nötig.
